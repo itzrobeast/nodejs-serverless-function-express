@@ -1,8 +1,8 @@
 // api/instagram-webhook.js
 import fetch from 'node-fetch';
-import { createGoogleCalendarEvent } from './google-calendar';
+import { createGoogleCalendarEvent } from './google-calendar'; // Imports Google Calendar function for scheduling events
 
-// Helper function to call OpenAI's API
+// Function to interact with OpenAI API
 async function callOpenAI(userMessage) {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -20,12 +20,15 @@ async function callOpenAI(userMessage) {
   return data.choices[0].message.content;
 }
 
+// Primary handler for Instagram webhook
 export default async function handler(req, res) {
   if (req.method === 'GET') {
+    // Verify token for Instagram webhook setup
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-    const verifyToken = req.query['hub.verify_token'];
 
-    if (verifyToken === process.env.INSTAGRAM_VERIFY_TOKEN) {
+    if (mode && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
       return res.status(200).send(challenge);
     } else {
       return res.status(403).send('Verification failed');
@@ -35,14 +38,18 @@ export default async function handler(req, res) {
     const userMessage = body.message;
 
     try {
+      // Call GPT to generate a response
       const gptResponse = await callOpenAI(userMessage);
 
+      // Check if user asked for an appointment and create event if so
       if (userMessage.toLowerCase().includes("book appointment")) {
         const eventDetails = extractEventDetails(userMessage);
         await createGoogleCalendarEvent(eventDetails);
       }
 
-      return res.status(200).json({ response: gptResponse });
+      // Send the generated response back to Instagram
+      await sendInstagramMessage(body.sender.id, gptResponse);
+      return res.status(200).json({ response: 'Message sent!' });
     } catch (error) {
       console.error('Error processing Instagram webhook:', error);
       return res.status(500).json({ error: 'Failed to process the request' });
@@ -52,7 +59,19 @@ export default async function handler(req, res) {
   }
 }
 
-// Function to parse event details
+// Function to send a message back to Instagram user
+async function sendInstagramMessage(recipientId, message) {
+  await fetch(`https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: { text: message }
+    })
+  });
+}
+
+// Optional helper function to extract event details from user message
 function extractEventDetails(userMessage) {
   const date = new Date();
   const startDateTime = date.toISOString();
