@@ -1,9 +1,15 @@
+// index.js or app.js
 import express from 'express';
 
 const app = express();
-app.use(express.json()); // To handle JSON payloads from POST requests
+app.use(express.json()); // This handles JSON payloads for POST requests
 
-// Define the GET route for verification purposes
+// Define the root route to display a welcome message
+app.get('/', (req, res) => {
+    res.send('Welcome to the Application');
+});
+
+// Existing webhook route for verification (GET) and handling events (POST)
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -17,10 +23,8 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// Define the POST route to handle incoming webhook events
 app.post('/webhook', (req, res) => {
     console.log('Received webhook event:', req.body);
-    // Add logic to handle the event data as needed
     res.status(200).send('Webhook received');
 });
 
