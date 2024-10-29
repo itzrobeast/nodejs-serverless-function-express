@@ -2,21 +2,15 @@ import express from 'express';
 
 const app = express();
 
+// Main route
 app.get('/', (req, res) => {
-    res.send('Hello, World!');
+    res.send('Welcome to the application!');
 });
 
-// Webhook endpoint
-app.get('/webhook', (req, res) => {
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
-
-    if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
-        res.status(200).send(challenge);
-    } else {
-        res.status(403).send('Forbidden');
-    }
+// Other routes (e.g., /webhook or /api/some-route)
+app.post('/webhook', (req, res) => {
+    // Handle webhook events
+    res.send('Webhook received');
 });
 
 export default app;
