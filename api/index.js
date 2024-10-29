@@ -8,3 +8,10 @@ app.get('/', (req, res) => {
 });
 
 export default app;
+
+{
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
