@@ -3,7 +3,7 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "main": "index.js",   // Points to your main server file
+  "main": "api/index.js",  // Ensure your main file is under /api for Vercel functions
   "dependencies": {
     "express": "^4.17.1",
     "node-fetch": "^2.6.1"
@@ -14,7 +14,6 @@
     "typescript": "^4.7.3"
   },
   "scripts": {
-    "start": "node index.js",  // Command to run the app locally
-    "build": "tsc"             // If using TypeScript, builds TypeScript files
+    "build": "tsc"  // If using TypeScript, this will compile files
   }
 }
