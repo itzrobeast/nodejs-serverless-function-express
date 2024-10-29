@@ -1,4 +1,3 @@
-// index.js
 import express from 'express';
 
 const app = express();
@@ -7,11 +6,17 @@ app.get('/', (req, res) => {
     res.send('Hello, World!');
 });
 
-export default app;
+// Webhook endpoint
+app.get('/webhook', (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
 
-{
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  }
-}
+    if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
+        res.status(200).send(challenge);
+    } else {
+        res.status(403).send('Forbidden');
+    }
+});
+
+export default app;
