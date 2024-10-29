@@ -1,9 +1,8 @@
 {
-  "repository": "https://github.com/itzrobeast/GPT-Mila.git",
-  "license": "MIT",
-  "private": true,
-  "type": "module",
-  "main": "api/index.js",  // Ensure your main file is under /api for Vercel functions
+  "scripts": {
+    "start": "node index.js",
+    "build": "tsc"
+  },
   "dependencies": {
     "express": "^4.17.1",
     "node-fetch": "^2.6.1"
@@ -12,8 +11,5 @@
     "@types/node": "^17.0.42",
     "@vercel/node": "^2.9.6",
     "typescript": "^4.7.3"
-  },
-  "scripts": {
-    "build": "tsc"  // If using TypeScript, this will compile files
   }
 }
