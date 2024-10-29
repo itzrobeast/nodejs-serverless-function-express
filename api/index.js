@@ -1,12 +1,10 @@
-// api/index.js
-import { VercelRequest, VercelResponse } from '@vercel/node'
+// index.js
+import express from 'express';
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
-  res.json({
-    message: "Welcome to my API!",
-    endpoints: {
-      hello: "/api/hello",
-      otherEndpoint: "/api/other-endpoint"
-    }
-  })
-}
+const app = express();
+
+app.get('/', (req, res) => {
+    res.send('Hello, World!');
+});
+
+export default app;
