@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import { createGoogleCalendarEvent } from './google-calendar';
+import { createGoogleCalendarEvent } from './google-calendar.js';
 
 // Function to interact with OpenAI API
 async function callOpenAI(userMessage) {
