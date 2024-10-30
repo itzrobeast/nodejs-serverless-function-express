@@ -27,6 +27,7 @@ async function callOpenAI(userMessage) {
 // Primary handler for Instagram webhook
 export default async function handler(req, res) {
   console.log("Received request:", req.method);
+  console.log("Full query parameters:", req.query);
 
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
