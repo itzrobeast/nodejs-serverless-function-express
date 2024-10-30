@@ -44,7 +44,7 @@ export default async function handler(req, res) {
   } else if (req.method === 'POST') {
     const body = req.body;
     const userMessage = body.message;
-    const recipientId = body.sender?.id;  // Ensure the sender ID exists
+    const recipientId = body.sender?.id;
 
     if (!userMessage || !recipientId) {
       console.error('Invalid request payload:', body);
@@ -92,10 +92,11 @@ async function sendInstagramMessage(recipientId, message) {
     }
   } catch (error) {
     console.error('Error in sendInstagramMessage:', error);
+    throw error; // Ensure error is thrown for handling in the main handler
   }
 }
 
-// Optional helper function to extract event details from user message
+// Helper function to extract event details from user message
 function extractEventDetails(userMessage) {
   const date = new Date();
   const startDateTime = date.toISOString();
