@@ -1,8 +1,10 @@
 {
   "builds": [
-    { "src": "index.js", "use": "@vercel/node" }
+    { "src": "index.js", "use": "@vercel/node" },
+    { "src": "instagram-webhook.js", "use": "@vercel/node" }
   ],
   "routes": [
+    { "src": "/instagram-webhook", "dest": "instagram-webhook.js" },
     { "src": "/(.*)", "dest": "index.js" }
   ]
 }
