@@ -1,4 +1,3 @@
-// api/instagram-webhook.js
 import fetch from 'node-fetch';
 import { createGoogleCalendarEvent } from './google-calendar';
 
@@ -16,6 +15,12 @@ async function callOpenAI(userMessage) {
         messages: [{ role: 'user', content: userMessage }]
       })
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error calling OpenAI:', errorText);
+      throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
 
     const data = await response.json();
     return data.choices[0].message.content;
@@ -41,10 +46,12 @@ export default async function handler(req, res) {
       console.error('Verification failed');
       return res.status(403).send('Verification failed');
     }
-  } else if (req.method === 'POST') {
+  } 
+  
+  else if (req.method === 'POST') {
     const body = req.body;
-    const userMessage = body.message;
-    const recipientId = body.sender?.id;
+    const userMessage = body?.message?.text;
+    const recipientId = body?.sender?.id;
 
     if (!userMessage || !recipientId) {
       console.error('Invalid request payload:', body);
@@ -92,7 +99,7 @@ async function sendInstagramMessage(recipientId, message) {
     }
   } catch (error) {
     console.error('Error in sendInstagramMessage:', error);
-    throw error; // Ensure error is thrown for handling in the main handler
+    throw error;
   }
 }
 
