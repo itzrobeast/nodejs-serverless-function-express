@@ -48,6 +48,38 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
+// Function to process messaging events
+async function processMessagingEvent(message) {
+  const userMessage = message.message?.text || null;
+  const recipientId = message.sender?.id || null;
+
+  if (userMessage && recipientId) {
+    try {
+      const responseMessage = `Thank you for your message: "${userMessage}". We'll get back to you soon!`;
+      await sendInstagramMessage(recipientId, responseMessage);
+      console.log('Response sent to Instagram user.');
+    } catch (error) {
+      console.error('Error responding to Instagram message:', error);
+    }
+  } else if (message.reaction) {
+    // Handle reaction events
+    console.log('Reaction event received:', message.reaction);
+    const { reaction, emoji } = message.reaction;
+
+    if (recipientId) {
+      try {
+        const responseMessage = `Thanks for reacting with ${emoji} (${reaction})!`;
+        await sendInstagramMessage(recipientId, responseMessage);
+        console.log('Reaction response sent to Instagram user.');
+      } catch (error) {
+        console.error('Error responding to Instagram reaction:', error);
+      }
+    }
+  } else {
+    console.warn('Unhandled messaging event:', message);
+  }
+}
+
 // Primary webhook handler
 export default async function handler(req, res) {
   console.log('Received request:', req.method);
@@ -86,9 +118,7 @@ export default async function handler(req, res) {
 
               if (leadDetails) {
                 console.log('Lead Details Processed:', leadDetails);
-
                 // Optional: Notify your team or save to a database
-                // await notifyTeam(leadDetails);
               }
             } catch (error) {
               console.error('Error fetching lead details:', error);
@@ -97,23 +127,10 @@ export default async function handler(req, res) {
         });
       }
 
-      // Handle messaging events (Instagram DMs or comments)
+      // Handle messaging events (Instagram DMs, comments, or reactions)
       if (entry.messaging && Array.isArray(entry.messaging)) {
         entry.messaging.forEach(async (message) => {
-          const userMessage = message.message?.text || null;
-          const recipientId = message.sender?.id || null;
-
-          if (userMessage && recipientId) {
-            try {
-              const responseMessage = `Thank you for your message: "${userMessage}". We'll get back to you soon!`;
-              await sendInstagramMessage(recipientId, responseMessage);
-              console.log('Response sent to Instagram user.');
-            } catch (error) {
-              console.error('Error responding to Instagram message:', error);
-            }
-          } else {
-            console.warn('Message or senderId missing in messaging event:', message);
-          }
+          await processMessagingEvent(message);
         });
       } else {
         console.warn('No messaging or leadgen events found in entry:', entry);
