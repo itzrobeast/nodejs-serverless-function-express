@@ -15,7 +15,6 @@ async function fetchLeadDetails(leadgenId) {
     const leadDetails = await response.json();
     console.log('Fetched Lead Details:', leadDetails);
 
-    // Further processing (e.g., save to DB, notify team, push to CRM)
     return leadDetails;
   } catch (error) {
     console.error('Error fetching lead details:', error);
@@ -40,9 +39,9 @@ async function sendInstagramMessage(recipientId, message) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Error sending message to Instagram:', errorText);
-      throw new Error(`Failed to send message: ${response.statusText}`);
+      throw new Error(`Failed to send message: ${errorText}`);
     }
+    console.log('Message successfully sent to Instagram user.');
   } catch (error) {
     console.error('Error in sendInstagramMessage:', error);
     throw error;
@@ -56,9 +55,6 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
-
-    console.log('Expected token:', process.env.INSTAGRAM_VERIFY_TOKEN);
-    console.log('Received token:', token);
 
     if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
       console.log('Verification successful, returning challenge:', challenge);
@@ -75,51 +71,56 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid payload structure' });
     }
 
-    if (body.object === 'instagram' || body.object === 'page') {
-      body.entry.forEach((entry) => {
-        console.log('Processing entry:', entry);
+    // Process entries
+    body.entry.forEach((entry) => {
+      console.log('Processing entry:', entry);
 
-        // Handle leadgen events
+      // Handle leadgen events
+      if (entry.changes && Array.isArray(entry.changes)) {
         entry.changes.forEach(async (change) => {
           if (change.field === 'leadgen') {
             console.log('Leadgen event received:', change.value);
-            const leadDetails = await fetchLeadDetails(change.value.leadgen_id);
 
-            if (leadDetails) {
-              // Example: Log lead details or notify your team
-              console.log('Lead Details Processed:', leadDetails);
+            try {
+              const leadDetails = await fetchLeadDetails(change.value.leadgen_id);
 
-              // Optional: Notify your team (e.g., email, SMS) or save to a database
-              // await notifyTeam(leadDetails);
+              if (leadDetails) {
+                console.log('Lead Details Processed:', leadDetails);
+
+                // Optional: Notify your team or save to a database
+                // await notifyTeam(leadDetails);
+              }
+            } catch (error) {
+              console.error('Error fetching lead details:', error);
             }
           }
         });
+      }
 
-        // Handle messaging events (Instagram DMs or comments)
-        if (entry.messaging) {
-          entry.messaging.forEach(async (message) => {
-            const userMessage = message.message?.text || 'default message';
-            const recipientId = message.sender?.id || 'default recipient';
+      // Handle messaging events (Instagram DMs or comments)
+      if (entry.messaging && Array.isArray(entry.messaging)) {
+        entry.messaging.forEach(async (message) => {
+          const userMessage = message.message?.text || null;
+          const recipientId = message.sender?.id || null;
 
-            if (userMessage && recipientId) {
-              try {
-                // Example: Respond to Instagram messages via OpenAI
-                const responseMessage = `Thank you for your message: "${userMessage}". We'll get back to you soon!`;
-                await sendInstagramMessage(recipientId, responseMessage);
-                console.log('Response sent to Instagram user.');
-              } catch (error) {
-                console.error('Error processing Instagram message:', error);
-              }
+          if (userMessage && recipientId) {
+            try {
+              const responseMessage = `Thank you for your message: "${userMessage}". We'll get back to you soon!`;
+              await sendInstagramMessage(recipientId, responseMessage);
+              console.log('Response sent to Instagram user.');
+            } catch (error) {
+              console.error('Error responding to Instagram message:', error);
             }
-          });
-        }
-      });
+          } else {
+            console.warn('Message or senderId missing in messaging event:', message);
+          }
+        });
+      } else {
+        console.warn('No messaging or leadgen events found in entry:', entry);
+      }
+    });
 
-      return res.status(200).send('EVENT_RECEIVED');
-    } else {
-      console.error('Unknown object type:', body.object);
-      return res.status(400).json({ error: 'Invalid object type' });
-    }
+    return res.status(200).send('EVENT_RECEIVED');
   } else {
     return res.status(405).json({ error: 'Method not allowed' });
   }
