@@ -48,7 +48,7 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-// Function to process messaging events
+// Function to process messaging events (DMs or reactions)
 async function processMessagingEvent(message) {
   const userMessage = message.message?.text || null;
   const recipientId = message.sender?.id || null;
@@ -107,6 +107,20 @@ export default async function handler(req, res) {
     body.entry.forEach((entry) => {
       console.log('Processing entry:', entry);
 
+      // Handle changed_fields events
+      if (entry.changed_fields && Array.isArray(entry.changed_fields)) {
+        entry.changed_fields.forEach((field) => {
+          console.log('Changed field detected:', field);
+
+          if (field === 'leads_retrieval') {
+            console.log('Handling leads_retrieval event.');
+            // Add logic to fetch lead details or take other actions
+          } else {
+            console.warn('Unhandled changed_field:', field);
+          }
+        });
+      }
+
       // Handle leadgen events
       if (entry.changes && Array.isArray(entry.changes)) {
         entry.changes.forEach(async (change) => {
@@ -132,22 +146,8 @@ export default async function handler(req, res) {
         entry.messaging.forEach(async (message) => {
           await processMessagingEvent(message);
         });
-      }
-
-      // Handle changed_fields events
-      if (entry.changed_fields && Array.isArray(entry.changed_fields)) {
-        entry.changed_fields.forEach((field) => {
-          console.log('Changed field detected:', field);
-
-          if (field === 'pages_read_engagement') {
-            console.log('Handling pages_read_engagement event.');
-            // Add logic to handle this event type (e.g., log or fetch details)
-          } else {
-            console.warn('Unhandled changed_field:', field);
-          }
-        });
       } else {
-        console.warn('No messaging, leadgen, or changed_fields events found in entry:', entry);
+        console.warn('No messaging or leadgen events found in entry:', entry);
       }
     });
 
