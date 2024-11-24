@@ -55,16 +55,19 @@ async function processMessagingEvent(message) {
       const responseMessage =
         openaiResponse.choices[0]?.message?.content || "I'm here to help!";
 
+      console.log('Generated response from OpenAI:', responseMessage);
+
       // Send the OpenAI-generated response back to the Instagram user
       await sendInstagramMessage(recipientId, responseMessage);
       console.log('Dynamic response sent to Instagram user:', responseMessage);
     } catch (error) {
-      console.error('Error processing Instagram message with OpenAI:', error);
+      console.error('Error processing Instagram message with OpenAI or sending response:', error);
     }
   } else {
     console.warn('Unhandled messaging event or missing data:', message);
   }
 }
+
 
 // Primary webhook handler
 export default async function handler(req, res) {
