@@ -1,5 +1,11 @@
 import fetch from 'node-fetch';
+import OpenAI from 'openai';
 import { createGoogleCalendarEvent } from './google-calendar.js';
+import { sendSMS, makeCall } from './vonage.js';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Function to fetch lead details using the leadgen_id
 async function fetchLeadDetails(leadgenId) {
@@ -14,6 +20,7 @@ async function fetchLeadDetails(leadgenId) {
 
     const leadDetails = await response.json();
     console.log('Fetched Lead Details:', leadDetails);
+
     return leadDetails;
   } catch (error) {
     console.error('Error fetching lead details:', error);
@@ -47,20 +54,28 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-// Function to process messaging events (DMs, comments, or reactions)
+// Function to process messaging events dynamically with OpenAI
 async function processMessagingEvent(message) {
-  console.log("Processing Instagram message:", JSON.stringify(message, null, 2));
+  console.log('Processing Instagram message:', JSON.stringify(message, null, 2));
 
   const userMessage = message.message?.text || null;
   const recipientId = message.sender?.id || null;
 
   if (userMessage && recipientId) {
     try {
-      const responseMessage = `Thank you for your message: "${userMessage}". We'll get back to you soon!`;
+      const openaiResponse = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant responding to user queries.' },
+          { role: 'user', content: userMessage },
+        ],
+      });
+
+      const responseMessage = openaiResponse.choices[0]?.message?.content || "I'm here to help!";
       await sendInstagramMessage(recipientId, responseMessage);
-      console.log('Response sent to Instagram user.');
+      console.log('Dynamic response sent to Instagram user:', responseMessage);
     } catch (error) {
-      console.error('Error responding to Instagram message:', error);
+      console.error('Error processing Instagram message with OpenAI:', error);
     }
   } else if (message.reaction) {
     // Handle reaction events
@@ -107,20 +122,6 @@ export default async function handler(req, res) {
     // Process entries
     body.entry.forEach((entry) => {
       console.log('Processing entry:', entry);
-
-      // Handle changed_fields events
-      if (entry.changed_fields && Array.isArray(entry.changed_fields)) {
-        entry.changed_fields.forEach((field) => {
-          console.log('Changed field detected:', field);
-
-          if (field === 'leads_retrieval') {
-            console.log('Handling leads_retrieval event.');
-            // Logic for leads_retrieval events (if needed)
-          } else {
-            console.warn('Unhandled changed_field:', field);
-          }
-        });
-      }
 
       // Handle leadgen events
       if (entry.changes && Array.isArray(entry.changes)) {
