@@ -1,60 +1,8 @@
 import fetch from 'node-fetch';
-import OpenAI from 'openai';
-import { createGoogleCalendarEvent } from './google-calendar.js';
-import { sendSMS, makeCall } from './vonage.js';
+import { sendInstagramMessage } from './vonage.js';
+import { assistantHandler } from './assistant.js'; // Assistant integration
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// Function to fetch lead details using the leadgen_id
-async function fetchLeadDetails(leadgenId) {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v15.0/${leadgenId}?access_token=${process.env.FACEBOOK_ACCESS_TOKEN}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching lead details: ${response.statusText}`);
-    }
-
-    const leadDetails = await response.json();
-    console.log('Fetched Lead Details:', leadDetails);
-
-    return leadDetails;
-  } catch (error) {
-    console.error('Error fetching lead details:', error);
-    return null;
-  }
-}
-
-// Function to send a message back to Instagram user
-async function sendInstagramMessage(recipientId, message) {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipient: { id: recipientId },
-          message: { text: message },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to send message: ${errorText}`);
-    }
-    console.log('Message successfully sent to Instagram user.');
-  } catch (error) {
-    console.error('Error in sendInstagramMessage:', error);
-    throw error;
-  }
-}
-
-// Function to process messaging events dynamically with OpenAI
+// Function to process messaging events dynamically with OpenAI and the assistant
 async function processMessagingEvent(message) {
   console.log('Processing Instagram message:', JSON.stringify(message, null, 2));
 
@@ -63,19 +11,15 @@ async function processMessagingEvent(message) {
 
   if (userMessage && recipientId) {
     try {
-      const openaiResponse = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant responding to user queries.' },
-          { role: 'user', content: userMessage },
-        ],
-      });
+      // Use the assistant to process the user message and decide the next action
+      const assistantResponse = await assistantHandler(userMessage);
+      console.log('Assistant Response:', assistantResponse);
 
-      const responseMessage = openaiResponse.choices[0]?.message?.content || "I'm here to help!";
-      await sendInstagramMessage(recipientId, responseMessage);
-      console.log('Dynamic response sent to Instagram user:', responseMessage);
+      // Send the assistant-generated response back to Instagram
+      await sendInstagramMessage(recipientId, assistantResponse.text || "I'm here to help!");
+      console.log('Dynamic response sent to Instagram user.');
     } catch (error) {
-      console.error('Error processing Instagram message with OpenAI:', error);
+      console.error('Error processing Instagram message with assistant:', error);
     }
   } else if (message.reaction) {
     // Handle reaction events
@@ -119,29 +63,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid payload structure' });
     }
 
-    // Process entries
     body.entry.forEach((entry) => {
       console.log('Processing entry:', entry);
-
-      // Handle leadgen events
-      if (entry.changes && Array.isArray(entry.changes)) {
-        entry.changes.forEach(async (change) => {
-          if (change.field === 'leadgen') {
-            console.log('Leadgen event received:', change.value);
-
-            try {
-              const leadDetails = await fetchLeadDetails(change.value.leadgen_id);
-
-              if (leadDetails) {
-                console.log('Lead Details Processed:', leadDetails);
-                // Optional: Notify your team or save to a database
-              }
-            } catch (error) {
-              console.error('Error fetching lead details:', error);
-            }
-          }
-        });
-      }
 
       // Handle messaging events (Instagram DMs, comments, or reactions)
       if (entry.messaging && Array.isArray(entry.messaging)) {
