@@ -132,8 +132,22 @@ export default async function handler(req, res) {
         entry.messaging.forEach(async (message) => {
           await processMessagingEvent(message);
         });
+      }
+
+      // Handle changed_fields events
+      if (entry.changed_fields && Array.isArray(entry.changed_fields)) {
+        entry.changed_fields.forEach((field) => {
+          console.log('Changed field detected:', field);
+
+          if (field === 'pages_read_engagement') {
+            console.log('Handling pages_read_engagement event.');
+            // Add logic to handle this event type (e.g., log or fetch details)
+          } else {
+            console.warn('Unhandled changed_field:', field);
+          }
+        });
       } else {
-        console.warn('No messaging or leadgen events found in entry:', entry);
+        console.warn('No messaging, leadgen, or changed_fields events found in entry:', entry);
       }
     });
 
