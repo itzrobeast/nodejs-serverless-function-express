@@ -6,7 +6,7 @@ const openai = new OpenAI({
 });
 
 // Function to send a direct reply to an Instagram user
-async function sendInstagramMessage(recipientId, message) {
+export async function sendInstagramMessage(recipientId, message) {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
@@ -22,17 +22,16 @@ async function sendInstagramMessage(recipientId, message) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Error sending message to Instagram:', errorText);
-      throw new Error(`Failed to send Instagram message: ${response.statusText}`);
+      throw new Error(`Failed to send message: ${errorText}`);
     }
 
-    console.log('Message sent to Instagram user successfully.');
-    return await response.json();
+    console.log('Message successfully sent to Instagram user.');
   } catch (error) {
     console.error('Error in sendInstagramMessage:', error);
     throw error;
   }
 }
+
 
 // Function to process a single messaging event dynamically with OpenAI
 async function processMessagingEvent(message) {
@@ -43,7 +42,7 @@ async function processMessagingEvent(message) {
 
   if (userMessage && recipientId) {
     try {
-      // Use OpenAI to dynamically generate a response
+      console.log('Generating response using OpenAI...');
       const openaiResponse = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
@@ -52,21 +51,20 @@ async function processMessagingEvent(message) {
         ],
       });
 
-      const responseMessage =
-        openaiResponse.choices[0]?.message?.content || "I'm here to help!";
-
+      const responseMessage = openaiResponse.choices[0]?.message?.content || "I'm here to help!";
       console.log('Generated response from OpenAI:', responseMessage);
 
-      // Send the OpenAI-generated response back to the Instagram user
+      console.log('Sending response to Instagram user...');
       await sendInstagramMessage(recipientId, responseMessage);
-      console.log('Dynamic response sent to Instagram user:', responseMessage);
+      console.log('Response sent successfully to Instagram user.');
     } catch (error) {
-      console.error('Error processing Instagram message with OpenAI or sending response:', error);
+      console.error('Error processing message with OpenAI or sending response:', error);
     }
   } else {
     console.warn('Unhandled messaging event or missing data:', message);
   }
 }
+
 
 
 // Primary webhook handler
