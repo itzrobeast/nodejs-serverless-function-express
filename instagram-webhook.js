@@ -14,7 +14,6 @@ async function fetchLeadDetails(leadgenId) {
 
     const leadDetails = await response.json();
     console.log('Fetched Lead Details:', leadDetails);
-
     return leadDetails;
   } catch (error) {
     console.error('Error fetching lead details:', error);
@@ -48,10 +47,10 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-// Function to process messaging events (DMs or reactions)
+// Function to process messaging events (DMs, comments, or reactions)
 async function processMessagingEvent(message) {
-  console.log("Received message:", JSON.stringify(message, null, 2));
-  
+  console.log("Processing Instagram message:", JSON.stringify(message, null, 2));
+
   const userMessage = message.message?.text || null;
   const recipientId = message.sender?.id || null;
 
@@ -116,7 +115,7 @@ export default async function handler(req, res) {
 
           if (field === 'leads_retrieval') {
             console.log('Handling leads_retrieval event.');
-            // Add logic to fetch lead details or take other actions
+            // Logic for leads_retrieval events (if needed)
           } else {
             console.warn('Unhandled changed_field:', field);
           }
