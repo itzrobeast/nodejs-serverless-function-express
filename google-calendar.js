@@ -1,5 +1,3 @@
-
-// api/google-calendar.js
 import fetch from 'node-fetch';
 import { google } from 'googleapis';
 
@@ -25,18 +23,47 @@ async function getGoogleAccessToken() {
 export async function createGoogleCalendarEvent(eventDetails) {
   const accessToken = await getGoogleAccessToken();
 
-  const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${process.env.GOOGLE_CALENDAR_ID}/events`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      summary: eventDetails.summary || 'New Appointment',
-      start: { dateTime: eventDetails.startDateTime, timeZone: 'America/Los_Angeles' },
-      end: { dateTime: eventDetails.endDateTime, timeZone: 'America/Los_Angeles' }
-    })
-  });
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${process.env.GOOGLE_CALENDAR_ID}/events`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        summary: eventDetails.summary || 'New Appointment',
+        start: { dateTime: eventDetails.startDateTime, timeZone: 'America/Los_Angeles' },
+        end: { dateTime: eventDetails.endDateTime, timeZone: 'America/Los_Angeles' },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to create calendar event: ${response.statusText}`);
+  }
 
   return await response.json();
+}
+
+// Function to fetch upcoming events from Google Calendar
+export async function getUpcomingEvents(maxResults = 10) {
+  const accessToken = await getGoogleAccessToken();
+
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${process.env.GOOGLE_CALENDAR_ID}/events?maxResults=${maxResults}&orderBy=startTime&singleEvents=true`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch upcoming events: ${response.statusText}`);
+  }
+
+  const events = await response.json();
+  return events.items || [];
 }
