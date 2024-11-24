@@ -9,7 +9,7 @@ const openai = new OpenAI({
 async function sendInstagramMessage(recipientId, message) {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
+      `https://graph.facebook.com/v17.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -50,7 +50,11 @@ async function processMessagingEvent(message) {
         ],
       });
 
-      const responseMessage = openaiResponse.choices[0]?.message?.content || "I'm here to help!";
+      if (!openaiResponse || !openaiResponse.choices || !openaiResponse.choices[0]?.message?.content) {
+        throw new Error('Invalid OpenAI response format');
+      }
+
+      const responseMessage = openaiResponse.choices[0].message.content;
       console.log('Generated response from OpenAI:', responseMessage);
 
       console.log('Sending response to Instagram user...');
@@ -90,17 +94,23 @@ export default async function handler(req, res) {
     }
 
     // Process entries
-    body.entry.forEach((entry) => {
-      console.log('Processing entry:', entry);
+    try {
+      const processingTasks = body.entry.map(async (entry) => {
+        console.log('Processing entry:', entry);
 
-      if (entry.messaging && Array.isArray(entry.messaging)) {
-        entry.messaging.forEach(async (message) => {
-          await processMessagingEvent(message);
-        });
-      } else {
-        console.warn('No messaging events found in entry:', entry);
-      }
-    });
+        if (entry.messaging && Array.isArray(entry.messaging)) {
+          for (const message of entry.messaging) {
+            await processMessagingEvent(message);
+          }
+        } else {
+          console.warn('No messaging events found in entry:', entry);
+        }
+      });
+
+      await Promise.all(processingTasks);
+    } catch (error) {
+      console.error('Error processing entries:', error);
+    }
 
     return res.status(200).send('EVENT_RECEIVED');
   } else {
