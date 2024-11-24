@@ -6,7 +6,7 @@ const openai = new OpenAI({
 });
 
 // Function to send a direct reply to an Instagram user
-export async function sendInstagramMessage(recipientId, message) {
+async function sendInstagramMessage(recipientId, message) {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
@@ -31,7 +31,6 @@ export async function sendInstagramMessage(recipientId, message) {
     throw error;
   }
 }
-
 
 // Function to process a single messaging event dynamically with OpenAI
 async function processMessagingEvent(message) {
@@ -60,12 +59,12 @@ async function processMessagingEvent(message) {
     } catch (error) {
       console.error('Error processing message with OpenAI or sending response:', error);
     }
+  } else if (message.message?.is_deleted) {
+    console.log('Skipping deleted message:', message.message.mid);
   } else {
     console.warn('Unhandled messaging event or missing data:', message);
   }
 }
-
-
 
 // Primary webhook handler
 export default async function handler(req, res) {
@@ -94,7 +93,6 @@ export default async function handler(req, res) {
     body.entry.forEach((entry) => {
       console.log('Processing entry:', entry);
 
-      // Handle messaging events (Instagram DMs, comments, or reactions)
       if (entry.messaging && Array.isArray(entry.messaging)) {
         entry.messaging.forEach(async (message) => {
           await processMessagingEvent(message);
