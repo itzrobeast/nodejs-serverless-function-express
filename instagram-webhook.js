@@ -12,12 +12,18 @@ async function processMessagingEvent(message) {
   if (userMessage && recipientId) {
     try {
       // Use the assistant to process the user message and decide the next action
-      const assistantResponse = await assistantHandler(userMessage);
+      const assistantResponse = await assistantHandler({
+        userMessage,
+        recipientId,
+        platform: 'Instagram',
+      });
+
       console.log('Assistant Response:', assistantResponse);
 
       // Send the assistant-generated response back to Instagram
-      await sendInstagramMessage(recipientId, assistantResponse.text || "I'm here to help!");
-      console.log('Dynamic response sent to Instagram user.');
+      const responseText = assistantResponse.text || "I'm here to help!";
+      await sendInstagramMessage(recipientId, responseText);
+      console.log('Dynamic response sent to Instagram user:', responseText);
     } catch (error) {
       console.error('Error processing Instagram message with assistant:', error);
     }
@@ -69,7 +75,11 @@ export default async function handler(req, res) {
       // Handle messaging events (Instagram DMs, comments, or reactions)
       if (entry.messaging && Array.isArray(entry.messaging)) {
         entry.messaging.forEach(async (message) => {
-          await processMessagingEvent(message);
+          try {
+            await processMessagingEvent(message);
+          } catch (error) {
+            console.error('Error processing messaging event:', error);
+          }
         });
       } else {
         console.warn('No messaging or leadgen events found in entry:', entry);
