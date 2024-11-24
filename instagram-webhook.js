@@ -50,6 +50,8 @@ async function sendInstagramMessage(recipientId, message) {
 
 // Function to process messaging events (DMs or reactions)
 async function processMessagingEvent(message) {
+  console.log("Received message:", JSON.stringify(message, null, 2));
+  
   const userMessage = message.message?.text || null;
   const recipientId = message.sender?.id || null;
 
