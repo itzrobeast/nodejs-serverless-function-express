@@ -1,83 +1,51 @@
 import fetch from 'node-fetch';
 import { createGoogleCalendarEvent } from './google-calendar.js';
 
-// Function to interact with OpenAI API
-async function callOpenAI(userMessage) {
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
-
-    const data = await response.json();
-    return data.choices[0]?.message?.content || 'Sorry, I could not process your request.';
-  } catch (error) {
-    console.error('Error calling OpenAI:', error);
-    throw new Error('Failed to get response from OpenAI');
-  }
-}
-
-// Function to send a message back to Instagram or Messenger user
-async function sendMessage(platform, recipientId, message) {
-  const platformUrl =
-    platform === 'instagram'
-      ? `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`
-      : `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.FACEBOOK_ACCESS_TOKEN}`;
-
-  try {
-    const response = await fetch(platformUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipient: { id: recipientId },
-        message: { text: message },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Error sending message to ${platform}:`, errorText);
-      throw new Error(`Failed to send message: ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error('Error in sendMessage:', error);
-    throw error;
-  }
-}
-
-// Helper function to extract event details
-function extractEventDetails(userMessage) {
-  const date = new Date();
-  const startDateTime = date.toISOString();
-  const endDateTime = new Date(date.getTime() + 60 * 60 * 1000).toISOString();
-
-  return {
-    summary: 'Scheduled Appointment',
-    startDateTime,
-    endDateTime,
-  };
-}
-
-// Function to process Leadgen events
-async function processLeadgenEvent(leadId) {
+// Function to fetch lead details using the leadgen_id
+async function fetchLeadDetails(leadgenId) {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v15.0/${leadId}?access_token=${process.env.FACEBOOK_ACCESS_TOKEN}`
+      `https://graph.facebook.com/v15.0/${leadgenId}?access_token=${process.env.FACEBOOK_ACCESS_TOKEN}`
     );
-    const leadDetails = await response.json();
-    console.log('Lead details:', leadDetails);
 
-    // Handle lead details (e.g., save to DB, notify team)
+    if (!response.ok) {
+      throw new Error(`Error fetching lead details: ${response.statusText}`);
+    }
+
+    const leadDetails = await response.json();
+    console.log('Fetched Lead Details:', leadDetails);
+
+    // Further processing (e.g., save to DB, notify team, push to CRM)
     return leadDetails;
   } catch (error) {
     console.error('Error fetching lead details:', error);
+    return null;
+  }
+}
+
+// Function to send a message back to Instagram user
+async function sendInstagramMessage(recipientId, message) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: { id: recipientId },
+          message: { text: message },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error sending message to Instagram:', errorText);
+      throw new Error(`Failed to send message: ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('Error in sendInstagramMessage:', error);
+    throw error;
   }
 }
 
@@ -111,7 +79,23 @@ export default async function handler(req, res) {
       body.entry.forEach((entry) => {
         console.log('Processing entry:', entry);
 
-        // Handle Instagram or Messenger events
+        // Handle leadgen events
+        entry.changes.forEach(async (change) => {
+          if (change.field === 'leadgen') {
+            console.log('Leadgen event received:', change.value);
+            const leadDetails = await fetchLeadDetails(change.value.leadgen_id);
+
+            if (leadDetails) {
+              // Example: Log lead details or notify your team
+              console.log('Lead Details Processed:', leadDetails);
+
+              // Optional: Notify your team (e.g., email, SMS) or save to a database
+              // await notifyTeam(leadDetails);
+            }
+          }
+        });
+
+        // Handle messaging events (Instagram DMs or comments)
         if (entry.messaging) {
           entry.messaging.forEach(async (message) => {
             const userMessage = message.message?.text || 'default message';
@@ -119,30 +103,13 @@ export default async function handler(req, res) {
 
             if (userMessage && recipientId) {
               try {
-                const gptResponse = await callOpenAI(userMessage);
-                console.log('Generated response from OpenAI:', gptResponse);
-
-                if (userMessage.toLowerCase().includes('book appointment')) {
-                  const eventDetails = extractEventDetails(userMessage);
-                  await createGoogleCalendarEvent(eventDetails);
-                  console.log('Appointment created in Google Calendar');
-                }
-
-                await sendMessage('instagram', recipientId, gptResponse);
-                console.log('Response sent back to user');
+                // Example: Respond to Instagram messages via OpenAI
+                const responseMessage = `Thank you for your message: "${userMessage}". We'll get back to you soon!`;
+                await sendInstagramMessage(recipientId, responseMessage);
+                console.log('Response sent to Instagram user.');
               } catch (error) {
-                console.error('Error processing message event:', error);
+                console.error('Error processing Instagram message:', error);
               }
-            }
-          });
-        }
-
-        // Handle Leadgen events
-        if (entry.changes) {
-          entry.changes.forEach((change) => {
-            if (change.field === 'leadgen') {
-              console.log('Leadgen event received:', change.value);
-              processLeadgenEvent(change.value.lead_id);
             }
           });
         }
