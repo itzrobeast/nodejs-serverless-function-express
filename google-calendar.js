@@ -1,6 +1,5 @@
 import fetch from 'node-fetch';
 import { google } from 'googleapis';
-import { applyCors } from './cors'; // Import centralized CORS utility
 
 // Decode and initialize Google credentials from service_account.json in environment variable
 const serviceAccount = JSON.parse(
@@ -26,12 +25,7 @@ async function getGoogleAccessToken() {
 }
 
 // Function to create a Google Calendar event
-export async function createGoogleCalendarEvent(eventDetails, req, res) {
-  applyCors(res); // Apply CORS headers
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end(); // Handle preflight requests
-  }
-
+export async function createGoogleCalendarEvent(eventDetails) {
   try {
     const accessToken = await getGoogleAccessToken();
 
@@ -63,20 +57,15 @@ export async function createGoogleCalendarEvent(eventDetails, req, res) {
     }
 
     const event = await response.json();
-    return res.status(200).json(event);
+    return event;
   } catch (error) {
     console.error('Error creating Google Calendar event:', error);
-    return res.status(500).json({ error: 'Failed to create calendar event' });
+    throw error;
   }
 }
 
 // Function to fetch upcoming events from Google Calendar
-export async function getUpcomingEvents(req, res, maxResults = 10) {
-  applyCors(res); // Apply CORS headers
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end(); // Handle preflight requests
-  }
-
+export async function getUpcomingEvents(maxResults = 10) {
   try {
     const accessToken = await getGoogleAccessToken();
 
@@ -96,9 +85,9 @@ export async function getUpcomingEvents(req, res, maxResults = 10) {
     }
 
     const events = await response.json();
-    return res.status(200).json(events.items || []);
+    return events.items || [];
   } catch (error) {
     console.error('Error fetching upcoming Google Calendar events:', error);
-    return res.status(500).json({ error: 'Failed to fetch upcoming events' });
+    throw error;
   }
 }
