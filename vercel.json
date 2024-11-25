@@ -10,6 +10,7 @@
     { "src": "/google-calendar", "dest": "google-calendar.js" },
     { "src": "/assistant", "dest": "assistant.js" },
     { "src": "/setup-business", "dest": "/setup-business.js" },
+    { "src": "/favicon.ico", "dest": "/favicon.ico" },
     { "src": "/(.*)", "dest": "index.js" }
   ]
 }
