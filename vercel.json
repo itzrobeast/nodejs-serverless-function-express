@@ -9,6 +9,7 @@
     { "src": "/instagram-webhook", "dest": "instagram-webhook.js" },
     { "src": "/google-calendar", "dest": "google-calendar.js" },
     { "src": "/assistant", "dest": "assistant.js" },
+    { "src": "/setup-business", "dest": "/setup-business.js" },
     { "src": "/(.*)", "dest": "index.js" }
   ]
 }
