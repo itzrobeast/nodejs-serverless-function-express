@@ -1,5 +1,26 @@
 import fetch from 'node-fetch';
 import OpenAI from 'openai';
+import { applyCors } from './cors';
+
+export default async function handler(req, res) {
+  // Apply CORS headers
+  applyCors(res);
+
+  if (req.method === 'OPTIONS') {
+    // Handle preflight request
+    return res.status(200).end();
+  }
+
+  if (req.method === 'POST') {
+    console.log('Processing Instagram webhook:', req.body);
+    res.status(200).json({ message: 'Webhook received successfully!' });
+  } else {
+    res.status(405).json({ error: 'Method Not Allowed' });
+  }
+}
+
+
+
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
