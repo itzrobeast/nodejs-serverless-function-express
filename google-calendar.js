@@ -1,10 +1,17 @@
 import fetch from 'node-fetch';
 import { google } from 'googleapis';
 
-// Decode and initialize Google credentials from service_account.json in environment variable
-const serviceAccount = JSON.parse(
-  Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT, 'base64').toString('utf8')
-);
+// Decode and initialize Google credentials from the environment variable
+const serviceAccount = (() => {
+  try {
+    return JSON.parse(
+      Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT, 'base64').toString('utf8')
+    );
+  } catch (error) {
+    console.error('Failed to parse Google service account credentials:', error);
+    throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT environment variable');
+  }
+})();
 
 // Function to generate a Google API access token
 async function getGoogleAccessToken() {
@@ -20,7 +27,7 @@ async function getGoogleAccessToken() {
     return jwtClient.credentials.access_token;
   } catch (error) {
     console.error('Failed to generate Google API access token:', error);
-    throw error;
+    throw new Error('Unable to authenticate with Google API');
   }
 }
 
@@ -57,6 +64,7 @@ export async function createGoogleCalendarEvent(eventDetails) {
     }
 
     const event = await response.json();
+    console.log('Google Calendar event created successfully:', event);
     return event;
   } catch (error) {
     console.error('Error creating Google Calendar event:', error);
@@ -85,6 +93,7 @@ export async function getUpcomingEvents(maxResults = 10) {
     }
 
     const events = await response.json();
+    console.log('Fetched upcoming Google Calendar events successfully:', events.items);
     return events.items || [];
   } catch (error) {
     console.error('Error fetching upcoming Google Calendar events:', error);
