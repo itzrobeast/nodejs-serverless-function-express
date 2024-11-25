@@ -1,18 +1,22 @@
 import express from 'express';
-import { applyCors } from './cors'; // Import the centralized CORS utility
+import { applyCors } from './cors';
 
-const app = express();
-app.use(express.json()); // Middleware to parse JSON payloads
+export default async function handler(req, res) {
+  // Dynamically apply CORS headers based on environment variable
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app';
+  applyCors(res, allowedOrigin);
 
-// Middleware to apply CORS for all routes
-app.use((req, res, next) => {
-  applyCors(res);
   if (req.method === 'OPTIONS') {
-    // Handle preflight requests
-    return res.status(200).end();
+    return res.status(200).end(); // Handle preflight request
   }
-  next();
-});
+
+  if (req.method === 'POST') {
+    return res.status(200).json({ message: 'Hello from serverless function!' });
+  } else {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+}
+
 
 // Root route for quick testing
 app.get('/', (req, res) => {
