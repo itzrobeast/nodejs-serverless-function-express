@@ -1,7 +1,11 @@
 import express from 'express';
 import { applyCors } from './cors';
 
-export default async function handler(req, res) {
+const app = express();
+app.use(express.json()); // Middleware to parse JSON
+
+// Function to dynamically apply CORS headers
+const handler = async (req, res) => {
   // Dynamically apply CORS headers based on environment variable
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app';
   applyCors(res, allowedOrigin);
@@ -15,8 +19,7 @@ export default async function handler(req, res) {
   } else {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
-}
-
+};
 
 // Root route for quick testing
 app.get('/', (req, res) => {
@@ -51,9 +54,12 @@ app.post('/webhook', (req, res) => {
 });
 
 // Start the server (for local testing)
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
 
+// Export the app for serverless deployment
 export default app;
