@@ -1,5 +1,5 @@
 import express from 'express';
-import { applyCors } from './cors';
+import { applyCors } from './utils/cors';
 
 const app = express();
 app.use(express.json()); // Middleware to parse JSON
