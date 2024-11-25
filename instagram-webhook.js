@@ -1,7 +1,7 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import OpenAI from 'openai';
-import { applyCors } from './utils/cors';
+import { applyCors } from './utils/cors.js';
 
 const router = express.Router();
 const openai = new OpenAI({
