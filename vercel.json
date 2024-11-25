@@ -4,7 +4,6 @@
     { "src": "instagram-webhook.js", "use": "@vercel/node" },
     { "src": "google-calendar.js", "use": "@vercel/node" },
     { "src": "setup-business.js", "use": "@vercel/node" },
-    { "src": "favicon.ico", "use": "@vercel/node" },
     { "src": "assistant.js", "use": "@vercel/node" }
   ],
   "routes": [
