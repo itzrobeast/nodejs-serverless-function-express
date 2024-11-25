@@ -3,22 +3,20 @@ import fetch from 'node-fetch';
 import OpenAI from 'openai';
 import { applyCors } from './cors';
 
-export default async function handler(req, res) {
-  // Dynamically apply CORS headers based on environment variable
+const router = express.Router();
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Middleware to dynamically apply CORS headers
+router.use((req, res, next) => {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app';
   applyCors(res, allowedOrigin);
-
   if (req.method === 'OPTIONS') {
-    return res.status(200).end(); // Handle preflight request
+    return res.status(200).end(); // Handle preflight requests
   }
-
-  if (req.method === 'POST') {
-    return res.status(200).json({ message: 'Hello from serverless function!' });
-  } else {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-}
-
+  next();
+});
 
 // Function to send a direct reply to an Instagram user
 async function sendInstagramMessage(recipientId, message) {
