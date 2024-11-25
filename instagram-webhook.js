@@ -1,29 +1,21 @@
+import express from 'express';
 import fetch from 'node-fetch';
 import OpenAI from 'openai';
-import { applyCors } from './cors';
+import { applyCors } from './cors'; // Import centralized CORS utility
 
-export default async function handler(req, res) {
-  // Apply CORS headers
-  applyCors(res);
-
-  if (req.method === 'OPTIONS') {
-    // Handle preflight request
-    return res.status(200).end();
-  }
-
-  if (req.method === 'POST') {
-    console.log('Processing Instagram webhook:', req.body);
-    res.status(200).json({ message: 'Webhook received successfully!' });
-  } else {
-    res.status(405).json({ error: 'Method Not Allowed' });
-  }
-}
-
-
-
+const router = express.Router();
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Apply CORS headers for all requests
+router.use((req, res, next) => {
+  applyCors(res);
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end(); // Handle preflight requests
+  }
+  next();
 });
 
 // Function to send a direct reply to an Instagram user
@@ -91,50 +83,48 @@ async function processMessagingEvent(message) {
   }
 }
 
-// Primary webhook handler
-export default async function handler(req, res) {
-  console.log('Received request:', req.method);
-  console.log('Full query parameters:', req.query);
+// GET endpoint for webhook verification
+router.get('/', (req, res) => {
+  const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
-  if (req.method === 'GET') {
-    const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
-
-    if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
-      console.log('Verification successful, returning challenge:', challenge);
-      return res.status(200).send(challenge);
-    } else {
-      console.error('Verification failed');
-      return res.status(403).send('Verification failed');
-    }
-  } else if (req.method === 'POST') {
-    const body = req.body;
-
-    if (!body || !body.object) {
-      console.error('Invalid payload:', body);
-      return res.status(400).json({ error: 'Invalid payload structure' });
-    }
-
-    // Process entries
-    try {
-      const processingTasks = body.entry.map(async (entry) => {
-        console.log('Processing entry:', entry);
-
-        if (entry.messaging && Array.isArray(entry.messaging)) {
-          for (const message of entry.messaging) {
-            await processMessagingEvent(message);
-          }
-        } else {
-          console.warn('No messaging events found in entry:', entry);
-        }
-      });
-
-      await Promise.all(processingTasks);
-    } catch (error) {
-      console.error('Error processing entries:', error);
-    }
-
-    return res.status(200).send('EVENT_RECEIVED');
+  if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
+    console.log('Verification successful, returning challenge:', challenge);
+    return res.status(200).send(challenge);
   } else {
-    return res.status(405).json({ error: 'Method not allowed' });
+    console.error('Verification failed');
+    return res.status(403).send('Verification failed');
   }
-}
+});
+
+// POST endpoint for processing webhook events
+router.post('/', async (req, res) => {
+  const body = req.body;
+
+  if (!body || !body.object) {
+    console.error('Invalid webhook payload:', body);
+    return res.status(400).json({ error: 'Invalid payload structure' });
+  }
+
+  // Process entries
+  try {
+    const processingTasks = body.entry.map(async (entry) => {
+      console.log('Processing entry:', entry);
+
+      if (entry.messaging && Array.isArray(entry.messaging)) {
+        for (const message of entry.messaging) {
+          await processMessagingEvent(message);
+        }
+      } else {
+        console.warn('No messaging events found in entry:', entry);
+      }
+    });
+
+    await Promise.all(processingTasks);
+    return res.status(200).send('EVENT_RECEIVED');
+  } catch (error) {
+    console.error('Error processing entries:', error);
+    return res.status(500).json({ error: 'Failed to process webhook events' });
+  }
+});
+
+export default router;
