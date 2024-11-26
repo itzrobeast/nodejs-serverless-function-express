@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 const router = express.Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Ensure the request body is parsed
+// Ensure JSON parsing
 router.use(express.json());
 
 // CORS Middleware
@@ -103,33 +103,29 @@ router.get('/', (req, res) => {
 
 // Webhook Event Handler
 router.post('/', async (req, res) => {
-  const body = req.body;
-
-  if (!body || typeof body !== 'object') {
-    console.error('Invalid webhook payload:', body);
-    return res.status(400).json({ error: 'Invalid payload structure' });
-  }
-
   try {
-    if (!body.entry || !Array.isArray(body.entry)) {
-      console.error('Invalid entry structure in payload:', body);
-      return res.status(400).json({ error: 'Invalid entry structure' });
+    console.log('Incoming webhook payload:', req.body);
+
+    const { entry } = req.body;
+    if (!Array.isArray(entry)) {
+      console.error('Invalid payload structure:', req.body);
+      return res.status(400).json({ error: 'Invalid payload structure' });
     }
 
-    const tasks = body.entry.map(async (entry) => {
-      if (entry.messaging && Array.isArray(entry.messaging)) {
-        for (const message of entry.messaging) {
+    const tasks = entry.map(async (entryItem) => {
+      if (entryItem.messaging && Array.isArray(entryItem.messaging)) {
+        for (const message of entryItem.messaging) {
           await processMessagingEvent(message);
         }
       } else {
-        console.warn('No messaging array found in entry:', entry);
+        console.warn('No messaging field in entry:', entryItem);
       }
     });
 
     await Promise.all(tasks);
     res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
-    console.error('Error processing webhook entries:', error);
+    console.error('Error processing webhook:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
