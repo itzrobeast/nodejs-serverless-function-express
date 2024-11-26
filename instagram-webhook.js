@@ -35,10 +35,11 @@ async function sendInstagramMessage(recipientId, message) {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Error sending Instagram message:', errorText);
       throw new Error(`Failed to send message: ${errorText}`);
     }
 
-    console.log('Message successfully sent to Instagram user.');
+    console.log('Message successfully sent to Instagram user:', recipientId);
   } catch (error) {
     console.error('Error in sendInstagramMessage:', error);
     throw error;
@@ -48,12 +49,20 @@ async function sendInstagramMessage(recipientId, message) {
 // Process messaging events
 async function processMessagingEvent(message) {
   try {
+    if (!message) {
+      console.warn('Received undefined message in event.');
+      return;
+    }
+
     console.log('Processing Instagram message:', JSON.stringify(message, null, 2));
 
     const userMessage = message.message?.text || null;
     const recipientId = message.sender?.id || null;
 
     if (userMessage && recipientId) {
+      console.log('User message:', userMessage);
+      console.log('Recipient ID:', recipientId);
+
       const openaiResponse = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
@@ -62,8 +71,11 @@ async function processMessagingEvent(message) {
         ],
       });
 
-      const responseMessage = openaiResponse.choices[0]?.message?.content;
-      if (!responseMessage) throw new Error('Invalid OpenAI response');
+      const responseMessage = openaiResponse.choices?.[0]?.message?.content;
+      if (!responseMessage) {
+        console.error('Invalid OpenAI response:', openaiResponse);
+        throw new Error('Invalid OpenAI response');
+      }
 
       await sendInstagramMessage(recipientId, responseMessage);
     } else if (message.message?.is_deleted) {
@@ -81,10 +93,11 @@ router.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
   if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
-    console.log('Verification successful:', challenge);
+    console.log('Webhook verification successful.');
     return res.status(200).send(challenge);
   }
 
+  console.error('Webhook verification failed.');
   return res.status(403).send('Verification failed');
 });
 
@@ -98,11 +111,18 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    if (!body.entry || !Array.isArray(body.entry)) {
+      console.error('Invalid entry structure in payload:', body);
+      return res.status(400).json({ error: 'Invalid entry structure' });
+    }
+
     const tasks = body.entry.map(async (entry) => {
-      if (entry.messaging) {
+      if (entry.messaging && Array.isArray(entry.messaging)) {
         for (const message of entry.messaging) {
           await processMessagingEvent(message);
         }
+      } else {
+        console.warn('No messaging array found in entry:', entry);
       }
     });
 
