@@ -5,6 +5,9 @@ import OpenAI from 'openai';
 const router = express.Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Ensure the request body is parsed
+router.use(express.json());
+
 // CORS Middleware
 router.use((req, res, next) => {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app';
@@ -60,9 +63,6 @@ async function processMessagingEvent(message) {
     const recipientId = message.sender?.id || null;
 
     if (userMessage && recipientId) {
-      console.log('User message:', userMessage);
-      console.log('Recipient ID:', recipientId);
-
       const openaiResponse = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
