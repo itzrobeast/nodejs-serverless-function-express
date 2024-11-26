@@ -18,7 +18,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// Helper function to send messages
+// Helper function to send Instagram messages
 async function sendInstagramMessage(recipientId, message) {
   try {
     const response = await fetch(
@@ -46,7 +46,7 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-// Process messaging events
+// Process Instagram messaging events
 async function processMessagingEvent(message) {
   try {
     if (!message) {
@@ -88,7 +88,7 @@ async function processMessagingEvent(message) {
   }
 }
 
-// Webhook Verification
+// Webhook Verification Endpoint
 router.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
@@ -101,7 +101,7 @@ router.get('/', (req, res) => {
   return res.status(403).send('Verification failed');
 });
 
-// Handle Webhook Events
+// Webhook Event Handler
 router.post('/', async (req, res) => {
   const body = req.body;
 
