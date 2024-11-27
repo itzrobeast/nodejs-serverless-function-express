@@ -1,22 +1,28 @@
 import express from 'express';
 import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
+import setupBusiness from './setup-business.js';
+import assistant from './assistant.js';
+import googleCalendar from './google-calendar.js';
 
 const app = express();
 
-// Middleware
-app.use(express.json()); // JSON parsing middleware
+// Apply Middleware
+app.use(express.json()); // Parse JSON
 app.use(
   cors({
-    origin: 'https://mila-verse.vercel.app', // Allow only your frontend domain
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    credentials: true,
+    origin: 'https://mila-verse.vercel.app', // Allow your frontend
+    methods: ['GET', 'POST', 'OPTIONS'], // Allowed methods
+    allowedHeaders: ['Content-Type'], // Allowed headers
+    credentials: true, // Include credentials
   })
 );
 
 // Routes
 app.use('/instagram-webhook', instagramWebhook);
+app.use('/setup-business', setupBusiness);
+app.use('/assistant', assistant);
+app.use('/google-calendar', googleCalendar);
 
 // Root Route
 app.get('/', (req, res) => {
