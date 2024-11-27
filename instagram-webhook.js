@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 const router = express.Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Webhook Verification
+// Webhook verification
 router.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
@@ -27,6 +27,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload structure' });
     }
 
+    // Process each entry in the webhook event
     const tasks = body.entry.map(async (entry) => {
       if (entry.messaging) {
         for (const message of entry.messaging) {
@@ -43,7 +44,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Helper Functions
+// Helper function to process messaging events
 async function processMessagingEvent(message) {
   try {
     console.log('Processing Instagram message:', JSON.stringify(message, null, 2));
@@ -55,7 +56,7 @@ async function processMessagingEvent(message) {
       const openaiResponse = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
-          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'system', content: 'You are a helpful assistant responding to customer inquiries.' },
           { role: 'user', content: userMessage },
         ],
       });
@@ -74,6 +75,7 @@ async function processMessagingEvent(message) {
   }
 }
 
+// Helper function to send Instagram messages
 async function sendInstagramMessage(recipientId, message) {
   try {
     const response = await fetch(
@@ -96,6 +98,7 @@ async function sendInstagramMessage(recipientId, message) {
     console.log('Message successfully sent to Instagram user.');
   } catch (error) {
     console.error('Error in sendInstagramMessage:', error);
+    throw error;
   }
 }
 
