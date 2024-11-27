@@ -1,9 +1,6 @@
 import express from 'express';
-import fetch from 'node-fetch';
-import OpenAI from 'openai';
 
 const router = express.Router();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Webhook verification
 router.get('/', (req, res) => {
@@ -39,13 +36,13 @@ router.post('/', async (req, res, next) => {
     res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
     console.error('Error processing webhook entries:', error);
-    next(error); // Pass error to error-handling middleware
+    next(error);
   }
 });
 
 async function processMessagingEvent(message) {
   console.log('Processing Instagram message:', message);
-  // Add logic to process events (omitted for brevity)
+  // Add logic to process events
 }
 
 export default router;
