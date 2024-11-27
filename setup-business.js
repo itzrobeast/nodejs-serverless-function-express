@@ -3,15 +3,15 @@ import cors from 'cors';
 
 const router = express.Router();
 
-// CORS Configuration
-const corsMiddleware = cors({
-  origin: 'https://mila-verse.vercel.app',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true,
-});
-
-router.use(corsMiddleware);
+// CORS configuration
+router.use(
+  cors({
+    origin: 'https://mila-verse.vercel.app',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+    credentials: true,
+  })
+);
 
 router.post('/', (req, res) => {
   const { businessName, ownerName, contactEmail } = req.body;
