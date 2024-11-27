@@ -1,6 +1,11 @@
 import fetch from 'node-fetch';
 import { google } from 'googleapis';
 
+// Validate environment variables early
+if (!process.env.GOOGLE_SERVICE_ACCOUNT || !process.env.GOOGLE_CALENDAR_ID) {
+  throw new Error('Missing required environment variables: GOOGLE_SERVICE_ACCOUNT or GOOGLE_CALENDAR_ID');
+}
+
 // Decode and initialize Google credentials from the environment variable
 const serviceAccount = (() => {
   try {
@@ -26,7 +31,7 @@ async function getGoogleAccessToken() {
     await jwtClient.authorize();
     return jwtClient.credentials.access_token;
   } catch (error) {
-    console.error('Failed to generate Google API access token:', error);
+    console.error('Failed to generate Google API access token:', error.message, error.stack);
     throw new Error('Unable to authenticate with Google API');
   }
 }
@@ -60,6 +65,7 @@ export async function createGoogleCalendarEvent(eventDetails) {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Response error:', response.status, response.statusText);
       throw new Error(`Failed to create calendar event: ${errorText}`);
     }
 
@@ -67,7 +73,7 @@ export async function createGoogleCalendarEvent(eventDetails) {
     console.log('Google Calendar event created successfully:', event);
     return event;
   } catch (error) {
-    console.error('Error creating Google Calendar event:', error);
+    console.error('Error creating Google Calendar event:', error.message, error.stack);
     throw error;
   }
 }
@@ -89,6 +95,7 @@ export async function getUpcomingEvents(maxResults = 10) {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Response error:', response.status, response.statusText);
       throw new Error(`Failed to fetch upcoming events: ${errorText}`);
     }
 
@@ -96,7 +103,7 @@ export async function getUpcomingEvents(maxResults = 10) {
     console.log('Fetched upcoming Google Calendar events successfully:', events.items);
     return events.items || [];
   } catch (error) {
-    console.error('Error fetching upcoming Google Calendar events:', error);
+    console.error('Error fetching upcoming Google Calendar events:', error.message, error.stack);
     throw error;
   }
 }
