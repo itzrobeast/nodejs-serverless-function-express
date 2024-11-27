@@ -25,9 +25,11 @@ router.get('/', (req, res) => {
 // Handle Webhook Events
 router.post('/', async (req, res, next) => {
   try {
+    console.log('[DEBUG] Received payload:', JSON.stringify(req.body, null, 2));
+
     const body = req.body;
 
-    if (!body || typeof body !== 'object' || !body.entry) {
+    if (!body || !body.entry || !Array.isArray(body.entry)) {
       console.error('[ERROR] Invalid webhook payload:', body);
       return res.status(400).json({ error: 'Invalid payload structure' });
     }
@@ -35,6 +37,7 @@ router.post('/', async (req, res, next) => {
     const tasks = body.entry.map(async (entry) => {
       if (entry.messaging) {
         for (const message of entry.messaging) {
+          console.log('[DEBUG] Processing messaging event');
           await processMessagingEvent(message);
         }
       }
