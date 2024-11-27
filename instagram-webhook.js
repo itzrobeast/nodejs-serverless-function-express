@@ -3,6 +3,10 @@ import fetch from 'node-fetch';
 import OpenAI from 'openai';
 
 const router = express.Router();
+router.post('/', (req, res) => {
+    console.log('POST request received:', req.body);
+    res.status(200).send('Webhook received');
+});
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Helper function to send messages
