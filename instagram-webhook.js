@@ -5,15 +5,6 @@ import OpenAI from 'openai';
 const router = express.Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-
-// Define the POST route for /instagram-webhook
-router.post('/', (req, res) => {
-  // Your handler logic here
-  res.status(200).send('Webhook received');
-});
-
-
-
 // Helper function to send messages
 async function sendInstagramMessage(recipientId, message) {
   try {
@@ -58,7 +49,7 @@ async function processMessagingEvent(message) {
         ],
       });
 
-      const responseMessage = openaiResponse.choices[0]?.message?.content;
+      const responseMessage = openaiResponse.choices?.[0]?.message?.content;
       if (!responseMessage) throw new Error('Invalid OpenAI response');
 
       await sendInstagramMessage(recipientId, responseMessage);
@@ -110,11 +101,5 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Error-handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something went wrong!');
-});
-
-
+// Export the router
 export default router;
