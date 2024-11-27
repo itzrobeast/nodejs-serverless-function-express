@@ -3,6 +3,27 @@ import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
 import setupBusiness from './setup-business.js';
 import assistant from './assistant.js';
+// Environment Variable Validation
+const requiredVars = [
+  'FACEBOOK_ACCESS_TOKEN',
+  'VONAGE_API_KEY',
+  'INSTAGRAM_ACCESS_TOKEN',
+  'INSTAGRAM_APP_ID',
+  'INSTAGRAM_APP_SECRET',
+  'INSTAGRAM_VERIFY_TOKEN',
+  'GOOGLE_SERVICE_ACCOUNT',
+  'GOOGLE_CALENDAR_ID',
+  'OPENAI_API_KEY',
+];
+
+requiredVars.forEach((varName) => {
+  if (!process.env[varName]) {
+    console.error(`[ERROR] Missing environment variable: ${varName}`);
+    process.exit(1); // Exit the process if a required variable is missing
+  }
+});
+
+console.log('[DEBUG] All required environment variables are set');
 
 const app = express();
 
