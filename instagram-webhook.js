@@ -73,7 +73,7 @@ async function processMessagingEvent(message) {
 
 // Send reply via Instagram Graph API
 async function sendReplyToInstagram(senderId, reply) {
-  const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+  const pageAccessToken = process.env.FACEBOOK_ACCESS_TOKEN;
   const url = 'https://graph.facebook.com/v17.0/me/messages';
 
   try {
