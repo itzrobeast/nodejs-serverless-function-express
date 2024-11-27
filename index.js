@@ -16,6 +16,16 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((err, req, res, next) => {
+  console.error(`[ERROR] Uncaught exception: ${err.message}`);
+  console.error(`[ERROR] Stack trace: ${err.stack}`);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+router.post('/', (req, res, next) => {
+  console.log('[DEBUG] Incoming payload:', JSON.stringify(req.body, null, 2));
+  next();
+});
+
 
 // CORS configuration
 const allowedOrigin = 'https://mila-verse.vercel.app'; // Frontend URL
