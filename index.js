@@ -5,22 +5,19 @@ import setupBusiness from './setup-business.js';
 import assistant from './assistant.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
 
-// Use createGoogleCalendarEvent and getUpcomingEvents as needed.
-
-
 const app = express();
 
-// Middleware
-app.use(express.json()); // Parse JSON
+// Middleware to parse JSON
+app.use(express.json());
 
-// Debugging Middleware
+// Debugging middleware to log requests
 app.use((req, res, next) => {
   console.log(`[DEBUG] Request to ${req.url} - Method: ${req.method}`);
   next();
 });
 
-// CORS Configuration
-const allowedOrigin = 'https://mila-verse.vercel.app'; // Your frontend URL
+// CORS configuration
+const allowedOrigin = 'https://mila-verse.vercel.app'; // Frontend URL
 app.use(
   cors({
     origin: allowedOrigin,
@@ -34,19 +31,18 @@ app.use(
 app.use('/instagram-webhook', instagramWebhook);
 app.use('/setup-business', setupBusiness);
 app.use('/assistant', assistant);
-app.use('/google-calendar', googleCalendar);
 
-// Root Route
+// Root route
 app.get('/', (req, res) => {
   res.status(200).send('Welcome to the Node.js Serverless Function!');
 });
 
-// Fallback Route
+// Fallback route for 404 errors
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Error Handling Middleware
+// Error-handling middleware
 app.use((err, req, res, next) => {
   console.error('Error occurred:', err.stack);
   res.status(500).json({ error: 'Internal Server Error' });
