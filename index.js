@@ -3,7 +3,10 @@ import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
 import setupBusiness from './setup-business.js';
 import assistant from './assistant.js';
-import googleCalendar from './google-calendar.js';
+import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
+
+// Use createGoogleCalendarEvent and getUpcomingEvents as needed.
+
 
 const app = express();
 
