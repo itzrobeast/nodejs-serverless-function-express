@@ -48,8 +48,50 @@ router.post('/', async (req, res, next) => {
 });
 
 async function processMessagingEvent(message) {
-  console.log('Processing Instagram message:', message);
-  // Add logic to process events
+  try {
+    // Check if the message has text
+    if (message.message && message.message.text) {
+      const userMessage = message.message.text;
+      console.log(`[DEBUG] Received message: "${userMessage}"`);
+
+      // Example: Send a predefined reply
+      const reply = `You said: "${userMessage}" - Thank you for messaging us!`;
+
+      // Mock function to send a reply via Meta API (replace this with real implementation)
+      await sendReplyToInstagram(message.sender.id, reply);
+    } else {
+      console.log(`[DEBUG] Unsupported message format:`, message);
+    }
+  } catch (error) {
+    console.error(`[ERROR] Failed to process message: ${error.message}`);
+    throw error;
+  }
 }
+
+// Helper function to send replies via the Instagram Graph API
+async function sendReplyToInstagram(senderId, reply) {
+  const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+  const url = `https://graph.facebook.com/v17.0/me/messages`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${pageAccessToken}`,
+    },
+    body: JSON.stringify({
+      recipient: { id: senderId },
+      message: { text: reply },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to send message: ${errorText}`);
+  }
+
+  console.log(`[DEBUG] Reply sent successfully: "${reply}"`);
+}
+
 
 export default router;
