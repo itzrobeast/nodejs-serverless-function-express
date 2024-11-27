@@ -1,11 +1,6 @@
 import fetch from 'node-fetch';
 import { google } from 'googleapis';
 
-// Validate environment variables early
-if (!process.env.GOOGLE_SERVICE_ACCOUNT || !process.env.GOOGLE_CALENDAR_ID) {
-  throw new Error('Missing required environment variables: GOOGLE_SERVICE_ACCOUNT or GOOGLE_CALENDAR_ID');
-}
-
 // Decode and initialize Google credentials from the environment variable
 const serviceAccount = (() => {
   try {
@@ -37,7 +32,7 @@ async function getGoogleAccessToken() {
 }
 
 // Function to create a Google Calendar event
-export async function createGoogleCalendarEvent(eventDetails) {
+async function createGoogleCalendarEvent(eventDetails) {
   try {
     const accessToken = await getGoogleAccessToken();
 
@@ -65,7 +60,6 @@ export async function createGoogleCalendarEvent(eventDetails) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Response error:', response.status, response.statusText);
       throw new Error(`Failed to create calendar event: ${errorText}`);
     }
 
@@ -79,7 +73,7 @@ export async function createGoogleCalendarEvent(eventDetails) {
 }
 
 // Function to fetch upcoming events from Google Calendar
-export async function getUpcomingEvents(maxResults = 10) {
+async function getUpcomingEvents(maxResults = 10) {
   try {
     const accessToken = await getGoogleAccessToken();
 
@@ -95,7 +89,6 @@ export async function getUpcomingEvents(maxResults = 10) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Response error:', response.status, response.statusText);
       throw new Error(`Failed to fetch upcoming events: ${errorText}`);
     }
 
@@ -107,3 +100,9 @@ export async function getUpcomingEvents(maxResults = 10) {
     throw error;
   }
 }
+
+// Export the functions as a default object
+export default {
+  createGoogleCalendarEvent,
+  getUpcomingEvents,
+};
