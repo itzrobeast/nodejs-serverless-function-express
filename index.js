@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 
 // CORS Configuration
-const allowedOrigin = 'https://mila-verse.vercel.app'; // Your frontend URL
+const allowedOrigin = 'https://mila-verse.vercel.app'; // Replace with your frontend URL
 app.use(cors({
   origin: allowedOrigin,
   methods: ['GET', 'POST', 'OPTIONS'],
