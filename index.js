@@ -4,24 +4,22 @@ import instagramWebhook from './instagram-webhook.js';
 
 const app = express();
 
-// Use JSON parsing middleware
-app.use(express.json());
+// Middleware configuration
+app.use(express.json()); // Parses JSON request bodies
+app.use(cors());         // Handles CORS headers
 
-// Use the cors package
-const allowedOrigin = 'https://mila-verse.vercel.app';
-app.use(cors({
-  origin: allowedOrigin,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true,
-}));
-
-// Mount the Instagram webhook router
+// Mount Instagram Webhook routes
 app.use('/instagram-webhook', instagramWebhook);
 
-// Root route
+// Root route for testing
 app.get('/', (req, res) => {
-  res.status(200).send('Welcome to the Node.js Serverless Function!');
+  res.status(200).send('Server is working fine!');
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Internal Server Error');
 });
 
 export default app;
