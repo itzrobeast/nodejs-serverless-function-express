@@ -3,10 +3,6 @@ import fetch from 'node-fetch';
 import OpenAI from 'openai';
 
 const router = express.Router();
-router.post('/', (req, res) => {
-    console.log('POST request received:', req.body);
-    res.status(200).send('Webhook received');
-});
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Helper function to send messages
@@ -81,14 +77,14 @@ router.get('/', (req, res) => {
 
 // Handle Webhook Events
 router.post('/', async (req, res) => {
-  const body = req.body;
-
-  if (!body || typeof body !== 'object') {
-    console.error('Invalid webhook payload:', body);
-    return res.status(400).json({ error: 'Invalid payload structure' });
-  }
-
   try {
+    const body = req.body;
+
+    if (!body || typeof body !== 'object') {
+      console.error('Invalid webhook payload:', body);
+      return res.status(400).json({ error: 'Invalid payload structure' });
+    }
+
     const tasks = body.entry.map(async (entry) => {
       if (entry.messaging) {
         for (const message of entry.messaging) {
