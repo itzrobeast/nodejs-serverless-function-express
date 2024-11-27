@@ -2,6 +2,13 @@ import express from 'express';
 
 const router = express.Router();
 
+router.use((req, res, next) => {
+  console.log(`[DEBUG] Instagram Webhook middleware hit: ${req.method} ${req.url}`);
+  next();
+});
+
+
+
 // Webhook verification
 router.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
