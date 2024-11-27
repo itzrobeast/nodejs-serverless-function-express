@@ -21,7 +21,7 @@ app.use((err, req, res, next) => {
   console.error(`[ERROR] Stack trace: ${err.stack}`);
   res.status(500).json({ error: 'Internal Server Error' });
 });
-router.post('/', (req, res, next) => {
+app.post('/', (req, res, next) => {
   console.log('[DEBUG] Incoming payload:', JSON.stringify(req.body, null, 2));
   next();
 });
