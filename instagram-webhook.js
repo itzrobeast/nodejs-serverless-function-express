@@ -39,14 +39,11 @@ async function sendInstagramMessage(recipientId, message) {
 // Function to process a single messaging event dynamically with OpenAI
 async function processMessagingEvent(message) {
   try {
-    // Log the raw message received for processing
     console.log('[DEBUG] Received message for processing:', JSON.stringify(message, null, 2));
 
-    // Extract user message and recipient ID
     const userMessage = message.message?.text || null;
     const recipientId = message.sender?.id || null;
 
-    // Log extracted details
     if (userMessage) {
       console.log(`[DEBUG] User message: "${userMessage}"`);
     } else {
@@ -59,7 +56,6 @@ async function processMessagingEvent(message) {
       console.warn('[DEBUG] Recipient ID is missing or invalid in the payload.');
     }
 
-    // Proceed only if both user message and recipient ID are present
     if (userMessage && recipientId) {
       try {
         console.log('[DEBUG] Sending user message to OpenAI for response generation.');
@@ -73,17 +69,19 @@ async function processMessagingEvent(message) {
           ],
         });
 
-        // Extract response from OpenAI
+        console.log('[DEBUG] Raw OpenAI response:', JSON.stringify(openaiResponse, null, 2));
+
         const responseMessage =
           openaiResponse.choices[0]?.message?.content || "I'm here to help!";
-        console.log('[DEBUG] AI response generated:', responseMessage);
+
+        console.log('[DEBUG] Generated response from OpenAI:', responseMessage);
 
         // Send the response back to the Instagram user
         console.log('[DEBUG] Sending response to Instagram user.');
         await sendInstagramMessage(recipientId, responseMessage);
-        console.log('[DEBUG] Dynamic response successfully sent to Instagram user:', responseMessage);
+        console.log('[DEBUG] Response sent successfully to Instagram user:', responseMessage);
       } catch (error) {
-        console.error('[ERROR] Failed to generate or send response:', error.message);
+        console.error('[ERROR] OpenAI interaction or message sending failed:', error.message);
         throw error;
       }
     } else {
@@ -94,6 +92,7 @@ async function processMessagingEvent(message) {
     throw error;
   }
 }
+
 
 
 
