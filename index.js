@@ -8,14 +8,13 @@ const app = express();
 app.use(express.json());
 
 // Use the cors package
-const allowedOrigin = 'https://mila-verse.vercel.app';
+const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app';
 app.use(cors({
   origin: allowedOrigin,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
-  credentials: true,
+  credentials: true, // Adjust if cookies are needed
 }));
-
 
 // Mount the Instagram webhook router
 app.use('/instagram-webhook', instagramWebhook);
