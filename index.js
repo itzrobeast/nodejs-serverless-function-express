@@ -7,14 +7,23 @@ import googleCalendar from './google-calendar.js';
 
 const app = express();
 
-// Apply Middleware
+// Middleware
 app.use(express.json()); // Parse JSON
+
+// Debugging Middleware
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Request to ${req.url} - Method: ${req.method}`);
+  next();
+});
+
+// CORS Configuration
+const allowedOrigin = 'https://mila-verse.vercel.app'; // Your frontend URL
 app.use(
   cors({
-    origin: 'https://mila-verse.vercel.app', // Allow your frontend
-    methods: ['GET', 'POST', 'OPTIONS'], // Allowed methods
-    allowedHeaders: ['Content-Type'], // Allowed headers
-    credentials: true, // Include credentials
+    origin: allowedOrigin,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+    credentials: true,
   })
 );
 
