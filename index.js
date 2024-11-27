@@ -14,6 +14,13 @@ app.use((req, res, next) => {
   console.log(`[DEBUG] Request to ${req.url} - Method: ${req.method}`);
   next();
 });
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Middleware invoked: ${req.method} ${req.url}`);
+  console.log(`[DEBUG] Headers:`, req.headers);
+  console.log(`[DEBUG] Body:`, req.body);
+  next();
+});
+
 
 // CORS configuration
 const allowedOrigin = 'https://mila-verse.vercel.app'; // Frontend URL
