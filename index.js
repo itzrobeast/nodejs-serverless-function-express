@@ -1,29 +1,23 @@
 import express from 'express';
-import instagramWebhook from './instagram-webhook.js';
 
 const app = express();
 
-// Debug Middleware
+// Test Middleware
 app.use((req, res, next) => {
-  console.log(`[DEBUG] Request to: ${req.method} ${req.url}`);
+  console.log('[DEBUG] Middleware working:', req.method, req.url);
   next();
 });
 
-// Middleware for JSON Parsing
-app.use(express.json());
-
-// Register Test Route
-app.use('/instagram-webhook', instagramWebhook);
-
-// Root Route for Testing
-app.get('/', (req, res) => {
-  res.status(200).send('Server is running!');
+// Test Route
+app.post('/instagram-webhook', (req, res) => {
+  console.log('[DEBUG] Test Route Hit');
+  res.status(200).send('Test route working');
 });
 
-// Global Error Handling
-app.use((err, req, res, next) => {
-  console.error('[ERROR] Uncaught Exception:', err.message);
-  res.status(500).json({ error: 'Internal Server Error' });
+// Root Test Route
+app.get('/', (req, res) => {
+  console.log('[DEBUG] Root Route Hit');
+  res.status(200).send('Root route working');
 });
 
 // Export App
