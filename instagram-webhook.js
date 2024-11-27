@@ -63,7 +63,7 @@ async function processMessagingEvent(message) {
   }
 }
 
-// Webhook Verification
+// Webhook verification
 router.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
@@ -101,5 +101,4 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Export the router
 export default router;
