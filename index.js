@@ -3,7 +3,7 @@ import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
 import setupBusiness from './setup-business.js';
 import assistant from './assistant.js';
-import googleCalendar from './google-calendar.js';
+import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
 
 const app = express();
 
@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 
 // CORS Configuration
-const allowedOrigin = 'https://mila-verse.vercel.app'; // Replace with your frontend URL
+const allowedOrigin = 'https://mila-verse.vercel.app'; // Your frontend URL
 app.use(cors({
   origin: allowedOrigin,
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -23,7 +23,25 @@ app.use(cors({
 app.use('/instagram-webhook', instagramWebhook);
 app.use('/setup-business', setupBusiness);
 app.use('/assistant', assistant);
-app.use('/google-calendar', googleCalendar);
+
+// Add Google Calendar Routes
+app.post('/google-calendar/event', async (req, res) => {
+  try {
+    const event = await createGoogleCalendarEvent(req.body);
+    res.status(200).json(event);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/google-calendar/events', async (req, res) => {
+  try {
+    const events = await getUpcomingEvents(req.query.maxResults || 10);
+    res.status(200).json(events);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Root Route
 app.get('/', (req, res) => {
