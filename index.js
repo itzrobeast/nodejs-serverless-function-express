@@ -3,7 +3,7 @@ import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
 import assistant from './assistant.js';
 import setupBusiness from './setup-business.js';
-import vonageRoutes from './vonage.js';
+import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
 
 const app = express();
@@ -11,7 +11,7 @@ const app = express();
 // Middleware for JSON parsing
 app.use(express.json());
 
-// Debugging middleware to log all incoming requests
+// Debugging middleware
 app.use((req, res, next) => {
   console.log(`[DEBUG] Request to ${req.url} - Method: ${req.method}`);
   next();
@@ -38,7 +38,27 @@ app.get('/', (req, res) => {
 app.use('/instagram-webhook', instagramWebhook);
 
 // Vonage routes for SMS and calls
-app.use('/vonage', vonageRoutes);
+app.post('/vonage/send-sms', async (req, res) => {
+  const { to, text } = req.body;
+  try {
+    const response = await sendSMS(to, text);
+    res.status(200).json({ success: true, response });
+  } catch (error) {
+    console.error('[ERROR] Failed to send SMS:', error.message);
+    res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
+app.post('/vonage/make-call', async (req, res) => {
+  const { to, message } = req.body;
+  try {
+    const response = await makeCall(to, message);
+    res.status(200).json({ success: true, response });
+  } catch (error) {
+    console.error('[ERROR] Failed to make call:', error.message);
+    res.status(500).json({ error: 'Failed to make call' });
+  }
+});
 
 // Assistant API for handling AI-driven tasks
 app.use('/assistant', assistant);
@@ -62,21 +82,15 @@ app.get('/google-calendar/events', async (req, res) => {
     const events = await getUpcomingEvents(req.query.maxResults || 10);
     res.status(200).json({ success: true, events });
   } catch (error) {
-    console.error('[ERROR] Failed to fetch Google Calendar events:', error);
+    console.error('[ERROR] Google Calendar fetch failed:', error);
     res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
 
-// Fallback route for undefined paths
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
-});
-
-// Error-handling middleware
+// Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('[ERROR] Uncaught exception:', err.stack);
+  console.error('[ERROR] An error occurred:', err.stack);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Export the app for serverless deployment
 export default app;
