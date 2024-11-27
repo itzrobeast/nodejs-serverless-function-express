@@ -7,12 +7,13 @@ const app = express();
 // Use JSON parsing middleware
 app.use(express.json());
 
-// Use CORS if necessary
-const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app/';
+// Use the cors package
+const allowedOrigin = 'https://mila-verse.vercel.app';
 app.use(cors({
   origin: allowedOrigin,
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true,
 }));
 
 
