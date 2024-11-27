@@ -4,30 +4,22 @@ import instagramWebhook from './instagram-webhook.js';
 
 const app = express();
 
-// Apply JSON parsing middleware
+// Use JSON parsing middleware
 app.use(express.json());
 
-app.use(cors());
-
-// Centralized CORS configuration (if needed)
-const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app';
+// Use CORS if necessary
 app.use(cors({
-  origin: allowedOrigin,
+  origin: process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Default route for root path
-app.get('/', (req, res) => {
-  res.status(200).send('Welcome to the Node.js Serverless Function!');
-});
-
-// Mount the Instagram webhook route
+// Mount the Instagram webhook router
 app.use('/instagram-webhook', instagramWebhook);
 
-// Handle favicon requests to avoid 404 errors
-app.get('/favicon.ico', (req, res) => {
-  res.status(204).end(); // No Content
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).send('Welcome to the Node.js Serverless Function!');
 });
 
 // Fallback for unknown routes
@@ -35,5 +27,10 @@ app.use((req, res) => {
   res.status(404).send('Route not found');
 });
 
-// Export the app for serverless deployment
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Internal Server Error');
+});
+
 export default app;
