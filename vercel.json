@@ -1,11 +1,5 @@
 {
-  "builds": [
-    { "src": "index.js", "use": "@vercel/node" },
-    { "src": "instagram-webhook.js", "use": "@vercel/node" },
-    { "src": "google-calendar.js", "use": "@vercel/node" },
-    { "src": "setup-business.js", "use": "@vercel/node" },
-    { "src": "assistant.js", "use": "@vercel/node" }
-  ],
+ 
   "routes": [
     { "src": "/instagram-webhook", "dest": "instagram-webhook.js" },
     { "src": "/google-calendar", "dest": "google-calendar.js" },
