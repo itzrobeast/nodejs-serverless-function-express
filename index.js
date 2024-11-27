@@ -28,15 +28,15 @@ app.post('/', (req, res, next) => {
 
 
 // CORS configuration
-const allowedOrigin = 'https://mila-verse.vercel.app'; // Frontend URL
-app.use(
-  cors({
-    origin: allowedOrigin,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    credentials: true,
-  })
-);
+//const allowedOrigin = 'https://mila-verse.vercel.app'; // Frontend URL
+//app.use(/
+//  cors({//
+//    origin: allowedOrigin,//
+ //   methods: ['GET', 'POST', 'OPTIONS'],///
+ //   allowedHeaders: ['Content-Type'],//
+//    credentials: true,//
+//  })
+//);
 
 // Routes
 app.use('/instagram-webhook', instagramWebhook);
