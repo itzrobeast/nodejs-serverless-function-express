@@ -5,23 +5,7 @@ import OpenAI from 'openai';
 const router = express.Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Ensure JSON parsing
-router.use(express.json());
-
-// CORS Middleware
-router.use((req, res, next) => {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://mila-verse.vercel.app';
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
-
-// Helper function to send Instagram messages
+// Helper function to send messages
 async function sendInstagramMessage(recipientId, message) {
   try {
     const response = await fetch(
@@ -38,25 +22,19 @@ async function sendInstagramMessage(recipientId, message) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Error sending Instagram message:', errorText);
       throw new Error(`Failed to send message: ${errorText}`);
     }
 
-    console.log('Message successfully sent to Instagram user:', recipientId);
+    console.log('Message successfully sent to Instagram user.');
   } catch (error) {
     console.error('Error in sendInstagramMessage:', error);
     throw error;
   }
 }
 
-// Process Instagram messaging events
+// Process messaging events
 async function processMessagingEvent(message) {
   try {
-    if (!message) {
-      console.warn('Received undefined message in event.');
-      return;
-    }
-
     console.log('Processing Instagram message:', JSON.stringify(message, null, 2));
 
     const userMessage = message.message?.text || null;
@@ -71,11 +49,8 @@ async function processMessagingEvent(message) {
         ],
       });
 
-      const responseMessage = openaiResponse.choices?.[0]?.message?.content;
-      if (!responseMessage) {
-        console.error('Invalid OpenAI response:', openaiResponse);
-        throw new Error('Invalid OpenAI response');
-      }
+      const responseMessage = openaiResponse.choices[0]?.message?.content;
+      if (!responseMessage) throw new Error('Invalid OpenAI response');
 
       await sendInstagramMessage(recipientId, responseMessage);
     } else if (message.message?.is_deleted) {
@@ -88,44 +63,40 @@ async function processMessagingEvent(message) {
   }
 }
 
-// Webhook Verification Endpoint
+// Webhook Verification
 router.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
   if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
-    console.log('Webhook verification successful.');
+    console.log('Verification successful:', challenge);
     return res.status(200).send(challenge);
   }
 
-  console.error('Webhook verification failed.');
   return res.status(403).send('Verification failed');
 });
 
-// Webhook Event Handler
+// Handle Webhook Events
 router.post('/', async (req, res) => {
+  const body = req.body;
+
+  if (!body || typeof body !== 'object') {
+    console.error('Invalid webhook payload:', body);
+    return res.status(400).json({ error: 'Invalid payload structure' });
+  }
+
   try {
-    console.log('Incoming webhook payload:', req.body);
-
-    const { entry } = req.body;
-    if (!Array.isArray(entry)) {
-      console.error('Invalid payload structure:', req.body);
-      return res.status(400).json({ error: 'Invalid payload structure' });
-    }
-
-    const tasks = entry.map(async (entryItem) => {
-      if (entryItem.messaging && Array.isArray(entryItem.messaging)) {
-        for (const message of entryItem.messaging) {
+    const tasks = body.entry.map(async (entry) => {
+      if (entry.messaging) {
+        for (const message of entry.messaging) {
           await processMessagingEvent(message);
         }
-      } else {
-        console.warn('No messaging field in entry:', entryItem);
       }
     });
 
     await Promise.all(tasks);
     res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Error processing webhook entries:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
