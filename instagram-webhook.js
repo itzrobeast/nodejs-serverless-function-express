@@ -1,5 +1,4 @@
 import express from 'express';
-import fetch from 'node-fetch';
 
 const router = express.Router();
 
@@ -23,83 +22,25 @@ router.get('/', (req, res) => {
 });
 
 // Handle Webhook Events
-router.post('/', async (req, res, next) => {
+router.post('/', (req, res) => {
   try {
     console.log('[DEBUG] Received payload:', JSON.stringify(req.body, null, 2));
 
-    const body = req.body;
-
-    if (!body || !body.entry || !Array.isArray(body.entry)) {
-      console.error('[ERROR] Invalid webhook payload:', body);
+    if (!req.body || !req.body.entry || !Array.isArray(req.body.entry)) {
+      console.error('[ERROR] Invalid webhook payload:', req.body);
       return res.status(400).json({ error: 'Invalid payload structure' });
     }
 
-    const tasks = body.entry.map(async (entry) => {
-      if (entry.messaging) {
-        for (const message of entry.messaging) {
-          console.log('[DEBUG] Processing messaging event');
-          await processMessagingEvent(message);
-        }
-      }
+    // Log each entry for verification
+    req.body.entry.forEach((entry, index) => {
+      console.log(`[DEBUG] Entry ${index}:`, JSON.stringify(entry, null, 2));
     });
 
-    await Promise.all(tasks);
     res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
     console.error('[ERROR] Webhook processing failed:', error.message);
-    next(error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
-// Process individual messaging events
-async function processMessagingEvent(message) {
-  try {
-    if (message.message && message.message.text) {
-      const userMessage = message.message.text;
-      console.log(`[DEBUG] Received message: "${userMessage}"`);
-
-      const reply = `You said: "${userMessage}" - Thank you for messaging us!`;
-
-      // Send reply to Instagram
-      await sendReplyToInstagram(message.sender.id, reply);
-    } else {
-      console.log('[DEBUG] Unsupported message format:', message);
-    }
-  } catch (error) {
-    console.error('[ERROR] Failed to process message:', error.message);
-    throw error;
-  }
-}
-
-// Send reply via Instagram Graph API
-async function sendReplyToInstagram(senderId, reply) {
-  const pageAccessToken = process.env.FACEBOOK_ACCESS_TOKEN;
-  const url = 'https://graph.facebook.com/v17.0/me/messages';
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${pageAccessToken}`,
-      },
-      body: JSON.stringify({
-        recipient: { id: senderId },
-        message: { text: reply },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[ERROR] Failed to send message: ${errorText}`);
-      throw new Error(errorText);
-    }
-
-    console.log(`[DEBUG] Reply sent successfully: "${reply}"`);
-  } catch (error) {
-    console.error(`[ERROR] Instagram API call failed: ${error.message}`);
-    throw error;
-  }
-}
 
 export default router;
