@@ -2,10 +2,12 @@ import OpenAI from 'openai';
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
 
+// Initialize OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Function handlers for various actions
 const functionHandlers = {
   fetchEvents: async (args) => {
     const maxResults = args.maxResults || 10;
@@ -29,11 +31,14 @@ const functionHandlers = {
   },
 };
 
-export async function assistantHandler(userMessage) {
+// Assistant handler to process user messages
+export async function assistantHandler({ userMessage, recipientId, platform }) {
   try {
-    console.log('[DEBUG] Sending message to OpenAI:', userMessage);
+    console.log(`[DEBUG] Processing message from platform: ${platform}`);
+    console.log(`[DEBUG] User message: "${userMessage}"`);
 
-    const response = await openai.chat.completions.create({
+    // Generate response using OpenAI
+    const openaiResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
         { role: 'system', content: 'You are a helpful assistant that manages appointments and responds to user queries.' },
@@ -46,11 +51,12 @@ export async function assistantHandler(userMessage) {
       })),
     });
 
-    const functionCall = response.choices[0]?.message?.function_call;
+    const functionCall = openaiResponse.choices[0]?.message?.function_call;
 
+    // Handle OpenAI function calls if requested
     if (functionCall) {
       const { name, arguments: args } = functionCall;
-      console.log('[DEBUG] Function call received:', name, args);
+      console.log(`[DEBUG] OpenAI requested function call: ${name}`, args);
 
       try {
         const parsedArgs = JSON.parse(args);
@@ -64,28 +70,34 @@ export async function assistantHandler(userMessage) {
       }
     }
 
-    return { text: response.choices[0]?.message?.content || "I'm here to help!" };
+    // Default OpenAI response
+    const responseMessage = openaiResponse.choices[0]?.message?.content || "I'm here to help!";
+    console.log(`[DEBUG] Generated response from OpenAI: "${responseMessage}"`);
+
+    // Return the response
+    return { message: responseMessage };
   } catch (error) {
     console.error('[ERROR] Failed to process assistant request:', error);
-    return { text: 'Something went wrong. Please try again later.' };
+    return { message: 'Something went wrong. Please try again later.' };
   }
 }
 
+// Default API handler for external requests
 export default async function handler(req, res) {
   try {
-    if (req.method === 'GET') {
-      return res.status(200).json({ message: 'Assistant endpoint is live. Use POST to interact with the assistant.' });
-    }
-
     if (req.method === 'POST') {
-      const { messages } = req.body;
+      const { userMessage, recipientId, platform } = req.body;
 
-      if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        return res.status(400).json({ error: "'messages' must be a non-empty array." });
+      if (!userMessage || !recipientId || !platform) {
+        return res.status(400).json({ error: 'Missing required fields: userMessage, recipientId, or platform.' });
       }
 
-      const assistantResponse = await assistantHandler(messages[0]);
+      const assistantResponse = await assistantHandler({ userMessage, recipientId, platform });
       return res.status(200).json({ success: true, assistantResponse });
+    }
+
+    if (req.method === 'GET') {
+      return res.status(200).json({ message: 'Assistant endpoint is live. Use POST to interact with the assistant.' });
     }
 
     return res.status(405).json({ error: 'Method not allowed. Use GET or POST.' });
