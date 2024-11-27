@@ -32,7 +32,7 @@ async function getGoogleAccessToken() {
 }
 
 // Function to create a Google Calendar event
-async function createGoogleCalendarEvent(eventDetails) {
+export async function createGoogleCalendarEvent(eventDetails) {
   try {
     const accessToken = await getGoogleAccessToken();
 
@@ -73,7 +73,7 @@ async function createGoogleCalendarEvent(eventDetails) {
 }
 
 // Function to fetch upcoming events from Google Calendar
-async function getUpcomingEvents(maxResults = 10) {
+export async function getUpcomingEvents(maxResults = 10) {
   try {
     const accessToken = await getGoogleAccessToken();
 
@@ -100,9 +100,3 @@ async function getUpcomingEvents(maxResults = 10) {
     throw error;
   }
 }
-
-// Export the functions as a default object
-export default {
-  createGoogleCalendarEvent,
-  getUpcomingEvents,
-};
