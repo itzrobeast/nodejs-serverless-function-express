@@ -1,12 +1,11 @@
 {
- 
   "routes": [
     { "src": "/instagram-webhook", "dest": "instagram-webhook.js" },
     { "src": "/google-calendar", "dest": "google-calendar.js" },
     { "src": "/assistant", "dest": "assistant.js" },
-    { "src": "/setup-business", "dest": "/setup-business.js" },
-    { "src": "/favicon.ico", "dest": "/favicon.ico" },
-    { "src": "/favicon.png", "dest": "/favicon.png" },
+    { "src": "/setup-business", "dest": "setup-business.js" },
+    { "src": "/favicon.ico", "dest": "favicon.ico" },
+    { "src": "/favicon.png", "dest": "favicon.png" },
     { "src": "/(.*)", "dest": "index.js" }
   ]
 }
