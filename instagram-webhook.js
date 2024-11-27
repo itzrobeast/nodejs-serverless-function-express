@@ -8,6 +8,8 @@ const openai = new OpenAI({
 // Function to send a direct reply to an Instagram user
 async function sendInstagramMessage(recipientId, message) {
   try {
+    console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
+    
     const response = await fetch(
       `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
       {
@@ -36,37 +38,63 @@ async function sendInstagramMessage(recipientId, message) {
 
 // Function to process a single messaging event dynamically with OpenAI
 async function processMessagingEvent(message) {
-  console.log('Processing Instagram message:', JSON.stringify(message, null, 2));
+  try {
+    // Log the raw message received for processing
+    console.log('[DEBUG] Received message for processing:', JSON.stringify(message, null, 2));
 
-  const userMessage = message.message?.text || null;
-  const recipientId = message.sender?.id || null;
+    // Extract user message and recipient ID
+    const userMessage = message.message?.text || null;
+    const recipientId = message.sender?.id || null;
 
-  if (userMessage && recipientId) {
-    try {
-      // Use OpenAI to dynamically generate a response
-      const openaiResponse = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: 'You are a helpful business assistant responding to customer inquiries.' },
-          { role: 'user', content: userMessage },
-        ],
-      });
-
-      const responseMessage =
-        openaiResponse.choices[0]?.message?.content || "I'm here to help!";
-
-      console.log('Generated response from OpenAI:', responseMessage);
-
-      // Send the OpenAI-generated response back to the Instagram user
-      await sendInstagramMessage(recipientId, responseMessage);
-      console.log('Dynamic response sent to Instagram user:', responseMessage);
-    } catch (error) {
-      console.error('Error processing Instagram message with OpenAI or sending response:', error);
+    // Log extracted details
+    if (userMessage) {
+      console.log(`[DEBUG] User message: "${userMessage}"`);
+    } else {
+      console.warn('[DEBUG] User message is missing or unsupported in the payload.');
     }
-  } else {
-    console.warn('Unhandled messaging event or missing data:', message);
+
+    if (recipientId) {
+      console.log(`[DEBUG] Recipient ID: "${recipientId}"`);
+    } else {
+      console.warn('[DEBUG] Recipient ID is missing or invalid in the payload.');
+    }
+
+    // Proceed only if both user message and recipient ID are present
+    if (userMessage && recipientId) {
+      try {
+        console.log('[DEBUG] Sending user message to OpenAI for response generation.');
+
+        // Generate response using OpenAI
+        const openaiResponse = await openai.chat.completions.create({
+          model: 'gpt-4',
+          messages: [
+            { role: 'system', content: 'You are a helpful business assistant responding to customer inquiries.' },
+            { role: 'user', content: userMessage },
+          ],
+        });
+
+        // Extract response from OpenAI
+        const responseMessage =
+          openaiResponse.choices[0]?.message?.content || "I'm here to help!";
+        console.log('[DEBUG] AI response generated:', responseMessage);
+
+        // Send the response back to the Instagram user
+        console.log('[DEBUG] Sending response to Instagram user.');
+        await sendInstagramMessage(recipientId, responseMessage);
+        console.log('[DEBUG] Dynamic response successfully sent to Instagram user:', responseMessage);
+      } catch (error) {
+        console.error('[ERROR] Failed to generate or send response:', error.message);
+        throw error;
+      }
+    } else {
+      console.warn('[DEBUG] Missing required fields. Message processing skipped:', message);
+    }
+  } catch (error) {
+    console.error('[ERROR] Failed to process messaging event:', error.message);
+    throw error;
   }
 }
+
 
 
 // Primary webhook handler
