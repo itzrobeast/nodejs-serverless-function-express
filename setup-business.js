@@ -3,6 +3,12 @@ import cors from 'cors';
 
 const router = express.Router();
 
+router.use((req, res, next) => {
+  console.log(`[DEBUG] Setup Business middleware hit: ${req.method} ${req.url}`);
+  next();
+});
+
+
 // CORS configuration
 router.use(
   cors({
