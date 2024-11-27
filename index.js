@@ -28,7 +28,15 @@ console.log('[DEBUG] All required environment variables are set');
 const app = express();
 
 // Middleware to parse JSON
+app.use((req, res, next) => {
+  console.log('[DEBUG] Raw Request Body:', req.body);
+  next();
+});
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log('[DEBUG] Parsed Request Body:', req.body);
+  next();
+});
 
 // Debugging middleware to log requests
 app.use((req, res, next) => {
