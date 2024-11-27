@@ -1,25 +1,44 @@
 import express from 'express';
 import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
+import setupBusiness from './setup-business.js';
+import assistant from './assistant.js';
+import googleCalendar from './google-calendar.js';
 
 const app = express();
 
-// Middleware configuration
-app.use(express.json()); // Parses JSON request bodies
-app.use(cors());         // Handles CORS headers
+// Middleware
+app.use(express.json());
 
-// Mount Instagram Webhook routes
+// CORS Configuration
+const allowedOrigin = 'https://mila-verse.vercel.app'; // Your frontend URL
+app.use(cors({
+  origin: allowedOrigin,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true,
+}));
+
+// Routes
 app.use('/instagram-webhook', instagramWebhook);
+app.use('/setup-business', setupBusiness);
+app.use('/assistant', assistant);
+app.use('/google-calendar', googleCalendar);
 
-// Root route for testing
+// Root Route
 app.get('/', (req, res) => {
-  res.status(200).send('Server is working fine!');
+  res.status(200).send('Welcome to the Node.js Serverless Function!');
 });
 
-// Error handling middleware
+// Fallback Route
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Error Handling Middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Internal Server Error');
+  console.error('Error occurred:', err.stack);
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
 export default app;
