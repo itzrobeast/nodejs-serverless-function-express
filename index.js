@@ -1,45 +1,49 @@
+// index.js
 import express from 'express';
+import cors from 'cors';
+import setupBusinessRouter from './setup-business.js'; // Import the setup-business router
 
 const app = express();
 
-// Enable JSON body parsing
-app.use(express.json());
+// Middleware
+app.use(express.json()); // Middleware to parse JSON bodies
+app.use(
+  cors({
+    origin: 'https://mila-verse.vercel.app', // Allowed origin
+    methods: ['GET', 'POST', 'OPTIONS'], // Allowed methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+    credentials: true, // Allow credentials
+  })
+);
 
-// Temporary route to directly handle POST requests to `/setup-business`
-app.post('/setup-business', (req, res) => {
-  try {
-    // Extracting data from the request body
-    const { platform, businessName, ownerName, contactEmail } = req.body;
-
-    // Log the received data for debugging
-    console.log('[DEBUG] Received POST data:', req.body);
-
-    // Validate input fields
-    if (!platform || !businessName || !ownerName || !contactEmail) {
-      return res.status(400).json({
-        error: 'Missing required fields: platform, businessName, ownerName, or contactEmail',
-        receivedData: req.body,
-      });
-    }
-
-    // Simulate success response
-    return res.status(200).json({
-      message: 'Business setup successful!',
-      data: { platform, businessName, ownerName, contactEmail },
-    });
-  } catch (error) {
-    console.error('[ERROR] Error handling /setup-business:', error.message);
-    return res.status(500).json({ error: 'Internal Server Error' });
+// Debugging Middleware
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Incoming Request: ${req.method} ${req.url}`);
+  if (Object.keys(req.body).length) {
+    console.log('[DEBUG] Request Body:', req.body);
   }
+  next();
 });
 
-// Root health check for testing server
+// Routes
+app.use('/setup-business', setupBusinessRouter); // Use the setup-business router
+
+// Root Route
 app.get('/', (req, res) => {
-  res.status(200).send('Server is running!');
+  console.log('[DEBUG] Root route hit');
+  res.status(200).send('Welcome to the Node.js Serverless Function!');
 });
 
-// Start the server locally
+// Global Error Handling Middleware
+app.use((err, req, res, next) => {
+  console.error('[ERROR] Global Error Handler:', err.stack);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`[DEBUG] Server running on http://localhost:${PORT}`);
+  console.log(`[INFO] Server is running on http://localhost:${PORT}`);
 });
+
+export default app;
