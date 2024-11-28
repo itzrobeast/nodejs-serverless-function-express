@@ -29,6 +29,32 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
+
+// setup-business.js
+router.post('/setup-business', async (req, res) => {
+  console.log('[DEBUG] Route handler for /setup-business started');
+  try {
+    const { platform, businessName, ownerName, contactEmail } = req.body;
+    console.log('[DEBUG] Request body:', req.body);
+
+    if (!platform || !businessName || !ownerName || !contactEmail) {
+      throw new Error('Missing required fields');
+    }
+
+    res.status(200).json({
+      message: 'Business setup completed successfully!',
+      data: { platform, businessName, ownerName, contactEmail },
+    });
+  } catch (error) {
+    console.error('[ERROR] /setup-business:', error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    console.log('[DEBUG] Route handler for /setup-business completed');
+  }
+});
+
+
+
 // Define /setup-business route
 router.post('/setup-business', async (req, res) => {
   try {
@@ -47,6 +73,7 @@ router.post('/setup-business', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Health check route
 router.get('/health', (req, res) => {
