@@ -1,36 +1,28 @@
 import express from 'express';
 import cors from 'cors';
 
-const router = express.Router();
+const app = express();
 
-// Debug middleware
-router.use((req, res, next) => {
-  console.log(`[DEBUG] Setup Business middleware hit: ${req.method} ${req.url}`);
-  next();
-});
+// Global Middleware for JSON Parsing
+app.use(express.json());
 
-// CORS configuration
-router.use(
+// CORS Configuration
+app.use(
   cors({
-    origin: 'https://mila-verse.vercel.app',
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    credentials: true,
+    origin: 'https://mila-verse.vercel.app', // Allow requests from this origin
+    methods: ['GET', 'POST', 'OPTIONS'], // Allowed HTTP methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+    credentials: true, // Allow cookies and credentials
   })
 );
 
-// Route handler
-router.post('/', (req, res) => {
+// Example Route
+app.post('/setup-business', (req, res) => {
   const { businessName, ownerName, contactEmail } = req.body;
 
   if (!businessName || !ownerName || !contactEmail) {
-    console.error('[DEBUG] Missing required fields:', req.body);
-    return res.status(400).json({
-      error: 'Missing required fields: businessName, ownerName, or contactEmail',
-    });
+    return res.status(400).json({ error: 'Missing required fields' });
   }
-
-  console.log('[DEBUG] Setting up business:', { businessName, ownerName, contactEmail });
 
   res.status(200).json({
     message: 'Business setup completed successfully!',
@@ -38,4 +30,8 @@ router.post('/', (req, res) => {
   });
 });
 
-export default router;
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
