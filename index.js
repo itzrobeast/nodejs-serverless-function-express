@@ -13,10 +13,15 @@ app.use(express.json());
 
 // Custom CORS middleware
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'https://mila-verse.vercel.app'); // Allow requests from MilaVerse
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Specify allowed methods
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Specify allowed headers
-  res.setHeader('Access-Control-Allow-Credentials', true); // Allow credentials (cookies, authorization headers, etc.)
+  console.log(`[DEBUG] CORS Middleware - Method: ${req.method}, Path: ${req.path}`);
+  res.setHeader('Access-Control-Allow-Origin', 'https://mila-verse.vercel.app'); // Allow MilaVerse origin
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'); // Allowed methods
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true'); // Allow cookies and credentials
+  if (req.method === 'OPTIONS') {
+    console.log('[DEBUG] CORS Preflight Request Handled');
+    return res.sendStatus(204); // Preflight response
+  }
   next();
 });
 
