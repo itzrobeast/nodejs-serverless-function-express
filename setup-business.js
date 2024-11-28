@@ -2,11 +2,12 @@ import express from 'express';
 
 const router = express.Router();
 
+// POST Handler for /setup-business
 router.post('/', (req, res) => {
   try {
-    console.log('[DEBUG] POST /setup-business Hit:', req.body);
-
     const { platform, businessName, ownerName, contactEmail } = req.body;
+
+    console.log('[DEBUG] POST /setup-business hit:', req.body);
 
     // Validate fields
     if (!platform || !businessName || !ownerName || !contactEmail) {
@@ -16,17 +17,23 @@ router.post('/', (req, res) => {
       });
     }
 
-    res.json({
+    // Return success response
+    res.status(200).json({
       message: 'Business setup successful',
       data: { platform, businessName, ownerName, contactEmail },
     });
   } catch (error) {
-    console.error('[ERROR] POST /setup-business:', error.message);
-    res.status(400).json({
-      error: 'Invalid request',
+    console.error('[ERROR] /setup-business:', error.message);
+    res.status(500).json({
+      error: 'Something went wrong',
       details: error.message,
     });
   }
+});
+
+// Optional health check for debugging
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Setup-Business endpoint is healthy!' });
 });
 
 export default router;
