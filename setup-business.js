@@ -3,83 +3,64 @@ import cors from 'cors';
 
 const app = express();
 
-// Explicitly configure body parsing
-app.use(express.json({
-  verify: (req, res, buf) => {
-    try {
-      JSON.parse(buf.toString());
-    } catch (e) {
-      console.error('[PARSE ERROR]', e);
-      throw new Error('Invalid JSON');
-    }
-  }
-}));
+// Minimal middleware configuration
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Detailed CORS with debugging
 app.use(cors({
   origin: 'https://mila-verse.vercel.app',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  methods: ['GET', 'POST', 'OPTIONS']
 }));
 
-// Super verbose logging middleware
+// Debugging middleware
 app.use((req, res, next) => {
-  console.log('[DEBUG] Full Request Details:', {
+  console.log('Incoming Request:', {
     method: req.method,
-    url: req.url,
-    headers: req.headers,
+    path: req.path,
     body: req.body,
-    query: req.query
+    headers: req.headers
   });
   next();
 });
 
-// Single route handler with extensive error handling
-app.post('/setup-business', async (req, res, next) => {
+// Direct route handler without router
+app.post('/setup-business', (req, res) => {
   try {
-    console.log('[DEBUG] Raw Request Body:', req.body);
-    
     const { platform, businessName, ownerName, contactEmail } = req.body || {};
-    
+
+    console.log('Received Business Setup:', req.body);
+
     if (!platform || !businessName || !ownerName || !contactEmail) {
-      console.error('[VALIDATION ERROR] Missing fields');
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required fields',
-        receivedBody: req.body 
+        receivedData: req.body
       });
     }
 
     res.status(200).json({
-      message: 'Business setup completed successfully!',
+      message: 'Business setup successful',
       data: { platform, businessName, ownerName, contactEmail }
     });
   } catch (error) {
-    console.error('[ROUTE ERROR]', error);
-    next(error);
+    console.error('Business Setup Error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error.message 
+    });
   }
 });
 
-// Comprehensive error handling middleware
-app.use((err, req, res, next) => {
-  console.error('[CRITICAL ERROR]', {
-    name: err.name,
-    message: err.message,
-    stack: err.stack,
-    requestBody: req.body,
-    requestHeaders: req.headers
-  });
-
-  res.status(500).json({
-    error: 'Internal Server Error',
-    details: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred'
-  });
+// Root health check
+app.get('/', (req, res) => {
+  res.status(200).send('Server is running');
 });
 
-// Health check route
-app.get('/', (req, res) => {
-  res.status(200).send('Server is running!');
+// Catch-all error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled Error:', err);
+  res.status(500).json({ 
+    error: 'Unexpected server error', 
+    details: err.message 
+  });
 });
 
 export default app;
