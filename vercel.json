@@ -15,16 +15,4 @@
     { "src": "/assistant", "dest": "assistant.js" },
     { "src": "/favicon.ico", "dest": "/favicon.ico" },
     { "src": "/(.*)", "dest": "index.js" }
-  ],
-  "headers": [
-    {
-      "source": "/setup-business",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "https://mila-verse.vercel.app" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
-        { "key": "Access-Control-Allow-Credentials", "value": "true" }
-      ]
-    }
-  ]
 }
