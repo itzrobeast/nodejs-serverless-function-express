@@ -10,6 +10,15 @@ router.post('/', (req, res) => {
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
 
+// Validate appId
+    if (appId !== 'milaVerse') {
+      return res.status(400).json({
+        error: 'Unknown application',
+        appId,
+      });
+    }
+
+    
  // Define supported platforms
     const supportedPlatforms = ['Web', 'Mobile', 'Desktop']; // Add other supported platforms if needed
 
