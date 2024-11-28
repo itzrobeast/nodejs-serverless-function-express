@@ -65,6 +65,18 @@ app.use('/assistant', assistant);
 // Business setup API for customer data handling
 app.use('/setup-business', setupBusiness);
 
+app.post('/setup-business', (req, res) => {
+  const { businessName, ownerName, contactEmail } = req.body;
+
+  if (!businessName || !ownerName || !contactEmail) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  res.status(200).json({
+    message: 'Business setup completed successfully!',
+    data: { businessName, ownerName, contactEmail },
+  });
+});
 
 // Google Calendar API routes
 app.post('/google-calendar/event', async (req, res) => {
