@@ -6,27 +6,6 @@ const app = express();
 
 
 
-// Debugging Middleware
-app.use((req, res, next) => {
-  console.log(`[DEBUG] Incoming Request: ${req.method} ${req.url}`, {
-    headers: req.headers,
-    body: req.body,
-  });
-  next();
-});
-// Middleware
-export default async function cors(req, res) {
-  const origin = 'https://mila-verse.vercel.app';
-
-  res.headers.set('Access-Control-Allow-Origin', origin);
-  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.headers.set('Access-Control-Allow-Credentials', 'true');
-
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204 });
-  }
-}
 
 
 // Routes
