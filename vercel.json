@@ -18,24 +18,12 @@
   ],
   "headers": [
     {
-      "source": "/(.*)", // Apply headers to all routes
+      "source": "/(.*)",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://mila-verse.vercel.app" // Allow requests from this domain
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PUT, DELETE, OPTIONS" // Allow these methods
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization" // Allow these headers
-        },
-        {
-          "key": "Access-Control-Allow-Credentials",
-          "value": "true" // Allow credentials
-        }
+        { "key": "Access-Control-Allow-Origin", "value": "https://mila-verse.vercel.app" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
+        { "key": "Access-Control-Allow-Credentials", "value": "true" }
       ]
     }
   ]
