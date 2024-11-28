@@ -4,6 +4,7 @@ import assistant from './assistant.js';
 import setupBusinessRouter from './setup-business.js';
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
+import cors from 'cors';
 
 const app = express();
 
