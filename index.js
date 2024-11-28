@@ -2,8 +2,20 @@ import express from 'express';
 import setupBusinessRouter from './setup-business.js';
 import assistantHandler from './assistant.js';
 import instagramWebhookHandler from './instagram-webhook.js';
+import cors from 'cors';
+
 
 const app = express();
+
+
+// CORS Configuration
+app.use(cors({
+  origin: 'https://mila-verse.vercel.app', // Allow requests only from this origin
+  methods: ['GET', 'POST', 'OPTIONS'], // Specify allowed methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
+  credentials: true, // Allow credentials to be sent
+}));
+
 
 // Middleware for parsing JSON requests
 app.use(express.json());
