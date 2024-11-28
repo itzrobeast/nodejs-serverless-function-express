@@ -1,7 +1,9 @@
+// setup-business.js
 import express from 'express';
 
 const router = express.Router();
 
+// POST /setup-business handler
 router.post('/', (req, res) => {
   try {
     const { platform, businessName, ownerName, contactEmail } = req.body;
@@ -10,6 +12,7 @@ router.post('/', (req, res) => {
     if (!platform || !businessName || !ownerName || !contactEmail) {
       return res.status(400).json({
         error: 'Missing required fields',
+        receivedData: req.body,
       });
     }
 
@@ -23,6 +26,7 @@ router.post('/', (req, res) => {
   }
 });
 
+// Debug health check
 router.get('/health', (req, res) => {
   res.status(200).json({ status: 'Healthy' });
 });
