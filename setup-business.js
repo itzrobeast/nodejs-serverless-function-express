@@ -5,7 +5,7 @@ const router = express.Router();
 // POST Handler for /setup-business
 router.post('/', (req, res) => {
   try {
-    const { platform, businessName, ownerName, contactEmail } = req.body;
+    const { appId, platform, businessName, ownerName, contactEmail } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
