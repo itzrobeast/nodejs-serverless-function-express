@@ -27,6 +27,19 @@ app.use(
   })
 );
 
+// Example route
+app.post('/setup-business', (req, res) => {
+  const { user, accessToken, businessId } = req.body;
+
+  if (!user || !accessToken || !businessId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  res.status(200).json({
+    message: 'Business setup completed successfully!',
+    data: { user, businessId },
+  });
+});
 // Root route
 app.get('/', (req, res) => {
   console.log('[DEBUG] Root Route Hit');
@@ -64,24 +77,6 @@ app.use('/assistant', assistant);
 
 // Business setup API for customer data handling
 app.use('/setup-business', setupBusiness);
-
-app.post('/setup-business', (req, res) => {
-  console.log('[DEBUG] Received request:', req.body);
-
-  const { user, accessToken, businessId } = req.body;
-
-  if (!user || !accessToken || !businessId) {
-    console.error('[DEBUG] Missing required fields:', { user, accessToken, businessId });
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  console.log('[DEBUG] Processing business setup:', { user, businessId });
-
-  res.status(200).json({
-    message: 'Business setup completed successfully!',
-    data: { user, businessId },
-  });
-});
 
 
 // Google Calendar API routes
