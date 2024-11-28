@@ -1,48 +1,26 @@
 import express from 'express';
+import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
 import assistant from './assistant.js';
-import setupBusiness from './setup-business.js';
+import setupBusinessRouter from './setup-business.js';
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
-import cors from 'cors';
 
 const app = express();
 
-// Middleware logging
-app.use((req, res, next) => {
-  console.log(`[DEBUG] Middleware reached for ${req.method} ${req.url}`);
-  next();
-});
+// Global middleware
+app.use(express.json()); // Parse JSON
+app.use(cors({
+  origin: 'https://mila-verse.vercel.app',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 
-// Middleware for JSON parsing
-app.use(express.json());
-const setupBusinessRouter = require('./setupBusiness');
-app.use('/', setupBusinessRouter);
-
-// Custom CORS middleware
+// Debugging middleware
 app.use((req, res, next) => {
-  console.log(`[DEBUG] CORS Middleware - Method: ${req.method}, Path: ${req.path}`);
-  res.setHeader('Access-Control-Allow-Origin', 'https://mila-verse.vercel.app'); // Allow MilaVerse origin
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'); // Allowed methods
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
-  res.setHeader('Access-Control-Allow-Credentials', 'true'); // Allow cookies and credentials
-  if (req.method === 'OPTIONS') {
-    console.log('[DEBUG] CORS Preflight Request Handled');
-    return res.sendStatus(204); // Preflight response
-  }
-  next();
-});
-
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    console.log('[DEBUG] Response Headers:', res.getHeaders());
-  });
-  next();
-});
-
-// Debugging middleware for logging requests
-app.use((req, res, next) => {
-  console.log(`[DEBUG] Request to ${req.url} - Method: ${req.method}`);
+  console.log(`[DEBUG] Incoming Request: ${req.method} ${req.url}`);
+  console.log(`[DEBUG] Request Body:`, req.body);
   next();
 });
 
@@ -55,84 +33,67 @@ app.get('/', (req, res) => {
 // Instagram webhook integration
 app.use('/instagram-webhook', instagramWebhook);
 
-// Vonage API routes for SMS and calls
+// Business setup router
+app.use('/setup-business', setupBusinessRouter);
+
+// Vonage routes
 app.post('/vonage/send-sms', async (req, res) => {
-  const { to, text } = req.body;
-
-  if (!to || !text) {
-    return res.status(400).json({ error: 'Missing required fields: to and text' });
-  }
-
   try {
+    const { to, text } = req.body;
+    if (!to || !text) throw new Error('Missing required fields: to and text');
+
     const response = await sendSMS(to, text);
     res.status(200).json({ success: true, response });
   } catch (error) {
     console.error('[ERROR] Failed to send SMS:', error.message);
-    res.status(500).json({ error: 'Failed to send SMS' });
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/vonage/make-call', async (req, res) => {
-  const { to, message } = req.body;
-
-  if (!to || !message) {
-    return res.status(400).json({ error: 'Missing required fields: to and message' });
-  }
-
   try {
+    const { to, message } = req.body;
+    if (!to || !message) throw new Error('Missing required fields: to and message');
+
     const response = await makeCall(to, message);
     res.status(200).json({ success: true, response });
   } catch (error) {
     console.error('[ERROR] Failed to make call:', error.message);
-    res.status(500).json({ error: 'Failed to make call' });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Assistant API for handling AI-driven tasks
+// Assistant integration
 app.use('/assistant', assistant);
 
-
-app.use((req, res, next) => {
-  console.log(`[DEBUG] Middleware Execution: ${req.method} ${req.path}`);
-  next();
-});
-
-// Business setup API
-const setupBusiness = require('./setup-business');
-app.use('/setup-business', setupBusinessRouter); // Ensure setupBusinessRouter is an Express router
-
-// Google Calendar API routes
+// Google Calendar routes
 app.post('/google-calendar/event', async (req, res) => {
-  const eventDetails = req.body;
-
-  if (!eventDetails) {
-    return res.status(400).json({ error: 'Event details are required' });
-  }
-
   try {
+    const eventDetails = req.body;
+    if (!eventDetails) throw new Error('Event details are required');
+
     const event = await createGoogleCalendarEvent(eventDetails);
     res.status(200).json({ success: true, event });
   } catch (error) {
     console.error('[ERROR] Google Calendar event creation failed:', error.message);
-    res.status(500).json({ error: 'Failed to create Google Calendar event' });
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/google-calendar/events', async (req, res) => {
-  const maxResults = req.query.maxResults || 10;
-
   try {
+    const maxResults = req.query.maxResults || 10;
     const events = await getUpcomingEvents(maxResults);
     res.status(200).json({ success: true, events });
   } catch (error) {
-    console.error('[ERROR] Google Calendar fetch failed:', error.message);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    console.error('[ERROR] Failed to fetch events:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('[ERROR] An error occurred:', err.stack);
+  console.error('[ERROR] Global Error Handler:', err.stack);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
