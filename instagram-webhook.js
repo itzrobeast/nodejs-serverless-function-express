@@ -41,39 +41,38 @@ async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    // Extract the user message text
-    const userMessage = message.message?.text || null;
-    const recipientId = message.sender?.id || null;
+    // Attempt to extract the user message
+    const userMessage = message?.message?.text || null;
+    const recipientId = message?.sender?.id || null;
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted recipient ID:', recipientId);
 
+    // Validate extracted values
     if (!userMessage) {
-      console.error('[ERROR] Invalid user message:', userMessage);
-      throw new Error('Invalid user message. Message content is empty or undefined.');
+      console.error('[ERROR] User message is undefined or invalid:', JSON.stringify(message, null, 2));
+      throw new Error('Invalid user message');
     }
 
     if (!recipientId) {
       console.error('[ERROR] Missing recipient ID:', recipientId);
-      throw new Error('Recipient ID is missing or invalid.');
+      throw new Error('Recipient ID is missing or invalid');
     }
 
     console.log('[DEBUG] Sending user message to assistant for response.');
-
-    // Pass the message to the assistant for processing
     const assistantResponse = await assistantHandler(userMessage);
 
     console.log('[DEBUG] Assistant response:', assistantResponse.text);
 
-    // Send the assistant's response back to the Instagram user
     console.log('[DEBUG] Sending assistant response back to Instagram user.');
     await sendInstagramMessage(recipientId, assistantResponse.text);
-    console.log('[DEBUG] Response sent successfully to Instagram user:', assistantResponse.text);
 
+    console.log('[DEBUG] Response sent successfully to Instagram user:', assistantResponse.text);
   } catch (error) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
 }
+
 
 
 // Primary webhook handler
