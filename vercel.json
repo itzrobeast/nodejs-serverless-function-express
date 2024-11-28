@@ -11,8 +11,7 @@
     { "src": "/instagram-webhook", "dest": "instagram-webhook.js" },
     { "src": "/google-calendar", "dest": "google-calendar.js" },
     { "src": "/assistant", "dest": "assistant.js" },
-    { "src": "/favicon.ico", "dest": "favicon.ico" },
-    { "src": "/favicon.png", "dest": "favicon.png" },
+    { "src": "/favicon.ico", "dest": "/favicon.ico" },
     { "src": "/(.*)", "dest": "index.js" }
   ],
   "headers": [
@@ -20,7 +19,7 @@
       "source": "/setup-business",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "https://mila-verse.vercel.app" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
         { "key": "Access-Control-Allow-Credentials", "value": "true" }
       ]
