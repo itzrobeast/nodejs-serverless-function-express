@@ -20,9 +20,14 @@ router.options('/', (req, res) => {
 
 // Main POST route
 router.post('/', (req, res) => {
+  console.log('[DEBUG] Setup-Business POST route hit');
+  console.log('[DEBUG] Request Headers:', req.headers);
+  console.log('[DEBUG] Request Body:', req.body);
+
   const { businessName, ownerName, contactEmail } = req.body;
 
   if (!businessName || !ownerName || !contactEmail) {
+    console.error('[DEBUG] Missing required fields');
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -31,5 +36,6 @@ router.post('/', (req, res) => {
     data: { businessName, ownerName, contactEmail },
   });
 });
+
 
 export default router;
