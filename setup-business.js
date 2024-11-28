@@ -2,17 +2,31 @@ import express from 'express';
 
 const router = express.Router();
 
-router.get('/health', (req, res) => {
-  console.log('[DEBUG] Health Check Route Hit');
-  res.json({ status: 'Healthy' });
-});
-
 router.post('/', (req, res) => {
-  console.log('[DEBUG] POST /setup-business Hit', req.body);
-  if (!req.body) {
-    return res.status(400).json({ error: 'No body received' });
+  try {
+    console.log('[DEBUG] POST /setup-business Hit:', req.body);
+
+    const { platform, businessName, ownerName, contactEmail } = req.body;
+
+    // Validate fields
+    if (!platform || !businessName || !ownerName || !contactEmail) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        receivedData: req.body,
+      });
+    }
+
+    res.json({
+      message: 'Business setup successful',
+      data: { platform, businessName, ownerName, contactEmail },
+    });
+  } catch (error) {
+    console.error('[ERROR] POST /setup-business:', error.message);
+    res.status(400).json({
+      error: 'Invalid request',
+      details: error.message,
+    });
   }
-  res.json({ message: 'Business setup successful', data: req.body });
 });
 
 export default router;
