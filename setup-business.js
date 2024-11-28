@@ -1,8 +1,24 @@
 import express from 'express';
+import cors from 'cors';
 
 const router = express.Router();
 
-// Define the setup-business POST route
+// Enable CORS for this route
+router.use(
+  cors({
+    origin: 'https://mila-verse.vercel.app',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  })
+);
+
+// Handle OPTIONS requests
+router.options('/', (req, res) => {
+  res.sendStatus(204); // Respond with "No Content" for preflight
+});
+
+// Main POST route
 router.post('/', (req, res) => {
   const { businessName, ownerName, contactEmail } = req.body;
 
@@ -16,4 +32,4 @@ router.post('/', (req, res) => {
   });
 });
 
-export default router; // Export the router
+export default router;
