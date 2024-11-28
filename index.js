@@ -3,15 +3,14 @@ import setupBusinessRouter from './setup-business.js';
 
 const app = express();
 
-app.use(express.json()); // Core middleware for JSON payloads
+app.use(express.json());
 
-// Minimal setup to test `/setup-business`
+// Route registration
 app.use('/setup-business', setupBusinessRouter);
 
-// Root route for sanity check
+// Root health check
 app.get('/', (req, res) => {
-  res.status(200).send('Server is running!');
+  res.status(200).send('Root Route is Working!');
 });
 
-// Export the app
 export default app;
