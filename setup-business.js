@@ -2,18 +2,15 @@ import express from 'express';
 
 const router = express.Router();
 
-app.use('/setup-business', (req, res, next) => {
-  console.log(`[DEBUG] Request received at /setup-business`);
-  next();
-});
-
 router.post('/', (req, res) => {
   try {
     const { platform, businessName, ownerName, contactEmail } = req.body;
     console.log('[DEBUG] Request Body:', req.body);
 
     if (!platform || !businessName || !ownerName || !contactEmail) {
-      throw new Error('Missing required fields');
+      return res.status(400).json({
+        error: 'Missing required fields',
+      });
     }
 
     res.status(200).json({
@@ -21,12 +18,11 @@ router.post('/', (req, res) => {
       data: { platform, businessName, ownerName, contactEmail },
     });
   } catch (error) {
-    console.error('[ERROR] Business Setup Error:', error.message);
+    console.error('[ERROR] /setup-business:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Health check
 router.get('/health', (req, res) => {
   res.status(200).json({ status: 'Healthy' });
 });
