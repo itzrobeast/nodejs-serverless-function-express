@@ -2,6 +2,11 @@ import express from 'express';
 
 const router = express.Router();
 
+app.use('/setup-business', (req, res, next) => {
+  console.log(`[DEBUG] Request received at /setup-business`);
+  next();
+});
+
 router.post('/', (req, res) => {
   try {
     const { platform, businessName, ownerName, contactEmail } = req.body;
