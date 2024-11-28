@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
 import assistant from './assistant.js';
-import setupBusiness from './setup-business.js';
+import setupBusiness from './setup-business.js'; // Ensure setup-business.js exports a router
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
 
@@ -27,19 +27,6 @@ app.use(
   })
 );
 
-// Example route
-app.post('/setup-business', (req, res) => {
-  const { user, accessToken, businessId } = req.body;
-
-  if (!user || !accessToken || !businessId) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  res.status(200).json({
-    message: 'Business setup completed successfully!',
-    data: { user, businessId },
-  });
-});
 // Root route
 app.get('/', (req, res) => {
   console.log('[DEBUG] Root Route Hit');
@@ -75,9 +62,8 @@ app.post('/vonage/make-call', async (req, res) => {
 // Assistant API for handling AI-driven tasks
 app.use('/assistant', assistant);
 
-// Business setup API for customer data handling
-app.use('/setup-business', setupBusiness);
-
+// Business setup API
+app.use('/setup-business', setupBusiness); // Make sure setupBusiness is an Express router
 
 // Google Calendar API routes
 app.post('/google-calendar/event', async (req, res) => {
