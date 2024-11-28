@@ -25,6 +25,13 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    console.log('[DEBUG] Response Headers:', res.getHeaders());
+  });
+  next();
+});
+
 // Debugging middleware for logging requests
 app.use((req, res, next) => {
   console.log(`[DEBUG] Request to ${req.url} - Method: ${req.method}`);
