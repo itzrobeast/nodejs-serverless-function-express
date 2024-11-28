@@ -9,15 +9,18 @@ router.post('/', (req, res) => {
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
+ // Validate appId
+    if (!appId) {
+      console.error('[ERROR] Missing appId in request body');
+      return res.status(400).json({ error: 'appId is required' });
+    }
 
-// Validate appId
     if (appId !== 'milaVerse') {
       return res.status(400).json({
         error: 'Unknown application',
         appId,
       });
     }
-
     
  // Define supported platforms
     const supportedPlatforms = ['Web', 'Mobile', 'Desktop']; // Add other supported platforms if needed
