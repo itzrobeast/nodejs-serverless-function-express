@@ -2,12 +2,14 @@
   "version": 2,
   "builds": [
     { "src": "index.js", "use": "@vercel/node" },
+    { "src": "setup-business.js", "use": "@vercel/node" },
     { "src": "instagram-webhook.js", "use": "@vercel/node" },
     { "src": "google-calendar.js", "use": "@vercel/node" },
     { "src": "assistant.js", "use": "@vercel/node" }
   ],
   "routes": [
     { "src": "/setup-business", "dest": "index.js" },
+    { "src": "/setup-business/health", "dest": "index.js" },
     { "src": "/instagram-webhook", "dest": "instagram-webhook.js" },
     { "src": "/google-calendar", "dest": "google-calendar.js" },
     { "src": "/assistant", "dest": "assistant.js" },
