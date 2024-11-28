@@ -83,6 +83,12 @@ app.post('/vonage/make-call', async (req, res) => {
 // Assistant API for handling AI-driven tasks
 app.use('/assistant', assistant);
 
+
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Middleware Execution: ${req.method} ${req.path}`);
+  next();
+});
+
 // Business setup API
 app.use('/setup-business', setupBusinessRouter); // Ensure setupBusinessRouter is an Express router
 
