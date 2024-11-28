@@ -1,12 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 
-const router = express.Router();
+const app = express(); // Initialize the app
+const router = express.Router(); // Initialize the router
 
-app.use(express.json()); // Middleware to parse JSON
+// Middleware to parse JSON for all routes
+app.use(express.json());
 
-// Enable CORS for this route
-router.use(
+// Enable CORS globally for the app
+app.use(
   cors({
     origin: 'https://mila-verse.vercel.app',
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -16,41 +18,24 @@ router.use(
 );
 
 // Middleware to log all incoming requests
-router.use((req, res, next) => {
+app.use((req, res, next) => {
   console.log(`[DEBUG] ${req.method} request to ${req.originalUrl} with body:`, req.body);
   next();
 });
 
-
-//global error handler:
+// Global error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled Error:', err);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-
-//route handler
-app.post('/setup-business', async (req, res, next) => {
-  try {
-    console.log('Request body:', req.body); // Add logging
-    // Your handler logic
-    res.status(200).send('Success');
-  } catch (error) {
-    console.error('Error in /setup-business:', error);
-    next(error); // Pass to error-handling middleware
-  }
-});
-
-
-
-
-// Handle OPTIONS requests
-router.options('/', (req, res) => {
-  res.sendStatus(204); // Respond with no content for preflight
+// Health-check route for debugging
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Setup-Business is healthy!' });
 });
 
 // Main POST route
-router.post('/', async (req, res) => {
+router.post('/setup-business', async (req, res) => {
   try {
     const { platform, businessName, ownerName, contactEmail } = req.body;
 
@@ -79,10 +64,8 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Mount the router on the app
+app.use('/', router);
 
-// Temporary health-check route for debugging
-router.get('/health', (req, res) => {
-  res.status(200).json({ status: 'Setup-Business is healthy!' });
-});
-
-export default router;
+// Export the app (if needed for serverless frameworks like Vercel)
+export default app;
