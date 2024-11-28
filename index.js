@@ -90,6 +90,7 @@ app.use((req, res, next) => {
 });
 
 // Business setup API
+const setupBusiness = require('./setup-business');
 app.use('/setup-business', setupBusinessRouter); // Ensure setupBusinessRouter is an Express router
 
 // Google Calendar API routes
