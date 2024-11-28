@@ -39,28 +39,42 @@ async function sendInstagramMessage(recipientId, message) {
 // Process individual messaging events
 async function processMessagingEvent(message) {
   try {
-    console.log('[DEBUG] Received message for processing:', JSON.stringify(message, null, 2));
+    console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
+    // Extract the user message text
     const userMessage = message.message?.text || null;
     const recipientId = message.sender?.id || null;
 
-    if (!userMessage || !recipientId) {
-      console.warn('[DEBUG] Missing required fields. Skipping processing.');
-      return; // Skip processing
+    console.log('[DEBUG] Extracted user message:', userMessage);
+    console.log('[DEBUG] Extracted recipient ID:', recipientId);
+
+    if (!userMessage) {
+      console.error('[ERROR] Invalid user message:', userMessage);
+      throw new Error('Invalid user message. Message content is empty or undefined.');
     }
 
-    console.log('[DEBUG] Passing message to assistant for processing.');
+    if (!recipientId) {
+      console.error('[ERROR] Missing recipient ID:', recipientId);
+      throw new Error('Recipient ID is missing or invalid.');
+    }
 
-    // Generate response using assistant
+    console.log('[DEBUG] Sending user message to assistant for response.');
+
+    // Pass the message to the assistant for processing
     const assistantResponse = await assistantHandler(userMessage);
+
     console.log('[DEBUG] Assistant response:', assistantResponse.text);
 
-    // Send the response back to Instagram
+    // Send the assistant's response back to the Instagram user
+    console.log('[DEBUG] Sending assistant response back to Instagram user.');
     await sendInstagramMessage(recipientId, assistantResponse.text);
+    console.log('[DEBUG] Response sent successfully to Instagram user:', assistantResponse.text);
+
   } catch (error) {
-    console.error('[ERROR] Failed to process messaging event:', error);
+    console.error('[ERROR] Failed to process messaging event:', error.message);
   }
 }
+
 
 // Primary webhook handler
 export default async function handler(req, res) {
