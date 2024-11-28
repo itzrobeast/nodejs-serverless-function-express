@@ -9,6 +9,22 @@ router.post('/', (req, res) => {
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
+
+ // Define supported platforms
+    const supportedPlatforms = ['Web', 'Mobile', 'Desktop']; // Add other supported platforms if needed
+
+    // Validate the platform field
+    if (!supportedPlatforms.includes(platform)) {
+      return res.status(400).json({
+        error: 'Unsupported platform',
+        receivedPlatform: platform,
+        supportedPlatforms,
+      });
+    }
+
+
+
+    
     // Validate fields
     if (!platform || !businessName || !ownerName || !contactEmail) {
       return res.status(400).json({
