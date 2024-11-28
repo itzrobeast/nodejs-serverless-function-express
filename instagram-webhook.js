@@ -48,21 +48,25 @@ async function processMessagingEvent(message) {
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted recipient ID:', recipientId);
 
-    // Skip processing for deleted or unsupported messages
     if (!userMessage) {
-      console.warn('[DEBUG] User message is undefined or unsupported. Skipping:', JSON.stringify(message, null, 2));
+      console.error('[ERROR] Invalid user message:', JSON.stringify(message, null, 2));
       return; // Skip further processing
     }
 
     if (!recipientId) {
-      console.error('[ERROR] Missing recipient ID:', recipientId);
-      throw new Error('Recipient ID is missing or invalid');
+      console.error('[ERROR] Missing recipient ID:', JSON.stringify(message, null, 2));
+      return; // Skip further processing
     }
 
     console.log('[DEBUG] Sending user message to assistant for response.');
     const assistantResponse = await assistantHandler(userMessage);
 
-    console.log('[DEBUG] Assistant response:', assistantResponse.text);
+    console.log('[DEBUG] Assistant response:', assistantResponse?.text);
+
+    if (!assistantResponse || !assistantResponse.text) {
+      console.error('[ERROR] Assistant failed to generate a valid response.');
+      return;
+    }
 
     console.log('[DEBUG] Sending assistant response back to Instagram user.');
     await sendInstagramMessage(recipientId, assistantResponse.text);
