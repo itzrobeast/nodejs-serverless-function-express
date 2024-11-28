@@ -10,6 +10,8 @@ const app = express();
 
 // Middleware for JSON parsing
 app.use(express.json());
+const setupBusinessRouter = require('./setupBusiness');
+app.use('/', setupBusinessRouter);
 
 // Custom CORS middleware
 app.use((req, res, next) => {
