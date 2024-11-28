@@ -1,3 +1,4 @@
+// index.js
 import express from 'express';
 import cors from 'cors';
 import setupBusinessRouter from './setup-business.js';
@@ -13,7 +14,7 @@ app.use(cors({
   credentials: true,
 }));
 
-// Debugging middleware
+// Debugging Middleware
 app.use((req, res, next) => {
   console.log(`[DEBUG] Incoming Request: ${req.method} ${req.url}`);
   next();
@@ -26,7 +27,7 @@ app.get('/', (req, res) => {
   res.status(200).send('Welcome to the Node.js Serverless Function!');
 });
 
-// Error Handling
+// Global Error Handling
 app.use((err, req, res, next) => {
   console.error('[ERROR] Global Error Handler:', err.stack);
   res.status(500).json({ error: 'Internal Server Error' });
