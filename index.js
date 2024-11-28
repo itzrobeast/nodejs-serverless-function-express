@@ -8,6 +8,11 @@ import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.
 
 const app = express();
 
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Middleware reached for ${req.method} ${req.url}`);
+  next();
+});
+
 // Global middleware
 app.use(express.json()); // Parse JSON
 app.use(cors({
