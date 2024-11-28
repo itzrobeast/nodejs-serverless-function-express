@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import instagramWebhook from './instagram-webhook.js';
 import assistant from './assistant.js';
-import setupBusinessRouter from './setup-business.js';
+import setupBusiness from './setup-business.js';
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
 
