@@ -18,13 +18,12 @@ app.use((req, res, next) => {
 });
 
 // CORS middleware configuration
-const allowedOrigins = ['https://mila-verse.vercel.app'];
 app.use(
   cors({
-    origin: allowedOrigins,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    credentials: true,
+    origin: 'https://mila-verse.vercel.app', // Allow requests from this origin
+    methods: ['GET', 'POST', 'OPTIONS'], // Allowed HTTP methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+    credentials: true, // Allow cookies and credentials
   })
 );
 
@@ -65,6 +64,7 @@ app.use('/assistant', assistant);
 
 // Business setup API for customer data handling
 app.use('/setup-business', setupBusiness);
+
 
 // Google Calendar API routes
 app.post('/google-calendar/event', async (req, res) => {
