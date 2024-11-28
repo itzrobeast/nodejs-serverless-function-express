@@ -19,23 +19,30 @@ router.options('/', (req, res) => {
 });
 
 // Main POST route
-router.post('/', (req, res) => {
-  console.log('[DEBUG] Setup-Business POST route hit');
-  console.log('[DEBUG] Request Headers:', req.headers);
-  console.log('[DEBUG] Request Body:', req.body);
+router.post('/', async (req, res) => {
+  try {
+    const { businessName, ownerName, contactEmail } = req.body;
 
-  const { businessName, ownerName, contactEmail } = req.body;
+    if (!businessName || !ownerName || !contactEmail) {
+      throw new Error('Missing required fields');
+    }
 
-  if (!businessName || !ownerName || !contactEmail) {
-    console.error('[DEBUG] Missing required fields');
-    return res.status(400).json({ error: 'Missing required fields' });
+    // Simulate some processing logic
+    console.log(`[DEBUG] Processing business setup:`, { businessName, ownerName, contactEmail });
+
+    res.status(200).json({
+      message: 'Business setup completed successfully!',
+      data: { businessName, ownerName, contactEmail },
+    });
+  } catch (error) {
+    console.error(`[ERROR] Setup-Business:`, error);
+    res.status(500).json({
+      error: error.message || 'Internal Server Error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
   }
-
-  res.status(200).json({
-    message: 'Business setup completed successfully!',
-    data: { businessName, ownerName, contactEmail },
-  });
 });
+
 
 
 export default router;
