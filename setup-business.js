@@ -3,6 +3,8 @@ import cors from 'cors';
 
 const router = express.Router();
 
+app.use(express.json()); // Middleware to parse JSON
+
 // Enable CORS for this route
 router.use(
   cors({
@@ -18,6 +20,29 @@ router.use((req, res, next) => {
   console.log(`[DEBUG] ${req.method} request to ${req.originalUrl} with body:`, req.body);
   next();
 });
+
+
+//global error handler:
+app.use((err, req, res, next) => {
+  console.error('Unhandled Error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+
+//route handler
+app.post('/setup-business', async (req, res, next) => {
+  try {
+    console.log('Request body:', req.body); // Add logging
+    // Your handler logic
+    res.status(200).send('Success');
+  } catch (error) {
+    console.error('Error in /setup-business:', error);
+    next(error); // Pass to error-handling middleware
+  }
+});
+
+
+
 
 // Handle OPTIONS requests
 router.options('/', (req, res) => {
