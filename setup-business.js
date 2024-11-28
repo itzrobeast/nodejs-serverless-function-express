@@ -15,7 +15,7 @@ router.use(
 
 // Handle OPTIONS requests
 router.options('/', (req, res) => {
-  res.sendStatus(204); // Respond with "No Content" for preflight
+  res.sendStatus(204);
 });
 
 // Main POST route
