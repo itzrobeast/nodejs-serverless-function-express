@@ -36,6 +36,12 @@ export async function assistantHandler({ userMessage, recipientId, platform }) {
   try {
     console.log(`[DEBUG] Processing message from platform: ${platform}`);
     console.log(`[DEBUG] User message: "${userMessage}"`);
+    console.log('[DEBUG] Received user message:', userMessage);
+
+    if (!userMessage || typeof userMessage !== 'string') {
+      console.error('[ERROR] Invalid user message:', userMessage);
+      return { text: 'I couldn’t understand your message. Could you please rephrase it?' };
+    }
 
     // Generate response using OpenAI
     const openaiResponse = await openai.chat.completions.create({
