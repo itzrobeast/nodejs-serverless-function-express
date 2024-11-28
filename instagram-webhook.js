@@ -37,43 +37,37 @@ async function sendInstagramMessage(recipientId, message) {
 }
 
 // Process individual messaging events
+// Process individual messaging events
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    // Extract message details
-    const userMessage = message?.message?.text || null;
-    const recipientId = message?.sender?.id || null;
+    const userMessage = message?.message?.text; // Extract user message text
+    const recipientId = message?.sender?.id;   // Extract sender/recipient ID
+    const platform = 'instagram';             // Define the platform as Instagram
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted recipient ID:', recipientId);
 
-    if (!userMessage) {
-      console.error('[ERROR] Invalid user message:', JSON.stringify(message, null, 2));
-      return; // Skip further processing
+    if (!userMessage || !recipientId) {
+      console.error('[ERROR] Missing message or recipient ID:', { userMessage, recipientId });
+      return; // Skip processing this message
     }
 
-    if (!recipientId) {
-      console.error('[ERROR] Missing recipient ID:', JSON.stringify(message, null, 2));
-      return; // Skip further processing
+    // Pass the extracted data to the assistant
+    console.log('[DEBUG] Sending user message to assistant for processing.');
+    const assistantResponse = await assistantHandler({ userMessage, recipientId, platform });
+
+    // Send the assistant's response back to Instagram
+    if (assistantResponse && assistantResponse.message) {
+      console.log('[DEBUG] Assistant response:', assistantResponse.message);
+      await sendInstagramMessage(recipientId, assistantResponse.message);
+    } else {
+      console.warn('[WARN] Assistant response is missing or invalid.');
     }
-
-    console.log('[DEBUG] Sending user message to assistant for response.');
-    const assistantResponse = await assistantHandler(userMessage);
-
-    console.log('[DEBUG] Assistant response:', assistantResponse?.text);
-
-    if (!assistantResponse || !assistantResponse.text) {
-      console.error('[ERROR] Assistant failed to generate a valid response.');
-      return;
-    }
-
-    console.log('[DEBUG] Sending assistant response back to Instagram user.');
-    await sendInstagramMessage(recipientId, assistantResponse.text);
-
-    console.log('[DEBUG] Response sent successfully to Instagram user:', assistantResponse.text);
   } catch (error) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
+    throw error;
   }
 }
 
