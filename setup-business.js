@@ -27,35 +27,33 @@ router.options('/', (req, res) => {
 // Main POST route
 router.post('/', async (req, res) => {
   try {
-    // Validate request body
-    const { businessName, ownerName, contactEmail } = req.body;
+    const { platform, businessName, ownerName, contactEmail } = req.body;
 
-    if (!businessName || !ownerName || !contactEmail) {
-      console.warn('[WARNING] Missing required fields:', req.body);
-      return res.status(400).json({
-        error: 'Missing required fields. Please provide businessName, ownerName, and contactEmail.',
-      });
+    console.log('[DEBUG] Received Payload:', req.body); // Log incoming data
+
+    if (!platform) {
+      throw new Error('Platform is required but not provided!');
     }
 
-    // Simulate some processing logic
-    console.log(`[DEBUG] Processing business setup:`, { businessName, ownerName, contactEmail });
+    if (!businessName || !ownerName || !contactEmail) {
+      throw new Error('Missing required fields: businessName, ownerName, or contactEmail');
+    }
 
-    // Simulate successful processing
+    console.log('[DEBUG] Processing business setup for platform:', platform);
+
     res.status(200).json({
       message: 'Business setup completed successfully!',
-      data: { businessName, ownerName, contactEmail },
+      data: { platform, businessName, ownerName, contactEmail },
     });
   } catch (error) {
-    // Log the error
-    console.error('[ERROR] Setup-Business:', error);
-
-    // Respond with error details
+    console.error('[ERROR] Setup-Business:', error.message);
     res.status(500).json({
       error: error.message || 'Internal Server Error',
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 });
+
 
 // Temporary health-check route for debugging
 router.get('/health', (req, res) => {
