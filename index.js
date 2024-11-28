@@ -8,6 +8,12 @@ import cors from 'cors';
 
 const app = express();
 
+// Middleware logging
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Middleware reached for ${req.method} ${req.url}`);
+  next();
+});
+
 // Middleware for JSON parsing
 app.use(express.json());
 const setupBusinessRouter = require('./setupBusiness');
