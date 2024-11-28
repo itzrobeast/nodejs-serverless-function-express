@@ -15,5 +15,28 @@
     { "src": "/favicon.ico", "dest": "favicon.ico" },
     { "src": "/favicon.png", "dest": "favicon.png" },
     { "src": "/(.*)", "dest": "index.js" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)", // Apply headers to all routes
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://mila-verse.vercel.app" // Allow requests from this domain
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS" // Allow these methods
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization" // Allow these headers
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true" // Allow credentials
+        }
+      ]
+    }
   ]
 }
