@@ -41,17 +41,17 @@ async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    // Attempt to extract the user message
+    // Extract message details
     const userMessage = message?.message?.text || null;
     const recipientId = message?.sender?.id || null;
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted recipient ID:', recipientId);
 
-    // Validate extracted values
+    // Skip processing for deleted or unsupported messages
     if (!userMessage) {
-      console.error('[ERROR] User message is undefined or invalid:', JSON.stringify(message, null, 2));
-      throw new Error('Invalid user message');
+      console.warn('[DEBUG] User message is undefined or unsupported. Skipping:', JSON.stringify(message, null, 2));
+      return; // Skip further processing
     }
 
     if (!recipientId) {
@@ -72,7 +72,6 @@ async function processMessagingEvent(message) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
 }
-
 
 
 // Primary webhook handler
