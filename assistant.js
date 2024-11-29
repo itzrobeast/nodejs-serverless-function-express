@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
+import db from './database'; // Hypothetical database module to fetch business-specific configs
 
 // Initialize OpenAI
 const openai = new OpenAI({
@@ -31,23 +32,59 @@ const functionHandlers = {
   },
 };
 
+// Objection handler
+function handleObjections(userMessage, businessConfig) {
+  const objections = businessConfig.objections || {
+    financial: "We have financing options. If you'd like, I can forward you the link.",
+    insurance: {
+      general: "We only take Medical in San Diego, not at the Los Angeles office in Burbank.",
+      exclusions: "Medical does not cover any implants or advanced surgery procedures.",
+    },
+  };
+
+  if (userMessage.includes('money') || userMessage.includes('finance')) {
+    return objections.financial;
+  }
+
+  if (userMessage.includes('Medical')) {
+    return `${objections.insurance.general} ${objections.insurance.exclusions}`;
+  }
+
+  return null; // No objections found
+}
+
 // Assistant handler to process user messages
 export async function assistantHandler({ userMessage, recipientId, platform }) {
   try {
     console.log(`[DEBUG] Processing message from platform: ${platform}`);
     console.log(`[DEBUG] User message: "${userMessage}"`);
-    console.log('[DEBUG] Received user message:', userMessage);
 
     if (!userMessage || typeof userMessage !== 'string') {
       console.error('[ERROR] Invalid user message:', userMessage);
       return { text: 'I couldn’t understand your message. Could you please rephrase it?' };
     }
 
+    // Fetch business-specific configuration
+    const businessId = recipientId; // Assuming `recipientId` maps to a business
+    const businessConfig = await db.getBusinessConfig(businessId);
+
+    // Handle objections dynamically
+    const objectionResponse = handleObjections(userMessage, businessConfig);
+    if (objectionResponse) {
+      console.log('[DEBUG] Objection response triggered:', objectionResponse);
+      return { message: objectionResponse };
+    }
+
     // Generate response using OpenAI
     const openaiResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
-        { role: 'system', content: 'You are a helpful assistant that manages appointments and responds to user queries.' },
+        {
+          role: 'system',
+          content: `You are an AI receptionist for ${businessConfig.name}. Your role is to manage appointments, answer user questions, and provide information based on ${businessConfig.name}'s website and guidelines. You operate for the following locations: ${businessConfig.locations.join(
+            ', '
+          )}. Stay professional and to the point.`,
+        },
         { role: 'user', content: userMessage },
       ],
       functions: Object.keys(functionHandlers).map((name) => ({
