@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
-import supabase from './supabaseClient'; // Supabase client for secure backend operations
+import supabase from './supabaseClient.js'; // Supabase client for secure backend operations
 
 // Initialize OpenAI
 const openai = new OpenAI({
