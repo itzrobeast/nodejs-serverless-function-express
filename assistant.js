@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { sendSMS, makeCall } from './vonage.js';
 import { createGoogleCalendarEvent, getUpcomingEvents } from './google-calendar.js';
-import db from './database'; // Hypothetical database module to fetch business-specific configs
+import supabase from './supabaseClient'; // Supabase client for secure backend operations
 
 // Initialize OpenAI
 const openai = new OpenAI({
@@ -33,7 +33,7 @@ const functionHandlers = {
 };
 
 // Objection handler
-function handleObjections(userMessage, businessConfig) {
+const handleObjections = (userMessage, businessConfig) => {
   const objections = businessConfig.objections || {
     financial: "We have financing options. If you'd like, I can forward you the link.",
     insurance: {
@@ -51,10 +51,31 @@ function handleObjections(userMessage, businessConfig) {
   }
 
   return null; // No objections found
-}
+};
+
+// Fetch business configuration securely using Supabase
+const getBusinessConfig = async (owner_id) => {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('owner_id', owner_id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching business configuration:', error.message);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Unexpected error fetching business config:', err.message);
+    return null;
+  }
+};
 
 // Assistant handler to process user messages
-export async function assistantHandler({ userMessage, recipientId, platform }) {
+export const assistantHandler = async ({ userMessage, recipientId, platform }) => {
   try {
     console.log(`[DEBUG] Processing message from platform: ${platform}`);
     console.log(`[DEBUG] User message: "${userMessage}"`);
@@ -65,8 +86,11 @@ export async function assistantHandler({ userMessage, recipientId, platform }) {
     }
 
     // Fetch business-specific configuration
-    const businessId = recipientId; // Assuming `recipientId` maps to a business
-    const businessConfig = await db.getBusinessConfig(businessId);
+    const businessConfig = await getBusinessConfig(recipientId);
+
+    if (!businessConfig) {
+      return { message: 'Could not retrieve business configuration. Please try again later.' };
+    }
 
     // Handle objections dynamically
     const objectionResponse = handleObjections(userMessage, businessConfig);
@@ -117,13 +141,12 @@ export async function assistantHandler({ userMessage, recipientId, platform }) {
     const responseMessage = openaiResponse.choices[0]?.message?.content || "I'm here to help!";
     console.log(`[DEBUG] Generated response from OpenAI: "${responseMessage}"`);
 
-    // Return the response
     return { message: responseMessage };
   } catch (error) {
     console.error('[ERROR] Failed to process assistant request:', error);
     return { message: 'Something went wrong. Please try again later.' };
   }
-}
+};
 
 // Default API handler for external requests
 export default async function handler(req, res) {
