@@ -30,10 +30,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /get-business
+// PUT /update-business
 router.put('/', async (req, res) => {
   try {
-    const { id, name, contact_email, locations } = req.body;
+    const { id, name, contact_email, locations, ai_knowledge } = req.body;
 
     if (!id || !name || !contact_email) {
       return res.status(400).json({ error: 'Missing required fields: id, name, or contact_email' });
@@ -41,7 +41,7 @@ router.put('/', async (req, res) => {
 
     const { data, error } = await supabase
       .from('businesses')
-      .update({ name, contact_email, locations })
+      .update({ name, contact_email, locations, ai_knowledge })
       .eq('id', id);
 
     if (error) {
