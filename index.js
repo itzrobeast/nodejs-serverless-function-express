@@ -3,6 +3,7 @@ import setupBusinessRouter from './setup-business.js';
 import assistantHandler from './assistant.js';
 import instagramWebhookHandler from './instagram-webhook.js';
 import cors from 'cors';
+import getBusinessRoute from './get-business.js';
 
 
 const app = express();
@@ -30,6 +31,7 @@ app.use((req, res, next) => {
 app.use('/setup-business', setupBusinessRouter);
 app.use('/assistant', assistantHandler);
 app.use('/instagram-webhook', instagramWebhookHandler);
+app.use('/get-business', getBusinessRoute);
 
 // Root Route
 app.get('/', (req, res) => {
