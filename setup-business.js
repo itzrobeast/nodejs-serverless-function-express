@@ -1,15 +1,16 @@
 import express from 'express';
+import supabase from './supabaseClient'; // Import Supabase client
 
 const router = express.Router();
 
 // POST Handler for /setup-business
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const { appId, platform, businessName, ownerName, contactEmail } = req.body;
+    const { appId, platform, businessName, ownerName, contactEmail, locations, insurancePolicies, objections } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
- // Validate appId
+    // Validate appId
     if (!appId) {
       console.error('[ERROR] Missing appId in request body');
       return res.status(400).json({ error: 'appId is required' });
@@ -21,11 +22,11 @@ router.post('/', (req, res) => {
         appId,
       });
     }
-    
- // Define supported platforms
-    const supportedPlatforms = ['Web', 'Mobile', 'Desktop']; // Add other supported platforms if needed
 
-    // Validate the platform field
+    // Define supported platforms
+    const supportedPlatforms = ['Web', 'Mobile', 'Desktop'];
+
+    // Validate platform
     if (!supportedPlatforms.includes(platform)) {
       return res.status(400).json({
         error: 'Unsupported platform',
@@ -34,21 +35,41 @@ router.post('/', (req, res) => {
       });
     }
 
-
-
-    
-    // Validate fields
-    if (!platform || !businessName || !ownerName || !contactEmail) {
+    // Validate required fields
+    if (!businessName || !ownerName || !contactEmail) {
       return res.status(400).json({
         error: 'Missing required fields',
+        requiredFields: ['businessName', 'ownerName', 'contactEmail'],
         receivedData: req.body,
       });
     }
 
+    // Insert business into Supabase
+    const { data, error } = await supabase.from('businesses').insert([
+      {
+        name: businessName,
+        owner_id: ownerName, // Assuming ownerName maps to owner_id
+        locations,
+        insurance_policies: insurancePolicies || {}, // Default to empty object
+        objections: objections || {}, // Default to empty object
+        contact_email: contactEmail,
+      },
+    ]);
+
+    if (error) {
+      console.error('[ERROR] Failed to insert business:', error.message);
+      return res.status(500).json({
+        error: 'Database error',
+        details: error.message,
+      });
+    }
+
+    console.log('[DEBUG] Business added successfully:', data);
+
     // Return success response
-    res.status(200).json({
+    res.status(201).json({
       message: 'Business setup successful',
-      data: { platform, businessName, ownerName, contactEmail },
+      business: data,
     });
   } catch (error) {
     console.error('[ERROR] /setup-business:', error.message);
