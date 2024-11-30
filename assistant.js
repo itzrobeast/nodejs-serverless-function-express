@@ -105,9 +105,9 @@ export const assistantHandler = async ({ userMessage, recipientId, platform }) =
       messages: [
         {
           role: 'system',
-          content: `You are an AI receptionist for ${businessConfig.name}. Your role is to manage appointments, answer user questions, and provide information based on ${businessConfig.name}'s website and guidelines. You operate for the following locations: ${businessConfig.locations.join(
-            ', '
-          )}. Stay professional and to the point.`,
+          content: `You are an AI receptionist for ${businessConfig.name}. Your role is to manage appointments, answer user questions, be precise and professional and provide information based on ${businessConfig.name}'s website and guidelines. You operate for the following locations: ${businessConfig.locations.join(
+        ', '
+      )}. Here is the business-specific knowledge: ${businessConfig.ai_knowledge || 'No additional knowledge provided.'}`,
         },
         { role: 'user', content: userMessage },
       ],
