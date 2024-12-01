@@ -44,6 +44,31 @@ router.post('/', async (req, res) => {
       });
     }
 
+    
+ try {
+    // Check if the business already exists for this owner_id
+    const { data: existingBusiness, error: fetchError } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('owner_id', owner_id)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // 'PGRST116' means no rows were found, so it's not an actual error
+      throw new Error('Failed to fetch existing business data');
+    }
+
+    if (existingBusiness) {
+      // If the business exists, return it
+      return res.status(200).json({
+        message: 'Business data already exists',
+        data: existingBusiness,
+      });
+    }
+
+    
+
+    
     // Insert business into Supabase
     const { data, error } = await supabase.from('businesses').insert([
       {
