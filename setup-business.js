@@ -15,6 +15,7 @@ router.post('/', async (req, res) => {
       locations,
       insurancePolicies,
       objections,
+      aiKnowledgeBase, // New field for AI knowledge base
     } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
@@ -73,6 +74,7 @@ router.post('/', async (req, res) => {
         locations: locations || [], // Default to empty array
         insurance_policies: insurancePolicies || {}, // Default to empty object
         objections: objections || {}, // Default to empty object
+        ai_knowledge_base: aiKnowledgeBase || '', // Default to empty string
       },
     ]);
 
