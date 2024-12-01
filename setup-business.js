@@ -22,7 +22,6 @@ router.post('/', async (req, res) => {
       user, // Extract the user object from req.body
       accessToken,
       businessName,
-      ownerId = req.body.user?.id,
       contactEmail,
       locations,
       insurancePolicies,
@@ -32,20 +31,16 @@ router.post('/', async (req, res) => {
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
-    
-    
-    const ownerId = user.id; // Assign the user ID from the extracted user object
-    
     // Derive platform dynamically BEFORE any reference
     const platform = getPlatform(req);
     console.log('[DEBUG] Detected platform:', platform);
 
     // Validate required fields
-    if (!appId || !businessName || !ownerId || !contactEmail) {
+    if (!appId || !businessName || !user?.id || !contactEmail) {
       console.error('[ERROR] Missing required fields');
       return res.status(400).json({
         error: 'Missing required fields',
-        requiredFields: ['appId', 'businessName', 'ownerId', 'contactEmail'],
+        requiredFields: ['appId', 'businessName', 'user.id', 'contactEmail'],
         receivedData: req.body,
       });
     }
@@ -56,41 +51,37 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Unknown application', appId });
     }
 
-// Check if user exists in the 'users' table
-const { data: existingUser, error: userFetchError } = await supabase
-  .from('users')
-  .select('*')
-  .eq('fb_id', user.id)
-  .single();
+    // Check if user exists in the 'users' table
+    const { data: existingUser, error: userFetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('fb_id', user.id)
+      .single();
 
-if (userFetchError && userFetchError.code !== 'PGRST116') {
-  throw new Error('Failed to fetch existing user data');
-}
+    if (userFetchError && userFetchError.code !== 'PGRST116') {
+      throw new Error('Failed to fetch existing user data');
+    }
 
-if (!existingUser) {
-  // Insert new user into 'users' table
-  const { error: userInsertError } = await supabase.from('users').insert([
-    {
-      fb_id: user.id,
-      name: user.name,
-      email: user.email,
-    },
-  ]);
+    if (!existingUser) {
+      // Insert new user into 'users' table
+      const { error: userInsertError } = await supabase.from('users').insert([
+        {
+          fb_id: user.id,
+          name: user.name,
+          email: user.email,
+        },
+      ]);
 
-  if (userInsertError) {
-    throw new Error('Failed to insert user data');
-  }
-}
-
-                            
-
-    
+      if (userInsertError) {
+        throw new Error('Failed to insert user data');
+      }
+    }
 
     // Check if the business already exists for this ownerId
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
       .select('*')
-      .eq('owner_id', ownerId)
+      .eq('owner_id', user.id)
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
@@ -110,7 +101,7 @@ if (!existingUser) {
     const { data, error: insertError } = await supabase.from('businesses').insert([
       {
         name: businessName,
-        owner_id: ownerId,
+        owner_id: user.id,
         contact_email: contactEmail,
         locations: locations || [],
         insurance_policies: insurancePolicies || {},
