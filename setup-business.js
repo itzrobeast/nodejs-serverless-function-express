@@ -1,5 +1,5 @@
 import express from 'express';
-import supabase from './supabaseClient.js'; // Import Supabase client
+import supabase from './supabaseClient'; // Import Supabase client
 
 const router = express.Router();
 
@@ -15,30 +15,31 @@ router.post('/', async (req, res) => {
       locations,
       insurancePolicies,
       objections,
-      aiKnowledgeBase, // New field for AI knowledge base
+      aiKnowledgeBase,
     } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
     // Validate required fields
-    if (!appId || !businessName || !ownerId || !contactEmail) {
+    if (!appId || !businessName || !ownerId || !contactEmail || !platform) {
+      console.error('[ERROR] Missing required fields');
       return res.status(400).json({
         error: 'Missing required fields',
-        requiredFields: ['appId', 'businessName', 'ownerId', 'contactEmail'],
+        requiredFields: ['appId', 'platform', 'businessName', 'ownerId', 'contactEmail'],
         receivedData: req.body,
       });
     }
 
     // Validate appId
     if (appId !== 'milaVerse') {
+      console.error('[ERROR] Invalid appId:', appId);
       return res.status(400).json({ error: 'Unknown application', appId });
     }
 
-    // Define supported platforms
-    const supportedPlatforms = ['Web', 'Mobile', 'Desktop'];
-
     // Validate platform
-    if (!platform || !supportedPlatforms.includes(platform)) {
+    const supportedPlatforms = ['Web', 'Mobile', 'Desktop'];
+    if (!supportedPlatforms.includes(platform)) {
+      console.error('[ERROR] Unsupported platform:', platform);
       return res.status(400).json({
         error: 'Unsupported platform',
         receivedPlatform: platform,
@@ -54,11 +55,12 @@ router.post('/', async (req, res) => {
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      // PGRST116 indicates "no rows found"; treat it as non-fatal
+      console.error('[ERROR] Database fetch error:', fetchError.message);
       throw new Error('Failed to fetch existing business data');
     }
 
     if (existingBusiness) {
+      console.log('[DEBUG] Business already exists:', existingBusiness);
       return res.status(200).json({
         message: 'Business already exists',
         data: existingBusiness,
@@ -75,6 +77,7 @@ router.post('/', async (req, res) => {
         insurance_policies: insurancePolicies || {}, // Default to empty object
         objections: objections || {}, // Default to empty object
         ai_knowledge_base: aiKnowledgeBase || '', // Default to empty string
+        platform, // Save platform
       },
     ]);
 
