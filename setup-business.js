@@ -99,17 +99,19 @@ router.post('/', async (req, res) => {
 
     // Insert new business into Supabase
     const { data, error: insertError } = await supabase.from('businesses').insert([
-      {
-        name: businessName,
-        owner_id: user.id,
-        contact_email: contactEmail,
-        locations: locations || [],
-        insurance_policies: insurancePolicies || {},
-        objections: objections || {},
-        ai_knowledge_base: aiKnowledgeBase || '',
-        platform, // Use the platform determined by getPlatform(req)
-      },
-    ]);
+  {
+    name: businessName,
+    owner_id: user.id, // From the `user` object in the request
+    page_id: pageId || null, // Add `pageId` from the request body or default to null
+    access_token: accessToken || null, // Add `accessToken` from the request body or default to null
+    contact_email: contactEmail,
+    locations: locations || [], // Default to empty array if not provided
+    insurance_policies: insurancePolicies || {}, // Default to empty object if not provided
+    objections: objections || {}, // Default to empty object if not provided
+    ai_knowledge_base: aiKnowledgeBase || '', // Default to an empty string if not provided
+    platform, // Use the platform determined dynamically
+  },
+]);
 
     if (insertError) {
       console.error('[ERROR] Failed to insert business:', insertError.message);
