@@ -10,7 +10,7 @@ router.post('/', async (req, res) => {
       appId,
       platform,
       businessName,
-      ownerId,
+      ownerId = req.body.user?.id, // Fallback to user.id if ownerId is not explicitly provided
       contactEmail,
       locations,
       insurancePolicies,
@@ -47,19 +47,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    
-const ownerId = req.body.ownerId || req.body.user?.id;
-
-if (!appId || !businessName || !ownerId || !contactEmail || !platform) {
-  console.error('[ERROR] Missing required fields');
-  return res.status(400).json({
-    error: 'Missing required fields',
-    requiredFields: ['appId', 'platform', 'businessName', 'ownerId', 'contactEmail'],
-    receivedData: req.body,
-  });
-}
-
-    
     // Check if the business already exists for this ownerId
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
@@ -81,18 +68,16 @@ if (!appId || !businessName || !ownerId || !contactEmail || !platform) {
     }
 
     // Insert new business into Supabase
-    const { data, error: insertError } = await supabase.from('businesses').insert([
-      {
-        name: businessName,
-        owner_id: ownerId,
-        contact_email: contactEmail,
-        locations: locations || [], // Default to empty array
-        insurance_policies: insurancePolicies || {}, // Default to empty object
-        objections: objections || {}, // Default to empty object
-        ai_knowledge_base: aiKnowledgeBase || '', // Default to empty string
-        platform, // Save platform
-      },
-    ]);
+    const { data, error: insertError } = await supabase.from('businesses').insert([{
+      name: businessName,
+      owner_id: ownerId,
+      contact_email: contactEmail,
+      locations: locations || [], // Default to empty array
+      insurance_policies: insurancePolicies || {}, // Default to empty object
+      objections: objections || {}, // Default to empty object
+      ai_knowledge_base: aiKnowledgeBase || '', // Default to empty string
+      platform, // Save platform
+    }]);
 
     if (insertError) {
       console.error('[ERROR] Failed to insert business:', insertError.message);
