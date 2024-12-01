@@ -3,6 +3,19 @@ import supabase from './supabaseClient.js'; // Import Supabase client
 
 const router = express.Router();
 
+// Function to determine the platform from the request headers
+function getPlatform(req) {
+  const userAgent = req.headers['user-agent'] || '';
+  if (/mobile/i.test(userAgent)) {
+    return 'Mobile';
+  } else if (/tablet/i.test(userAgent)) {
+    return 'Tablet';
+  }
+  return 'Web';
+}
+
+
+
 // POST Handler for /setup-business
 router.post('/', async (req, res) => {
   try {
@@ -37,15 +50,7 @@ router.post('/', async (req, res) => {
     }
 
     // Validate platform
-    const supportedPlatforms = ['Web', 'Mobile', 'Desktop'];
-    if (!supportedPlatforms.includes(platform)) {
-      console.error('[ERROR] Unsupported platform:', platform);
-      return res.status(400).json({
-        error: 'Unsupported platform',
-        receivedPlatform: platform,
-        supportedPlatforms,
-      });
-    }
+    const platform = getPlatform(req);
 
     // Check if the business already exists for this ownerId
     const { data: existingBusiness, error: fetchError } = await supabase
