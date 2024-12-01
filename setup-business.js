@@ -21,7 +21,6 @@ router.post('/', async (req, res) => {
   try {
     const {
       appId,
-      platform,
       businessName,
       ownerId = req.body.user?.id, // Fallback to user.id if ownerId is not explicitly provided
       contactEmail,
