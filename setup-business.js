@@ -19,6 +19,8 @@ router.post('/', async (req, res) => {
   try {
     const {
       appId,
+      user, // Extract the user object from req.body
+      accessToken,
       businessName,
       ownerId = req.body.user?.id,
       contactEmail,
@@ -30,6 +32,10 @@ router.post('/', async (req, res) => {
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
+    
+    
+    const ownerId = user.id; // Assign the user ID from the extracted user object
+    
     // Derive platform dynamically BEFORE any reference
     const platform = getPlatform(req);
     console.log('[DEBUG] Detected platform:', platform);
