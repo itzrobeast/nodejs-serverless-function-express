@@ -9,6 +9,12 @@ import getBusinessRoute from './get-business.js';
 const app = express();
 
 
+
+app.use((req, res, next) => {
+  console.log('[DEBUG] Applying CORS for route:', req.url);
+  next();
+});
+
 // CORS Configuration
 app.use(cors({
   origin: 'https://mila-verse.vercel.app', // Allow requests only from this origin
