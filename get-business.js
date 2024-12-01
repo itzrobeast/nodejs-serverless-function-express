@@ -32,6 +32,7 @@ router.get('/', async (req, res) => {
 
 // PUT /update-business - Update business information
 router.put('/', async (req, res) => {
+ console.log("Request body received:", req.body);
   try {
     const {
       id,
