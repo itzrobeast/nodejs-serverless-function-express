@@ -50,6 +50,36 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Unknown application', appId });
     }
 
+// Check if user exists in the 'users' table
+const { data: existingUser, error: userFetchError } = await supabase
+  .from('users')
+  .select('*')
+  .eq('fb_id', user.id)
+  .single();
+
+if (userFetchError && userFetchError.code !== 'PGRST116') {
+  throw new Error('Failed to fetch existing user data');
+}
+
+if (!existingUser) {
+  // Insert new user into 'users' table
+  const { error: userInsertError } = await supabase.from('users').insert([
+    {
+      fb_id: user.id,
+      name: user.name,
+      email: user.email,
+    },
+  ]);
+
+  if (userInsertError) {
+    throw new Error('Failed to insert user data');
+  }
+}
+
+                            
+
+    
+
     // Check if the business already exists for this ownerId
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
