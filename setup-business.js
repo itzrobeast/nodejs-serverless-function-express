@@ -47,6 +47,19 @@ router.post('/', async (req, res) => {
       });
     }
 
+    
+const ownerId = req.body.ownerId || req.body.user?.id;
+
+if (!appId || !businessName || !ownerId || !contactEmail || !platform) {
+  console.error('[ERROR] Missing required fields');
+  return res.status(400).json({
+    error: 'Missing required fields',
+    requiredFields: ['appId', 'platform', 'businessName', 'ownerId', 'contactEmail'],
+    receivedData: req.body,
+  });
+}
+
+    
     // Check if the business already exists for this ownerId
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
