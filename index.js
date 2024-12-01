@@ -18,7 +18,7 @@ app.use((req, res, next) => {
 // CORS Configuration
 app.use(cors({
   origin: 'https://mila-verse.vercel.app', // Allow requests only from this origin
-  methods: ['GET', 'POST', 'OPTIONS'], // Specify allowed methods
+  methods: ['GET', 'POST', 'PUT', 'OPTIONS'], // Specify allowed methods
   allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
   credentials: true, // Allow credentials to be sent
 }));
