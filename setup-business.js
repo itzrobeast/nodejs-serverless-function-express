@@ -14,15 +14,13 @@ function getPlatform(req) {
   return 'Web';
 }
 
-
-
 // POST Handler for /setup-business
 router.post('/', async (req, res) => {
   try {
     const {
       appId,
       businessName,
-      ownerId = req.body.user?.id, // Fallback to user.id if ownerId is not explicitly provided
+      ownerId = req.body.user?.id,
       contactEmail,
       locations,
       insurancePolicies,
@@ -32,12 +30,16 @@ router.post('/', async (req, res) => {
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
+    // Derive platform dynamically BEFORE any reference
+    const platform = getPlatform(req);
+    console.log('[DEBUG] Detected platform:', platform);
+
     // Validate required fields
-    if (!appId || !businessName || !ownerId || !contactEmail || !platform) {
+    if (!appId || !businessName || !ownerId || !contactEmail) {
       console.error('[ERROR] Missing required fields');
       return res.status(400).json({
         error: 'Missing required fields',
-        requiredFields: ['appId', 'platform', 'businessName', 'ownerId', 'contactEmail'],
+        requiredFields: ['appId', 'businessName', 'ownerId', 'contactEmail'],
         receivedData: req.body,
       });
     }
@@ -47,9 +49,6 @@ router.post('/', async (req, res) => {
       console.error('[ERROR] Invalid appId:', appId);
       return res.status(400).json({ error: 'Unknown application', appId });
     }
-
-    // Validate platform
-    const platform = getPlatform(req);
 
     // Check if the business already exists for this ownerId
     const { data: existingBusiness, error: fetchError } = await supabase
@@ -72,16 +71,18 @@ router.post('/', async (req, res) => {
     }
 
     // Insert new business into Supabase
-    const { data, error: insertError } = await supabase.from('businesses').insert([{
-      name: businessName,
-      owner_id: ownerId,
-      contact_email: contactEmail,
-      locations: locations || [], // Default to empty array
-      insurance_policies: insurancePolicies || {}, // Default to empty object
-      objections: objections || {}, // Default to empty object
-      ai_knowledge_base: aiKnowledgeBase || '', // Default to empty string
-      platform, // Save platform
-    }]);
+    const { data, error: insertError } = await supabase.from('businesses').insert([
+      {
+        name: businessName,
+        owner_id: ownerId,
+        contact_email: contactEmail,
+        locations: locations || [],
+        insurance_policies: insurancePolicies || {},
+        objections: objections || {},
+        ai_knowledge_base: aiKnowledgeBase || '',
+        platform, // Use the platform determined by getPlatform(req)
+      },
+    ]);
 
     if (insertError) {
       console.error('[ERROR] Failed to insert business:', insertError.message);
