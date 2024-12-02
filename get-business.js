@@ -67,7 +67,7 @@ console.log("AI Knowledge:", ai_knowledge_base); // Log the field before updatin
     const { data, error } = await supabase
       .from('businesses')
       .update(updateFields)
-      .eq('id', id);
+      .eq('owner_id', owner_id);
 
     if (error) {
       console.error('[ERROR] Failed to update business data:', error.message);
