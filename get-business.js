@@ -35,7 +35,7 @@ router.put('/', async (req, res) => {
  console.log("Request body received:", req.body);
   try {
     const {
-      id,
+      owner_id,
       name,
       contact_email,
       locations,
