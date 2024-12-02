@@ -49,6 +49,8 @@ router.put('/', async (req, res) => {
     if (!id || !name || !contact_email) {
       return res.status(400).json({ error: 'Missing required fields: id, name, or contact_email' });
     }
+    
+console.log("AI Knowledge:", ai_knowledge_base); // Log the field before updating the database
 
     const updateFields = {
       name,
@@ -61,6 +63,7 @@ router.put('/', async (req, res) => {
       access_token: access_token || null,
     };
 
+
     const { data, error } = await supabase
       .from('businesses')
       .update(updateFields)
@@ -70,6 +73,8 @@ router.put('/', async (req, res) => {
       console.error('[ERROR] Failed to update business data:', error.message);
       return res.status(500).json({ error: 'Failed to update business data', details: error.message });
     }
+
+    console.log("Updated business data:", data); // Log the updated data
 
     res.status(200).json({ message: 'Business information updated successfully', data });
   } catch (err) {
