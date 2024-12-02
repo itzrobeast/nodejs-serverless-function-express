@@ -46,7 +46,7 @@ router.put('/', async (req, res) => {
       access_token,
     } = req.body;
 
-    if (!id || !name || !contact_email) {
+    if (!owner_id || !name || !contact_email) {
       return res.status(400).json({ error: 'Missing required fields: id, name, or contact_email' });
     }
     
