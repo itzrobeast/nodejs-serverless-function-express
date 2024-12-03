@@ -59,7 +59,7 @@ async function processMessagingEvent(message) {
       .from('users')
       .select('*')
       .eq('ig_id', recipientId)
-      .single();
+      .maybeSingle();
 
     if (userError && userError.code === 'PGRST116') {
       console.log('[INFO] User not found by ig_id, checking fb_id.');
@@ -68,7 +68,7 @@ async function processMessagingEvent(message) {
         .from('users')
         .select('*')
         .eq('fb_id', recipientId) // Check if the Instagram ID was mistakenly used as fb_id
-        .single();
+        .maybeSingle();
 
       if (!fbUser && !fbUserError) {
         console.log('[INFO] User not found by fb_id. Creating new user.');
@@ -127,7 +127,7 @@ async function processMessagingEvent(message) {
       .from('businesses')
       .select('*')
       .eq('owner_id', user.fb_id)
-      .single();
+      .maybeSingle();
 
     if (businessError || !business) {
       console.error('[ERROR] Business not found for user:', user.fb_id);
