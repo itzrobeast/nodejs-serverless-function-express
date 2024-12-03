@@ -97,7 +97,7 @@ router.post('/', async (req, res) => {
   const updateFields = {
     name: businessName || existingBusiness.name,
     contact_email: contactEmail || existingBusiness.contact_email,
-    locations: locations || existingBusiness.locations,
+    locations: locations.length > 0 ? locations : existingBusiness.locations, // Use existing locations if the incoming array is empty
     insurance_policies: insurancePolicies || existingBusiness.insurance_policies,
     objections: objections || existingBusiness.objections,
     ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
@@ -149,7 +149,7 @@ router.post('/', async (req, res) => {
     page_id: pageId || null, // Add `pageId` from the request body or default to null
     access_token: accessToken || null, // Add `accessToken` from the request body or default to null
     contact_email: contactEmail,
-    locations: locations || [], // Default to empty array if not provided
+    locations: locations.length > 0 ? locations : [], // Default to empty array if not provided
     insurance_policies: insurancePolicies || {}, // Default to empty object if not provided
     objections: objections || {}, // Default to empty object if not provided
     ai_knowledge_base: aiKnowledgeBase || '', // Default to an empty string if not provided
