@@ -27,6 +27,7 @@ router.post('/', async (req, res) => {
       insurancePolicies,
       objections,
       aiKnowledgeBase,
+      pageId,
     } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
