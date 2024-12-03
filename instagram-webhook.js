@@ -43,13 +43,13 @@ async function processMessagingEvent(message) {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
     const userMessage = message?.message?.text; // Extract user message text
-    const recipientId = message?.sender?.id;   // Extract sender/recipient ID
+    const igId = message?.recipient?.id; // Instagram User ID
     const platform = 'instagram';             // Define the platform as Instagram
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted recipient ID:', recipientId);
 
-    if (!userMessage || !recipientId) {
+    if (!userMessage || !igId) {
       console.error('[ERROR] Missing message or recipient ID:', { userMessage, recipientId });
       return; // Skip processing this message
     }
@@ -58,7 +58,7 @@ async function processMessagingEvent(message) {
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('ig_id', recipientId)
+      .eq('ig_id', igId)
       .maybeSingle();
 
     if (userError && userError.code === 'PGRST116') {
@@ -74,12 +74,12 @@ async function processMessagingEvent(message) {
         console.log('[INFO] User not found by fb_id. Creating new user.');
         const { data: newUser, error: insertError } = await supabase
           .from('users')
-          .insert([{ ig_id: recipientId, fb_id: null, name: null, email: null }]);
+          .insert([{ ig_id: igId, fb_id: null, name: null, email: null }]);
 
         if (insertError) {
           console.error('[ERROR] Failed to insert new user:', insertError.message);
           await sendInstagramMessage(
-            recipientId,
+            igId,
             'An error occurred while creating your user profile. Please contact support.'
           );
           return;
@@ -131,7 +131,7 @@ async function processMessagingEvent(message) {
 
     if (businessError || !business) {
       console.error('[ERROR] Business not found for user:', user.fb_id);
-      await sendInstagramMessage(recipientId, 'Could not retrieve business configuration. Please try again later.');
+      await sendInstagramMessage(igId, 'Could not retrieve business configuration. Please try again later.');
       return;
     }
 
@@ -141,7 +141,7 @@ async function processMessagingEvent(message) {
     console.log('[DEBUG] Sending user message to assistant for processing.');
     const assistantResponse = await assistantHandler({
       userMessage,
-      recipientId,
+      recipientId: igId,
       platform,
       business,
     });
@@ -149,7 +149,7 @@ async function processMessagingEvent(message) {
     // Step 4: Send the assistant's response back to Instagram
     if (assistantResponse && assistantResponse.message) {
       console.log('[DEBUG] Assistant response:', assistantResponse.message);
-      await sendInstagramMessage(recipientId, assistantResponse.message);
+      await sendInstagramMessage(igId, assistantResponse.message);
     } else {
       console.warn('[WARN] Assistant response is missing or invalid.');
     }
