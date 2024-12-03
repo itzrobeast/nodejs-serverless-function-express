@@ -38,7 +38,7 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-// Process individual messaging events
+
 // Process individual messaging events
 async function processMessagingEvent(message) {
   try {
@@ -56,18 +56,69 @@ async function processMessagingEvent(message) {
       return; // Skip processing this message
     }
 
-    // Step 1: Find the user by `recipientId`
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('fb_id')
-      .eq('fb_id', recipientId)
-      .single();
+    // Step 1: Find or insert the user by Instagram ID
+let { data: user, error: userError } = await supabase
+  .from('users')
+  .select('*')
+  .eq('ig_id', recipientId)
+  .single();
 
-    if (userError || !user) {
-      console.error('[ERROR] User not found for recipientId:', recipientId);
-      await sendInstagramMessage(recipientId, 'We couldn’t find your user information. Please contact support.');
-      return; // Exit early if user is not found
+if (userError && userError.code === 'PGRST116') {
+  // User not found using Instagram ID, fallback to Facebook ID
+  console.log('[INFO] User not found by ig_id, checking fb_id.');
+  const { data: fbUser, error: fbUserError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('fb_id', recipientId) // Check if the Instagram ID was mistakenly used in fb_id
+    .single();
+
+  if (fbUserError || !fbUser) {
+    console.log('[INFO] User not found by fb_id. Creating new user.');
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert([{ ig_id: recipientId, name: null, email: null }]); // Add new user
+
+    if (insertError) {
+      console.error('[ERROR] Failed to insert new user:', insertError.message);
+      await sendInstagramMessage(
+        recipientId,
+        'An error occurred while creating your user profile. Please contact support.'
+      );
+      return;
     }
+
+    user = newUser[0]; // Assign the new user to the `user` variable
+  } else {
+    // Found user by Facebook ID, update Instagram ID
+    console.log('[INFO] Found user by fb_id, updating ig_id.');
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ ig_id: recipientId })
+      .eq('id', fbUser.id);
+
+    if (updateError) {
+      console.error('[ERROR] Failed to update user with ig_id:', updateError.message);
+      await sendInstagramMessage(
+        recipientId,
+        'An error occurred while linking your Instagram ID. Please contact support.'
+      );
+      return;
+    }
+
+    user = fbUser; // Use the existing Facebook user
+    user.ig_id = recipientId; // Add the Instagram ID to the user object
+  }
+} else if (userError) {
+  console.error('[ERROR] Failed to query users table:', userError.message);
+  await sendInstagramMessage(
+    recipientId,
+    'An error occurred while retrieving your user information. Please contact support.'
+  );
+  return;
+}
+
+console.log('[DEBUG] Found or created user:', user);
+
 
     // Step 2: Find the business by `owner_id`
     const { data: business, error: businessError } = await supabase
