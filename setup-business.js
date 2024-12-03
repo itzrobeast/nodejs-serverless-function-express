@@ -98,6 +98,20 @@ router.post('/', async (req, res) => {
       });
     }
 
+
+
+    console.log('[DEBUG] Payload for Supabase insert:', {
+  name: businessName,
+  owner_id: user.id,
+  page_id: pageId, // Should log the correct value
+  contact_email: contactEmail,
+  locations,
+  insurance_policies,
+  objections,
+  ai_knowledge_base: aiKnowledgeBase,
+  platform,
+});
+
     // Insert new business into Supabase
     const { data, error: insertError } = await supabase.from('businesses').insert([
   {
