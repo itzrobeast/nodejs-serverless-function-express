@@ -47,9 +47,9 @@ router.post('/', async (req, res) => {
       accessToken,
       businessName,
       contactEmail,
-      locations = [],
-      insurancePolicies = {},
-      objections = {},
+      locations,
+      insurancePolicies,
+      objections,
       aiKnowledgeBase = '',
       pageId,
     } = req.body;
@@ -142,9 +142,10 @@ router.post('/', async (req, res) => {
       const updateFields = {
         name: businessName || existingBusiness.name,
         contact_email: contactEmail || existingBusiness.contact_email,
-        locations: locations.length > 0 ? locations : existingBusiness.locations,
-        insurance_policies: insurancePolicies || existingBusiness.insurance_policies,
-        objections: objections || existingBusiness.objections,
+        locations: locations !== undefined ? locations : existingBusiness.locations, // Preserve existing if not provided
+        insurance_policies:
+          insurancePolicies !== undefined ? insurancePolicies : existingBusiness.insurance_policies,
+        objections: objections !== undefined ? objections : existingBusiness.objections,
         ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
         page_id: pageId || existingBusiness.page_id,
         platform,
@@ -175,9 +176,9 @@ router.post('/', async (req, res) => {
             page_id: pageId || null,
             access_token: accessToken || null,
             contact_email: contactEmail,
-            locations,
-            insurance_policies: insurancePolicies,
-            objections,
+            locations: locations || [], // Default only for new business
+            insurance_policies: insurancePolicies || {}, // Default only for new business
+            objections: objections || {}, // Default only for new business
             ai_knowledge_base: aiKnowledgeBase,
             platform,
           },
@@ -205,3 +206,4 @@ router.get('/health', (req, res) => {
 });
 
 export default router;
+
