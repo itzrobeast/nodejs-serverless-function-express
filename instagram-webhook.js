@@ -133,6 +133,7 @@ async function processMessagingEvent(message) {
   }
 }
 
+
 // Primary webhook handler
 export default async function handler(req, res) {
   console.log('Received request:', req.method);
