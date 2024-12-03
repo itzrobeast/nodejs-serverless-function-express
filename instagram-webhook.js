@@ -43,14 +43,14 @@ async function processMessagingEvent(message) {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
     const userMessage = message?.message?.text; // Extract user message text
-    const igId = message?.recipient?.id; // Instagram User ID
-    const platform = 'instagram';             // Define the platform as Instagram
+    const igId = message?.recipient?.id; // Instagram User ID (recipient ID)
+    const platform = 'instagram'; // Define the platform as Instagram
 
     console.log('[DEBUG] Extracted user message:', userMessage);
-    console.log('[DEBUG] Extracted recipient ID:', recipientId);
+    console.log('[DEBUG] Extracted Instagram User ID (ig_id):', igId);
 
     if (!userMessage || !igId) {
-      console.error('[ERROR] Missing message or recipient ID:', { userMessage, recipientId });
+      console.error('[ERROR] Missing user message or Instagram ID:', { userMessage, igId });
       return; // Skip processing this message
     }
 
@@ -61,77 +61,41 @@ async function processMessagingEvent(message) {
       .eq('ig_id', igId)
       .maybeSingle();
 
-    if (userError && userError.code === 'PGRST116') {
-      console.log('[INFO] User not found by ig_id, checking fb_id.');
+    if (!user) {
+      console.log('[INFO] No user found by ig_id. Creating a new user.');
 
-      const { data: fbUser, error: fbUserError } = await supabase
+      // Create a new user with the Instagram ID
+      const { data: newUser, error: insertError } = await supabase
         .from('users')
-        .select('*')
-        .eq('fb_id', recipientId) // Check if the Instagram ID was mistakenly used as fb_id
-        .maybeSingle();
+        .insert([{ ig_id: igId, fb_id: null, name: null, email: null }]); // Default values for missing fields
 
-      if (!fbUser && !fbUserError) {
-        console.log('[INFO] User not found by fb_id. Creating new user.');
-        const { data: newUser, error: insertError } = await supabase
-          .from('users')
-          .insert([{ ig_id: igId, fb_id: null, name: null, email: null }]);
-
-        if (insertError) {
-          console.error('[ERROR] Failed to insert new user:', insertError.message);
-          await sendInstagramMessage(
-            igId,
-            'An error occurred while creating your user profile. Please contact support.'
-          );
-          return;
-        }
-
-        user = newUser[0]; // Assign the new user to the `user` variable
-      } else if (fbUser) {
-        console.log('[INFO] Found user by fb_id, updating ig_id.');
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({ ig_id: recipientId })
-          .eq('id', fbUser.id);
-
-        if (updateError) {
-          console.error('[ERROR] Failed to update user with ig_id:', updateError.message);
-          await sendInstagramMessage(
-            recipientId,
-            'An error occurred while linking your Instagram ID. Please contact support.'
-          );
-          return;
-        }
-
-        user = { ...fbUser, ig_id: recipientId }; // Update the user object with the Instagram ID
-      } else {
-        console.error('[ERROR] Unexpected error querying fb_id:', fbUserError);
+      if (insertError) {
+        console.error('[ERROR] Failed to insert new user:', insertError.message);
         await sendInstagramMessage(
-          recipientId,
-          'An error occurred while retrieving your user information. Please contact support.'
+          igId,
+          'An error occurred while creating your user profile. Please contact support.'
         );
         return;
       }
-    } else if (userError) {
-      console.error('[ERROR] Failed to query users table:', userError.message);
-      await sendInstagramMessage(
-        recipientId,
-        'An error occurred while retrieving your user information. Please contact support.'
-      );
-      return;
+
+      user = newUser[0];
     }
 
     console.log('[DEBUG] Found or created user:', user);
 
-    // Step 2: Find the business by `owner_id`
+    // Step 2: Find the business by `owner_id` (mapped to `fb_id`)
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
       .eq('owner_id', user.fb_id)
       .maybeSingle();
 
-    if (businessError || !business) {
+    if (!business) {
       console.error('[ERROR] Business not found for user:', user.fb_id);
-      await sendInstagramMessage(igId, 'Could not retrieve business configuration. Please try again later.');
+      await sendInstagramMessage(
+        igId,
+        'Could not retrieve business configuration. Please try again later.'
+      );
       return;
     }
 
