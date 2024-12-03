@@ -56,6 +56,20 @@ async function processMessagingEvent(message) {
       return; // Skip processing this message
     }
 
+    // Step 1: Find the user by `recipientId`
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('fb_id')
+      .eq('fb_id', recipientId)
+      .single();
+
+    if (userError || !user) {
+      console.error('[ERROR] User not found for recipientId:', recipientId);
+      await sendInstagramMessage(recipientId, 'We couldn’t find your user information. Please contact support.');
+      return; // Exit early if user is not found
+    }
+
+    // Step 2: Find the business by `owner_id`
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
@@ -69,10 +83,13 @@ async function processMessagingEvent(message) {
     }
 
     console.log('[DEBUG] Found business:', business);
+    
 
     // Pass the extracted data to the assistant
+
+
     console.log('[DEBUG] Sending user message to assistant for processing.');
-    const assistantResponse = await assistantHandler({ userMessage, recipientId, platform });
+    const assistantResponse = await assistantHandler({ userMessage, recipientId, platform, business, });
 
     // Send the assistant's response back to Instagram
     if (assistantResponse && assistantResponse.message) {
