@@ -37,20 +37,25 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-// Process individual messaging events
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    const userMessage = message?.message?.text; // Extract user message text
+    const userMessage = message?.message?.text; // Extract the user message text
     const igId = message?.recipient?.id; // Instagram User ID (recipient ID)
+    const recipientId = message?.sender?.id; // The ID to reply back to the user
     const platform = 'instagram'; // Define the platform as Instagram
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted Instagram User ID (ig_id):', igId);
+    console.log('[DEBUG] Extracted recipient ID (sender.id):', recipientId);
 
-    if (!userMessage || !igId) {
-      console.error('[ERROR] Missing user message or Instagram ID:', { userMessage, igId });
+    if (!userMessage || !igId || !recipientId) {
+      console.error('[ERROR] Missing message, ig_id, or recipientId:', {
+        userMessage,
+        igId,
+        recipientId,
+      });
       return; // Skip processing this message
     }
 
@@ -61,39 +66,44 @@ async function processMessagingEvent(message) {
       .eq('ig_id', igId)
       .maybeSingle();
 
-    if (!user) {
-      console.log('[INFO] No user found by ig_id. Creating a new user.');
-
-      // Create a new user with the Instagram ID
+    if (!user && !userError) {
+      console.log('[INFO] User not found by ig_id. Creating new user.');
       const { data: newUser, error: insertError } = await supabase
         .from('users')
-        .insert([{ ig_id: igId, fb_id: null, name: null, email: null }]); // Default values for missing fields
+        .insert([{ ig_id: igId, fb_id: null, name: null, email: null }]);
 
       if (insertError) {
         console.error('[ERROR] Failed to insert new user:', insertError.message);
         await sendInstagramMessage(
-          igId,
+          recipientId,
           'An error occurred while creating your user profile. Please contact support.'
         );
         return;
       }
 
       user = newUser[0];
+    } else if (userError) {
+      console.error('[ERROR] Failed to query users table:', userError.message);
+      await sendInstagramMessage(
+        recipientId,
+        'An error occurred while retrieving your user information. Please contact support.'
+      );
+      return;
     }
 
     console.log('[DEBUG] Found or created user:', user);
 
-    // Step 2: Find the business by `owner_id` (mapped to `fb_id`)
+    // Step 2: Find the business by `owner_id`
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
       .eq('owner_id', user.fb_id)
       .maybeSingle();
 
-    if (!business) {
+    if (businessError || !business) {
       console.error('[ERROR] Business not found for user:', user.fb_id);
       await sendInstagramMessage(
-        igId,
+        recipientId,
         'Could not retrieve business configuration. Please try again later.'
       );
       return;
@@ -105,7 +115,7 @@ async function processMessagingEvent(message) {
     console.log('[DEBUG] Sending user message to assistant for processing.');
     const assistantResponse = await assistantHandler({
       userMessage,
-      recipientId: igId,
+      recipientId: igId, // Passing Instagram User ID (ig_id) to the assistant
       platform,
       business,
     });
@@ -113,7 +123,7 @@ async function processMessagingEvent(message) {
     // Step 4: Send the assistant's response back to Instagram
     if (assistantResponse && assistantResponse.message) {
       console.log('[DEBUG] Assistant response:', assistantResponse.message);
-      await sendInstagramMessage(igId, assistantResponse.message);
+      await sendInstagramMessage(recipientId, assistantResponse.message);
     } else {
       console.warn('[WARN] Assistant response is missing or invalid.');
     }
