@@ -3,7 +3,7 @@
   "builds": [
     { "src": "index.js", "use": "@vercel/node" },
     { "src": "setup-business.js", "use": "@vercel/node" },
-    
+    { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
   "routes": [
     { "src": "/setup-business", "dest": "index.js" },
@@ -11,6 +11,7 @@
     { "src": "/get-business", "dest": "index.js" },
     { "src": "/assistant", "dest": "index.js" },
     { "src": "/instagram-webhook", "dest": "index.js" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
     { "src": "/favicon.png", "dest": "/public/favicon.png" },
     { "src": "/(.*)", "dest": "index.js" }
