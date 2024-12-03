@@ -1,5 +1,6 @@
 import express from 'express';
 import supabase from './supabaseClient.js'; // Import Supabase client
+import fetch from 'node-fetch'; // For making API requests
 
 const router = express.Router();
 
@@ -13,6 +14,31 @@ function getPlatform(req) {
   }
   return 'Web';
 }
+
+
+async function fetchInstagramId(fbId, accessToken) {
+  const url = `https://graph.facebook.com/v14.0/${fbId}/accounts?fields=instagram_business_account&access_token=${accessToken}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (response.ok && data.data.length > 0) {
+      const instagramAccount = data.data.find(acc => acc.instagram_business_account);
+      if (instagramAccount && instagramAccount.instagram_business_account) {
+        console.log('[INFO] Instagram ID found:', instagramAccount.instagram_business_account.id);
+        return instagramAccount.instagram_business_account.id; // Instagram User ID
+      }
+    }
+
+    console.warn('[WARN] No linked Instagram account found.');
+    return null;
+  } catch (error) {
+    console.error('[ERROR] Failed to fetch Instagram ID:', error.message);
+    return null;
+  }
+}
+
 
 // POST Handler for /setup-business
 router.post('/', async (req, res) => {
@@ -50,6 +76,52 @@ router.post('/', async (req, res) => {
     if (appId !== 'milaVerse') {
       console.error('[ERROR] Invalid appId:', appId);
       return res.status(400).json({ error: 'Unknown application', appId });
+    }
+
+    // Step 1: Fetch Instagram User ID (ig_id)
+    const igId = await fetchInstagramId(user.id, accessToken);
+
+    // Step 2: Check if the user already exists in the database
+    const { data: existingUser, error: userFetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('fb_id', user.id)
+      .single();
+
+    if (existingUser) {
+      // Update the existing user
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          name: user.name,
+          email: user.email,
+          ig_id: igId, // Save the Instagram User ID
+        })
+        .eq('id', existingUser.id);
+
+      if (updateError) {
+        throw new Error('Failed to update user');
+      }
+
+      console.log('[INFO] User updated successfully.');
+    } else {
+      // Insert a new user
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([
+          {
+            fb_id: user.id,
+            ig_id: igId, // Save the Instagram User ID
+            name: user.name,
+            email: user.email,
+          },
+        ]);
+
+      if (insertError) {
+        throw new Error('Failed to insert new user');
+      }
+
+      console.log('[INFO] User inserted successfully.');
     }
 
     // Check if user exists in the 'users' table
