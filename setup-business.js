@@ -91,14 +91,43 @@ router.post('/', async (req, res) => {
     }
 
     if (existingBusiness) {
-      console.log('[DEBUG] Business already exists:', existingBusiness);
-      return res.status(200).json({
-        message: 'Business already exists',
-        data: existingBusiness,
-      });
-    }
+  console.log('[DEBUG] Business already exists:', existingBusiness);
+
+  // Update `page_id` and other fields if necessary
+  const updateFields = {
+    name: businessName || existingBusiness.name,
+    contact_email: contactEmail || existingBusiness.contact_email,
+    locations: locations || existingBusiness.locations,
+    insurance_policies: insurancePolicies || existingBusiness.insurance_policies,
+    objections: objections || existingBusiness.objections,
+    ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
+    page_id: pageId || existingBusiness.page_id, // Update `page_id` if provided
+    platform,
+  };
+
+  console.log('[DEBUG] Updating existing business with fields:', updateFields);
+
+  const { data, error } = await supabase
+    .from('businesses')
+    .update(updateFields)
+    .eq('id', existingBusiness.id);
+
+  if (error) {
+    console.error('[ERROR] Failed to update business data:', error.message);
+    return res.status(500).json({
+      error: 'Failed to update business data',
+      details: error.message,
+    });
+  }
+
+  return res.status(200).json({
+    message: 'Business updated successfully',
+    data,
+  });
+}
 
 
+    
 
     console.log('[DEBUG] Payload for Supabase insert:', {
   name: businessName,
