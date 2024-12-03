@@ -1,5 +1,7 @@
 import { assistantHandler } from './assistant.js'; // Centralized logic
 import fetch from 'node-fetch'; // For Instagram API
+import supabase from './supabaseClient.js';
+
 
 // Function to send a direct reply to an Instagram user
 async function sendInstagramMessage(recipientId, message) {
@@ -53,6 +55,20 @@ async function processMessagingEvent(message) {
       console.error('[ERROR] Missing message or recipient ID:', { userMessage, recipientId });
       return; // Skip processing this message
     }
+
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('owner_id', user.fb_id)
+      .single();
+
+    if (businessError || !business) {
+      console.error('[ERROR] Business not found for user:', user.fb_id);
+      await sendInstagramMessage(recipientId, 'Could not retrieve business configuration. Please try again later.');
+      return;
+    }
+
+    console.log('[DEBUG] Found business:', business);
 
     // Pass the extracted data to the assistant
     console.log('[DEBUG] Sending user message to assistant for processing.');
