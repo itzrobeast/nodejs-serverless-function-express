@@ -2,7 +2,6 @@ import { assistantHandler } from './assistant.js'; // Centralized logic
 import fetch from 'node-fetch'; // For Instagram API
 import supabase from './supabaseClient.js';
 
-
 // Function to send a direct reply to an Instagram user
 async function sendInstagramMessage(recipientId, message) {
   try {
@@ -38,7 +37,6 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-
 // Process individual messaging events
 async function processMessagingEvent(message) {
   try {
@@ -57,68 +55,72 @@ async function processMessagingEvent(message) {
     }
 
     // Step 1: Find or insert the user by Instagram ID
-let { data: user, error: userError } = await supabase
-  .from('users')
-  .select('*')
-  .eq('ig_id', recipientId)
-  .single();
-
-if (userError && userError.code === 'PGRST116') {
-  // User not found using Instagram ID, fallback to Facebook ID
-  console.log('[INFO] User not found by ig_id, checking fb_id.');
-  const { data: fbUser, error: fbUserError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('fb_id', recipientId) // Check if the Instagram ID was mistakenly used in fb_id
-    .single();
-
-  if (fbUserError || !fbUser) {
-    console.log('[INFO] User not found by fb_id. Creating new user.');
-    const { data: newUser, error: insertError } = await supabase
+    let { data: user, error: userError } = await supabase
       .from('users')
-      .insert([{ ig_id: recipientId, name: null, email: null }]); // Add new user
+      .select('*')
+      .eq('ig_id', recipientId)
+      .single();
 
-    if (insertError) {
-      console.error('[ERROR] Failed to insert new user:', insertError.message);
+    if (userError && userError.code === 'PGRST116') {
+      console.log('[INFO] User not found by ig_id, checking fb_id.');
+
+      const { data: fbUser, error: fbUserError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('fb_id', recipientId) // Check if the Instagram ID was mistakenly used as fb_id
+        .single();
+
+      if (!fbUser && !fbUserError) {
+        console.log('[INFO] User not found by fb_id. Creating new user.');
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert([{ ig_id: recipientId, fb_id: null, name: null, email: null }]);
+
+        if (insertError) {
+          console.error('[ERROR] Failed to insert new user:', insertError.message);
+          await sendInstagramMessage(
+            recipientId,
+            'An error occurred while creating your user profile. Please contact support.'
+          );
+          return;
+        }
+
+        user = newUser[0]; // Assign the new user to the `user` variable
+      } else if (fbUser) {
+        console.log('[INFO] Found user by fb_id, updating ig_id.');
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ ig_id: recipientId })
+          .eq('id', fbUser.id);
+
+        if (updateError) {
+          console.error('[ERROR] Failed to update user with ig_id:', updateError.message);
+          await sendInstagramMessage(
+            recipientId,
+            'An error occurred while linking your Instagram ID. Please contact support.'
+          );
+          return;
+        }
+
+        user = { ...fbUser, ig_id: recipientId }; // Update the user object with the Instagram ID
+      } else {
+        console.error('[ERROR] Unexpected error querying fb_id:', fbUserError);
+        await sendInstagramMessage(
+          recipientId,
+          'An error occurred while retrieving your user information. Please contact support.'
+        );
+        return;
+      }
+    } else if (userError) {
+      console.error('[ERROR] Failed to query users table:', userError.message);
       await sendInstagramMessage(
         recipientId,
-        'An error occurred while creating your user profile. Please contact support.'
+        'An error occurred while retrieving your user information. Please contact support.'
       );
       return;
     }
 
-    user = newUser[0]; // Assign the new user to the `user` variable
-  } else {
-    // Found user by Facebook ID, update Instagram ID
-    console.log('[INFO] Found user by fb_id, updating ig_id.');
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ ig_id: recipientId })
-      .eq('id', fbUser.id);
-
-    if (updateError) {
-      console.error('[ERROR] Failed to update user with ig_id:', updateError.message);
-      await sendInstagramMessage(
-        recipientId,
-        'An error occurred while linking your Instagram ID. Please contact support.'
-      );
-      return;
-    }
-
-    user = fbUser; // Use the existing Facebook user
-    user.ig_id = recipientId; // Add the Instagram ID to the user object
-  }
-} else if (userError) {
-  console.error('[ERROR] Failed to query users table:', userError.message);
-  await sendInstagramMessage(
-    recipientId,
-    'An error occurred while retrieving your user information. Please contact support.'
-  );
-  return;
-}
-
-console.log('[DEBUG] Found or created user:', user);
-
+    console.log('[DEBUG] Found or created user:', user);
 
     // Step 2: Find the business by `owner_id`
     const { data: business, error: businessError } = await supabase
@@ -134,15 +136,17 @@ console.log('[DEBUG] Found or created user:', user);
     }
 
     console.log('[DEBUG] Found business:', business);
-    
 
-    // Pass the extracted data to the assistant
-
-
+    // Step 3: Pass the extracted data to the assistant
     console.log('[DEBUG] Sending user message to assistant for processing.');
-    const assistantResponse = await assistantHandler({ userMessage, recipientId, platform, business, });
+    const assistantResponse = await assistantHandler({
+      userMessage,
+      recipientId,
+      platform,
+      business,
+    });
 
-    // Send the assistant's response back to Instagram
+    // Step 4: Send the assistant's response back to Instagram
     if (assistantResponse && assistantResponse.message) {
       console.log('[DEBUG] Assistant response:', assistantResponse.message);
       await sendInstagramMessage(recipientId, assistantResponse.message);
@@ -154,7 +158,6 @@ console.log('[DEBUG] Found or created user:', user);
     throw error;
   }
 }
-
 
 // Primary webhook handler
 export default async function handler(req, res) {
@@ -193,7 +196,7 @@ export default async function handler(req, res) {
 
       res.status(200).send('EVENT_RECEIVED');
     } catch (error) {
-      console.error('[ERROR] Failed to process webhook entries:', error);
+      console.error('[ERROR] Failed to process webhook entries:', error.message);
       res.status(500).json({ error: 'Internal Server Error' });
     }
   } else {
