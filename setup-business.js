@@ -1,6 +1,6 @@
 import express from 'express';
-import supabase from './supabaseClient.js'; // Import Supabase client
-import fetch from 'node-fetch'; // For making API requests
+import supabase from './supabaseClient.js';
+import fetch from 'node-fetch';
 
 const router = express.Router();
 
@@ -15,10 +15,9 @@ function getPlatform(req) {
   return 'Web';
 }
 
-
+// Function to fetch Instagram User ID (ig_id) from Facebook Graph API
 async function fetchInstagramId(fbId, accessToken) {
   const url = `https://graph.facebook.com/v14.0/${fbId}/accounts?fields=instagram_business_account&access_token=${accessToken}`;
-
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -27,7 +26,7 @@ async function fetchInstagramId(fbId, accessToken) {
       const instagramAccount = data.data.find(acc => acc.instagram_business_account);
       if (instagramAccount && instagramAccount.instagram_business_account) {
         console.log('[INFO] Instagram ID found:', instagramAccount.instagram_business_account.id);
-        return instagramAccount.instagram_business_account.id; // Instagram User ID
+        return instagramAccount.instagram_business_account.id;
       }
     }
 
@@ -39,26 +38,25 @@ async function fetchInstagramId(fbId, accessToken) {
   }
 }
 
-
 // POST Handler for /setup-business
 router.post('/', async (req, res) => {
   try {
     const {
       appId,
-      user, // Extract the user object from req.body
+      user,
       accessToken,
       businessName,
       contactEmail,
-      locations,
-      insurancePolicies,
-      objections,
-      aiKnowledgeBase,
+      locations = [],
+      insurancePolicies = {},
+      objections = {},
+      aiKnowledgeBase = '',
       pageId,
     } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
 
-    // Derive platform dynamically BEFORE any reference
+    // Determine platform dynamically
     const platform = getPlatform(req);
     console.log('[DEBUG] Detected platform:', platform);
 
@@ -78,172 +76,120 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Unknown application', appId });
     }
 
-    // Step 1: Fetch Instagram User ID (ig_id)
+    // Fetch Instagram User ID (ig_id)
     const igId = await fetchInstagramId(user.id, accessToken);
 
-    // Step 2: Check if the user already exists in the database
-    const { data: existingUser, error: userFetchError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('fb_id', user.id)
-      .single();
-
-    if (existingUser) {
-      // Update the existing user
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          name: user.name,
-          email: user.email,
-          ig_id: igId, // Save the Instagram User ID
-        })
-        .eq('id', existingUser.id);
-
-      if (updateError) {
-        throw new Error('Failed to update user');
-      }
-
-      console.log('[INFO] User updated successfully.');
-    } else {
-      // Insert a new user
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([
-          {
-            fb_id: user.id,
-            ig_id: igId, // Save the Instagram User ID
-            name: user.name,
-            email: user.email,
-          },
-        ]);
-
-      if (insertError) {
-        throw new Error('Failed to insert new user');
-      }
-
-      console.log('[INFO] User inserted successfully.');
-    }
-
-    // Check if user exists in the 'users' table
-    const { data: existingUser, error: userFetchError } = await supabase
+    // Step 1: Check or Insert User
+    let { data: existingUser, error: userFetchError } = await supabase
       .from('users')
       .select('*')
       .eq('fb_id', user.id)
       .single();
 
     if (userFetchError && userFetchError.code !== 'PGRST116') {
-      throw new Error('Failed to fetch existing user data');
+      console.error('[ERROR] Failed to fetch existing user:', userFetchError.message);
+      throw new Error('Database error while fetching user');
     }
 
-    if (!existingUser) {
-      // Insert new user into 'users' table
-      const { error: userInsertError } = await supabase.from('users').insert([
-        {
-          fb_id: user.id,
+    if (existingUser) {
+      console.log('[INFO] User already exists. Updating user details...');
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
           name: user.name,
           email: user.email,
-        },
-      ]);
+          ig_id: igId,
+        })
+        .eq('id', existingUser.id);
 
-      if (userInsertError) {
-        throw new Error('Failed to insert user data');
+      if (updateError) {
+        console.error('[ERROR] Failed to update user:', updateError.message);
+        throw new Error('Failed to update user');
+      }
+    } else {
+      console.log('[INFO] User does not exist. Creating new user...');
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([
+          {
+            fb_id: user.id,
+            ig_id: igId,
+            name: user.name,
+            email: user.email,
+          },
+        ]);
+
+      if (insertError) {
+        console.error('[ERROR] Failed to insert new user:', insertError.message);
+        throw new Error('Failed to insert new user');
       }
     }
 
-    // Check if the business already exists for this ownerId
-    const { data: existingBusiness, error: fetchError } = await supabase
+    // Step 2: Check or Insert Business
+    const { data: existingBusiness, error: businessFetchError } = await supabase
       .from('businesses')
       .select('*')
       .eq('owner_id', user.id)
       .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('[ERROR] Database fetch error:', fetchError.message);
-      throw new Error('Failed to fetch existing business data');
+    if (businessFetchError && businessFetchError.code !== 'PGRST116') {
+      console.error('[ERROR] Failed to fetch existing business:', businessFetchError.message);
+      throw new Error('Database error while fetching business');
     }
 
     if (existingBusiness) {
-  console.log('[DEBUG] Business already exists:', existingBusiness);
+      console.log('[INFO] Business already exists. Updating business details...');
+      const updateFields = {
+        name: businessName || existingBusiness.name,
+        contact_email: contactEmail || existingBusiness.contact_email,
+        locations: locations.length > 0 ? locations : existingBusiness.locations,
+        insurance_policies: insurancePolicies || existingBusiness.insurance_policies,
+        objections: objections || existingBusiness.objections,
+        ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
+        page_id: pageId || existingBusiness.page_id,
+        platform,
+      };
 
-  // Update `page_id` and other fields if necessary
-  const updateFields = {
-    name: businessName || existingBusiness.name,
-    contact_email: contactEmail || existingBusiness.contact_email,
-    locations: locations.length > 0 ? locations : existingBusiness.locations, // Use existing locations if the incoming array is empty
-    insurance_policies: insurancePolicies || existingBusiness.insurance_policies,
-    objections: objections || existingBusiness.objections,
-    ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
-    page_id: pageId || existingBusiness.page_id, // Update `page_id` if provided
-    platform,
-  };
+      const { error: updateError } = await supabase
+        .from('businesses')
+        .update(updateFields)
+        .eq('id', existingBusiness.id);
 
-  console.log('[DEBUG] Updating existing business with fields:', updateFields);
+      if (updateError) {
+        console.error('[ERROR] Failed to update business:', updateError.message);
+        throw new Error('Failed to update business');
+      }
 
-  const { data, error } = await supabase
-    .from('businesses')
-    .update(updateFields)
-    .eq('id', existingBusiness.id);
-
-  if (error) {
-    console.error('[ERROR] Failed to update business data:', error.message);
-    return res.status(500).json({
-      error: 'Failed to update business data',
-      details: error.message,
-    });
-  }
-
-  return res.status(200).json({
-    message: 'Business updated successfully',
-    data,
-  });
-}
-
-
-    
-
-    console.log('[DEBUG] Payload for Supabase insert:', {
-  name: businessName,
-  owner_id: user.id,
-  page_id: pageId, // Should log the correct value
-  contact_email: contactEmail,
-  locations,
-  insurance_policies,
-  objections,
-  ai_knowledge_base: aiKnowledgeBase,
-  platform,
-});
-
-    // Insert new business into Supabase
-    const { data, error: insertError } = await supabase.from('businesses').insert([
-  {
-    name: businessName,
-    owner_id: user.id, // From the `user` object in the request
-    page_id: pageId || null, // Add `pageId` from the request body or default to null
-    access_token: accessToken || null, // Add `accessToken` from the request body or default to null
-    contact_email: contactEmail,
-    locations: locations.length > 0 ? locations : [], // Default to empty array if not provided
-    insurance_policies: insurancePolicies || {}, // Default to empty object if not provided
-    objections: objections || {}, // Default to empty object if not provided
-    ai_knowledge_base: aiKnowledgeBase || '', // Default to an empty string if not provided
-    platform, // Use the platform determined dynamically
-  },
-]);
-
-    if (insertError) {
-      console.error('[ERROR] Failed to insert business:', insertError.message);
-      return res.status(500).json({
-        error: 'Database error',
-        details: insertError.message,
+      return res.status(200).json({
+        message: 'Business updated successfully',
+        data: updateFields,
       });
+    } else {
+      console.log('[INFO] Business does not exist. Creating new business...');
+      const { error: insertError } = await supabase
+        .from('businesses')
+        .insert([
+          {
+            name: businessName,
+            owner_id: user.id,
+            page_id: pageId || null,
+            access_token: accessToken || null,
+            contact_email: contactEmail,
+            locations,
+            insurance_policies: insurancePolicies,
+            objections,
+            ai_knowledge_base: aiKnowledgeBase,
+            platform,
+          },
+        ]);
+
+      if (insertError) {
+        console.error('[ERROR] Failed to insert new business:', insertError.message);
+        throw new Error('Failed to insert new business');
+      }
+
+      return res.status(201).json({ message: 'Business setup successful' });
     }
-
-    console.log('[DEBUG] Business added successfully:', data);
-
-    // Return success response
-    return res.status(201).json({
-      message: 'Business setup successful',
-      business: data,
-    });
   } catch (error) {
     console.error('[ERROR] /setup-business:', error.message);
     return res.status(500).json({
