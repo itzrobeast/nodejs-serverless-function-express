@@ -4,7 +4,7 @@ import supabase from './supabaseClient.js';
 const router = express.Router();
 
 // GET Handler to fetch the business phone number
-router.get('/get-vonage-number', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { business_id } = req.query;
 
@@ -21,6 +21,10 @@ router.get('/get-vonage-number', async (req, res) => {
     if (error) {
       console.error('[ERROR] Failed to fetch Vonage number:', error.message);
       return res.status(500).json({ error: 'Failed to retrieve Vonage number' });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'No Vonage number found for this business' });
     }
 
     res.status(200).json({ vonage_number: data.vonage_number });
