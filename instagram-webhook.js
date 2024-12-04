@@ -37,29 +37,30 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
+// Process individual messaging events
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
     const userMessage = message?.message?.text; // Extract the user message text
-    const igId = message?.recipient?.id; // Instagram User ID (recipient ID)
-    const recipientId = message?.sender?.id; // The ID to reply back to the user
+    const igId = message?.recipient?.id; // Instagram User ID (our bot)
+    const senderId = message?.sender?.id; // Customer ID (person interacting with the bot)
     const platform = 'instagram'; // Define the platform as Instagram
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted Instagram User ID (ig_id):', igId);
-    console.log('[DEBUG] Extracted recipient ID (sender.id):', recipientId);
+    console.log('[DEBUG] Extracted sender ID (customer):', senderId);
 
-    if (!userMessage || !igId || !recipientId) {
-      console.error('[ERROR] Missing message, ig_id, or recipientId:', {
+    if (!userMessage || !igId || !senderId) {
+      console.error('[ERROR] Missing message, ig_id, or senderId:', {
         userMessage,
         igId,
-        recipientId,
+        senderId,
       });
       return; // Skip processing this message
     }
 
-    // Step 1: Find or insert the user by Instagram ID
+    // Step 1: Find or insert the user by Instagram ID (igId matches our bot's ID)
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -75,7 +76,7 @@ async function processMessagingEvent(message) {
       if (insertError) {
         console.error('[ERROR] Failed to insert new user:', insertError.message);
         await sendInstagramMessage(
-          recipientId,
+          senderId,
           'An error occurred while creating your user profile. Please contact support.'
         );
         return;
@@ -85,7 +86,7 @@ async function processMessagingEvent(message) {
     } else if (userError) {
       console.error('[ERROR] Failed to query users table:', userError.message);
       await sendInstagramMessage(
-        recipientId,
+        senderId,
         'An error occurred while retrieving your user information. Please contact support.'
       );
       return;
@@ -93,37 +94,19 @@ async function processMessagingEvent(message) {
 
     console.log('[DEBUG] Found or created user:', user);
 
-    // Step 2: Find the business by `owner_id`
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('owner_id', user.fb_id)
-      .maybeSingle();
+    // Step 2: Pass the extracted data to the assistant
+    console.log('[DEBUG] Sending user message to assistant for processing.');
+    const assistantResponse = await assistantHandler({
+      userMessage,
+      recipientId: senderId, // Used for sending responses back to Instagram (customer ID)
+      platform,
+      businessId: user.fb_id, // Pass the user's `fb_id` for business lookups
+    });
 
-    if (businessError || !business) {
-      console.error('[ERROR] Business not found for user:', user.fb_id);
-      await sendInstagramMessage(
-        recipientId,
-        'Could not retrieve business configuration. Please try again later.'
-      );
-      return;
-    }
-
-    console.log('[DEBUG] Found business:', business);
-
-    // Pass `user.fb_id` (not recipientId) to the assistant handler
-console.log('[DEBUG] Sending user message to assistant for processing.');
-const assistantResponse = await assistantHandler({
-  userMessage,
-  recipientId, // Used for sending responses back to Instagram (sender.id)
-  platform,
-  businessId: user.fb_id, // Pass the user's `fb_id` for business lookups
-});
-
-    // Step 4: Send the assistant's response back to Instagram
+    // Step 3: Send the assistant's response back to Instagram
     if (assistantResponse && assistantResponse.message) {
       console.log('[DEBUG] Assistant response:', assistantResponse.message);
-      await sendInstagramMessage(recipientId, assistantResponse.message);
+      await sendInstagramMessage(senderId, assistantResponse.message);
     } else {
       console.warn('[WARN] Assistant response is missing or invalid.');
     }
@@ -132,7 +115,6 @@ const assistantResponse = await assistantHandler({
     throw error;
   }
 }
-
 
 // Primary webhook handler
 export default async function handler(req, res) {
