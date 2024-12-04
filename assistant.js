@@ -54,12 +54,12 @@ const handleObjections = (userMessage, businessConfig) => {
 };
 
 // Fetch business configuration securely using Supabase
-const getBusinessConfig = async (owner_id) => {
+const getBusinessConfig = async (businessId) => {
   try {
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
-      .eq('owner_id', owner_id)
+      .eq('owner_id', businessId)
       .single();
 
     if (error) {
@@ -74,19 +74,19 @@ const getBusinessConfig = async (owner_id) => {
   }
 };
 
-// Assistant handler to process user messages
-export const assistantHandler = async ({ userMessage, recipientId, platform }) => {
+
+export const assistantHandler = async ({ userMessage, recipientId, platform, businessId }) => {
   try {
     console.log(`[DEBUG] Processing message from platform: ${platform}`);
     console.log(`[DEBUG] User message: "${userMessage}"`);
 
     if (!userMessage || typeof userMessage !== 'string') {
       console.error('[ERROR] Invalid user message:', userMessage);
-      return { text: 'I couldn’t understand your message. Could you please rephrase it?' };
+      return { message: 'I couldn’t understand your message. Could you please rephrase it?' };
     }
 
-    // Fetch business-specific configuration
-    const businessConfig = await getBusinessConfig(recipientId);
+    // Fetch business-specific configuration using the correct `businessId`
+    const businessConfig = await getBusinessConfig(businessId);
 
     if (!businessConfig) {
       return { message: 'Could not retrieve business configuration. Please try again later.' };
@@ -105,18 +105,26 @@ export const assistantHandler = async ({ userMessage, recipientId, platform }) =
       messages: [
         {
           role: 'system',
-          content: `You are an AI receptionist for ${businessConfig.name}. Your role is to manage appointments, answer user questions, be precise and professional and provide information based on ${businessConfig.name}'s website and guidelines. You operate for the following locations: ${businessConfig.locations.join(
-        ', '
-      )}. Here is the business-specific knowledge: ${businessConfig.ai_knowledge || 'No additional knowledge provided.'}`,
+          content: `You are an AI receptionist for ${businessConfig.name}. Your role is to manage appointments, answer user questions, be precise and professional, and provide information based on ${businessConfig.name}'s website and guidelines. You operate for the following locations: ${businessConfig.locations.join(
+            ', '
+          )}. Here is the business-specific knowledge: ${
+            businessConfig.ai_knowledge || 'No additional knowledge provided.'
+          }`,
         },
         { role: 'user', content: userMessage },
       ],
-      functions: Object.keys(functionHandlers).map((name) => ({
-        name,
-        description: `Executes the ${name} function.`,
-        parameters: { type: 'object', properties: {} },
-      })),
     });
+
+    const responseMessage = openaiResponse.choices[0]?.message?.content || "I'm here to help!";
+    console.log(`[DEBUG] Generated response from OpenAI: "${responseMessage}"`);
+
+    return { message: responseMessage };
+  } catch (error) {
+    console.error('[ERROR] Failed to process assistant request:', error.message);
+    return { message: 'Something went wrong. Please try again later.' };
+  }
+};
+
 
     const functionCall = openaiResponse.choices[0]?.message?.function_call;
 
