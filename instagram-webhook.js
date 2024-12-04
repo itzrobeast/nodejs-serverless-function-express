@@ -111,14 +111,14 @@ async function processMessagingEvent(message) {
 
     console.log('[DEBUG] Found business:', business);
 
-    // Step 3: Pass the extracted data to the assistant
-    console.log('[DEBUG] Sending user message to assistant for processing.');
-    const assistantResponse = await assistantHandler({
-      userMessage,
-      recipientId: igId, // Passing Instagram User ID (ig_id) to the assistant
-      platform,
-      business,
-    });
+    // Pass `user.fb_id` (not recipientId) to the assistant handler
+console.log('[DEBUG] Sending user message to assistant for processing.');
+const assistantResponse = await assistantHandler({
+  userMessage,
+  recipientId, // Used for sending responses back to Instagram (sender.id)
+  platform,
+  businessId: user.fb_id, // Pass the user's `fb_id` for business lookups
+});
 
     // Step 4: Send the assistant's response back to Instagram
     if (assistantResponse && assistantResponse.message) {
