@@ -18,24 +18,26 @@ export const getLeadsFromMeta = async (accessToken, pageId) => {
   }
 };
 
-
+// GET Handler for Leads Retrieval
 router.get('/', async (req, res) => {
+  const { business_id } = req.query;
+
+  if (!business_id) {
+    return res.status(400).json({ error: 'Missing required parameter: business_id' });
+  }
+
   try {
-    const userId = req.query.userId;
+    // Fetch leads from the database for the specified business_id
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('business_id', business_id);
 
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId query parameter.' });
+    if (error) {
+      console.error('[ERROR] Failed to retrieve leads:', error.message);
+      return res.status(500).json({ error: 'Failed to retrieve leads' });
     }
 
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('id, access_token, page_id')
-      .eq('owner_id', userId)
-      .single();
-
-    if (businessError) {
-      return res.status(404).json({ error: 'Business not found.' });
-    }
 
     const { access_token, page_id } = business;
 
