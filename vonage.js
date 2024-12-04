@@ -7,6 +7,25 @@ const vonage = new Vonage({
   privateKey: process.env.VONAGE_PRIVATE_KEY, // Optional for advanced features
 });
 
+export const makeOutboundCall = async (to, from, text) => {
+  try {
+    await vonage.calls.create({
+      to: [{ type: 'phone', number: to }],
+      from: { type: 'phone', number: from },
+      ncco: [
+        {
+          action: 'talk',
+          text,
+        },
+      ],
+    });
+    console.log(`[INFO] Outbound call made to ${to}`);
+  } catch (error) {
+    console.error('[ERROR] Failed to make outbound call:', error.message);
+  }
+};
+
+
 // Function to send SMS
 export const sendSMS = async (to, text) => {
   try {
