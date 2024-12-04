@@ -63,3 +63,5 @@ export const assistantHandler = async ({ userMessage, recipientId, platform, bus
     return { message: 'Something went wrong. Please try again later.' };
   }
 };
+
+export default assistantHandler;
