@@ -25,6 +25,37 @@ export const makeOutboundCall = async (to, from, text) => {
   }
 };
 
+export const handleInboundCall = (req, res) => {
+  const { to, from } = req.body;
+  console.log(`[INFO] Inbound call from ${from} to ${to}`);
+
+  // Fetch the business associated with the number
+  supabase
+    .from('vonage_numbers')
+    .select('business_id')
+    .eq('vonage_number', to)
+    .single()
+    .then(({ data, error }) => {
+      if (error || !data) {
+        console.error('[ERROR] Business not found for inbound call:', error.message);
+        return res.json([{ action: 'talk', text: 'Sorry, we could not handle your call at this time.' }]);
+      }
+
+      const businessId = data.business_id;
+
+      // Pass the call to the assistant
+      assistantHandler({
+        userMessage: `Call from ${from}`,
+        recipientId: businessId,
+        platform: 'phone',
+      }).then((response) => {
+        res.json([{ action: 'talk', text: response.message || 'Thank you for calling.' }]);
+      });
+    });
+};
+
+
+
 
 // Function to send SMS
 export const sendSMS = async (to, text) => {
