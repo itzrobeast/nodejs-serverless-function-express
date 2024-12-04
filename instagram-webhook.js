@@ -1,4 +1,4 @@
-import { assistantHandler } from './assistant.js'; // Centralized logic
+import assistantHandler from './assistant.js';// Centralized logic
 import fetch from 'node-fetch'; // For Instagram API
 import supabase from './supabaseClient.js';
 
