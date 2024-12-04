@@ -11,6 +11,8 @@
     { "src": "/get-business", "dest": "index.js" },
     { "src": "/assistant", "dest": "index.js" },
     { "src": "/instagram-webhook", "dest": "index.js" },
+    { "src": "/get-vonage-number", "dest": "index.js" },
+    { "src": "/retrieve-leads", "dest": "index.js" }
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
     { "src": "/favicon.png", "dest": "/public/favicon.png" },
