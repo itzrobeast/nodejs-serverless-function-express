@@ -38,6 +38,31 @@ async function fetchInstagramId(fbId, accessToken) {
   }
 }
 
+const assignVonageNumber = async (businessId) => {
+  try {
+    // Generate or select a Vonage number for the business (replace with your own logic if needed)
+    const vonageNumber = `+1${Math.floor(1000000000 + Math.random() * 9000000000)}`; // Example number generation
+
+    // Insert into `vonage_numbers` table
+    const { error } = await supabase
+      .from('vonage_numbers')
+      .insert([{ business_id: businessId, vonage_number: vonageNumber }]);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    console.log(`[INFO] Assigned Vonage number ${vonageNumber} to business ID ${businessId}`);
+    return vonageNumber;
+  } catch (error) {
+    console.error('[ERROR] Failed to assign Vonage number:', error.message);
+    throw error;
+  }
+};
+
+
+
+
 // POST Handler for /setup-business
 router.post('/', async (req, res) => {
   try {
@@ -161,6 +186,21 @@ router.post('/', async (req, res) => {
         throw new Error('Failed to update business');
       }
 
+      // Ensure the business has a Vonage number
+  const { data: existingNumber, error: numberFetchError } = await supabase
+    .from('vonage_numbers')
+    .select('vonage_number')
+    .eq('business_id', existingBusiness.id)
+    .single();
+
+  if (!existingNumber && !numberFetchError) {
+    const vonageNumber = await assignVonageNumber(existingBusiness.id);
+    return res.status(200).json({
+      message: 'Business updated successfully with Vonage number assigned',
+      data: { ...updateFields, vonageNumber },
+    });
+  }
+
       return res.status(200).json({
         message: 'Business updated successfully',
         data: updateFields,
@@ -188,6 +228,9 @@ router.post('/', async (req, res) => {
         console.error('[ERROR] Failed to insert new business:', insertError.message);
         throw new Error('Failed to insert new business');
       }
+
+      // Assign a Vonage number to the new business
+  const vonageNumber = await assignVonageNumber(newBusiness.id);
 
       return res.status(201).json({ message: 'Business setup successful' });
     }
