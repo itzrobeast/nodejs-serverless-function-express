@@ -4,6 +4,8 @@ import assistantHandler from './assistant.js';
 import instagramWebhookHandler from './instagram-webhook.js';
 import cors from 'cors';
 import getBusinessRoute from './get-business.js';
+import getVonageNumberRoute from './get-vonage-number.js'; // Import get-vonage-number route
+import retrieveLeadsRoute from './retrieve-leads.js'; // Import retrieve-leads route
 
 
 const app = express();
@@ -38,6 +40,8 @@ app.use('/setup-business', setupBusinessRouter);
 app.use('/assistant', assistantHandler);
 app.use('/instagram-webhook', instagramWebhookHandler);
 app.use('/get-business', getBusinessRoute);
+app.use('/get-vonage-number', getVonageNumberRoute); // Add get-vonage-number route
+app.use('/retrieve-leads', retrieveLeadsRoute); // Add retrieve-leads route
 
 // Root Route
 app.get('/', (req, res) => {
