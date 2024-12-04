@@ -7,6 +7,37 @@ const vonage = new Vonage({
   privateKey: process.env.VONAGE_PRIVATE_KEY, // Optional for advanced features
 });
 
+const assignVonageNumberDynamically = async (businessId) => {
+  try {
+    // Search for available numbers
+    const availableNumbers = await vonage.number.search({ country: 'US' });
+
+    if (availableNumbers.numbers.length === 0) {
+      throw new Error('No available numbers found');
+    }
+
+    const selectedNumber = availableNumbers.numbers[0].msisdn;
+
+    // Buy the selected number
+    await vonage.number.buy({ country: 'US', msisdn: selectedNumber });
+
+    // Insert the number into the database
+    const { error } = await supabase
+      .from('vonage_numbers')
+      .insert([{ business_id: businessId, vonage_number: selectedNumber }]);
+
+    if (error) {
+      throw new Error(`Failed to insert Vonage number into database: ${error.message}`);
+    }
+
+    console.log(`[INFO] Dynamically assigned Vonage number ${selectedNumber} to business ID ${businessId}`);
+    return selectedNumber;
+  } catch (error) {
+    console.error('[ERROR] Failed to dynamically assign Vonage number:', error.message);
+    throw error;
+  }
+};
+
 export const makeOutboundCall = async (to, from, text) => {
   try {
     await vonage.calls.create({
