@@ -229,10 +229,35 @@ router.post('/', async (req, res) => {
         throw new Error('Failed to insert new business');
       }
 
-      // Assign a Vonage number to the new business
-  const vonageNumber = await assignVonageNumber(newBusiness.id);
+     // Assign a Vonage number to the new business after insertion
+const { data: newBusiness, error: insertError } = await supabase
+  .from('businesses')
+  .insert([
+    {
+      name: businessName,
+      owner_id: user.id,
+      page_id: pageId || null,
+      access_token: accessToken || null,
+      contact_email: contactEmail,
+      locations: locations || [], // Default only for new business
+      insurance_policies: insurancePolicies || {}, // Default only for new business
+      objections: objections || {}, // Default only for new business
+      ai_knowledge_base: aiKnowledgeBase,
+      platform,
+    },
+  ])
+  .single(); // This ensures you get the newly inserted row
 
-      return res.status(201).json({ message: 'Business setup successful' });
+if (insertError) {
+  console.error('[ERROR] Failed to insert new business:', insertError.message);
+  throw new Error('Failed to insert new business');
+}
+
+// Assign a Vonage number to the new business
+const vonageNumber = await assignVonageNumber(newBusiness.id);
+
+return res.status(201).json({ message: 'Business setup successful' });
+
     }
   } catch (error) {
     console.error('[ERROR] /setup-business:', error.message);
