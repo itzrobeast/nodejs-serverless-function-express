@@ -40,10 +40,8 @@ async function fetchInstagramId(fbId, accessToken) {
 
 const assignVonageNumber = async (businessId) => {
   try {
-    // Generate or select a Vonage number for the business (replace with your own logic if needed)
     const vonageNumber = `+1${Math.floor(1000000000 + Math.random() * 9000000000)}`; // Example number generation
 
-    // Insert into `vonage_numbers` table
     const { error } = await supabase
       .from('vonage_numbers')
       .insert([{ business_id: businessId, vonage_number: vonageNumber }]);
@@ -59,9 +57,6 @@ const assignVonageNumber = async (businessId) => {
     throw error;
   }
 };
-
-
-
 
 // POST Handler for /setup-business
 router.post('/', async (req, res) => {
@@ -163,83 +158,90 @@ router.post('/', async (req, res) => {
     }
 
     if (existingBusiness) {
-  console.log('[INFO] Business already exists. Updating business details...');
-  const updateFields = {
-    name: businessName || existingBusiness.name,
-    contact_email: contactEmail || existingBusiness.contact_email,
-    locations: locations !== undefined ? locations : existingBusiness.locations, // Preserve existing if not provided
-    insurance_policies:
-      insurancePolicies !== undefined ? insurancePolicies : existingBusiness.insurance_policies,
-    objections: objections !== undefined ? objections : existingBusiness.objections,
-    ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
-    page_id: pageId || existingBusiness.page_id,
-    platform,
-  };
+      console.log('[INFO] Business already exists. Updating business details...');
+      const updateFields = {
+        name: businessName || existingBusiness.name,
+        contact_email: contactEmail || existingBusiness.contact_email,
+        locations: locations !== undefined ? locations : existingBusiness.locations,
+        insurance_policies: insurancePolicies !== undefined ? insurancePolicies : existingBusiness.insurance_policies,
+        objections: objections !== undefined ? objections : existingBusiness.objections,
+        ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
+        page_id: pageId || existingBusiness.page_id,
+        platform,
+      };
 
-  const { error: updateError } = await supabase
-    .from('businesses')
-    .update(updateFields)
-    .eq('id', existingBusiness.id);
+      const { error: updateError } = await supabase
+        .from('businesses')
+        .update(updateFields)
+        .eq('id', existingBusiness.id);
 
-  if (updateError) {
-    console.error('[ERROR] Failed to update business:', updateError.message);
-    throw new Error('Failed to update business');
-  }
+      if (updateError) {
+        console.error('[ERROR] Failed to update business:', updateError.message);
+        throw new Error('Failed to update business');
+      }
 
-  // Ensure the business has a Vonage number
-  const { data: existingNumber, error: numberFetchError } = await supabase
-    .from('vonage_numbers')
-    .select('vonage_number')
-    .eq('business_id', existingBusiness.id)
-    .single();
+      const { data: existingNumber, error: numberFetchError } = await supabase
+        .from('vonage_numbers')
+        .select('vonage_number')
+        .eq('business_id', existingBusiness.id)
+        .single();
 
-  if (!existingNumber && !numberFetchError) {
-    const vonageNumber = await assignVonageNumber(existingBusiness.id);
-    return res.status(200).json({
-      message: 'Business updated successfully with Vonage number assigned',
-      data: { ...updateFields, vonageNumber },
+      if (!existingNumber && !numberFetchError) {
+        const vonageNumber = await assignVonageNumber(existingBusiness.id);
+        return res.status(200).json({
+          message: 'Business updated successfully with Vonage number assigned',
+          data: { ...updateFields, vonageNumber },
+        });
+      }
+
+      return res.status(200).json({
+        message: 'Business updated successfully',
+        data: updateFields,
+      });
+    } else {
+      console.log('[INFO] Business does not exist. Creating new business...');
+      const { data: newBusiness, error: insertError } = await supabase
+        .from('businesses')
+        .insert([
+          {
+            name: businessName,
+            owner_id: user.id,
+            page_id: pageId || null,
+            access_token: accessToken || null,
+            contact_email: contactEmail,
+            locations: locations || [],
+            insurance_policies: insurancePolicies || {},
+            objections: objections || {},
+            ai_knowledge_base: aiKnowledgeBase,
+            platform,
+          },
+        ])
+        .single();
+
+      if (insertError) {
+        console.error('[ERROR] Failed to insert new business:', insertError.message);
+        throw new Error('Failed to insert new business');
+      }
+
+      const vonageNumber = await assignVonageNumber(newBusiness.id);
+
+      return res.status(201).json({
+        message: 'Business setup successful',
+        data: { ...newBusiness, vonageNumber },
+      });
+    }
+  } catch (error) {
+    console.error('[ERROR] /setup-business:', error.message);
+    return res.status(500).json({
+      error: 'Internal server error',
+      details: error.message,
     });
   }
+});
 
-  return res.status(200).json({
-    message: 'Business updated successfully',
-    data: updateFields,
-  });
-} else {
-  console.log('[INFO] Business does not exist. Creating new business...');
-  const { data: newBusiness, error: insertError } = await supabase
-    .from('businesses')
-    .insert([
-      {
-        name: businessName,
-        owner_id: user.id,
-        page_id: pageId || null,
-        access_token: accessToken || null,
-        contact_email: contactEmail,
-        locations: locations || [], // Default only for new business
-        insurance_policies: insurancePolicies || {}, // Default only for new business
-        objections: objections || {}, // Default only for new business
-        ai_knowledge_base: aiKnowledgeBase,
-        platform,
-      },
-    ])
-    .single();
+// Optional health check for debugging
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Setup-Business endpoint is healthy!' });
+});
 
-  if (insertError) {
-    console.error('[ERROR] Failed to insert new business:', insertError.message);
-    throw new Error('Failed to insert new business');
-  }
-
-  // Assign a Vonage number to the new business
-  const vonageNumber = await assignVonageNumber(newBusiness.id);
-
-  return res.status(201).json({
-    message: 'Business setup successful',
-    data: { ...newBusiness, vonageNumber },
-  });
-}
-
-
-  
 export default router;
-
