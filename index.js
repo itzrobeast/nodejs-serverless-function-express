@@ -6,7 +6,7 @@ import cors from 'cors';
 import getBusinessRoute from './get-business.js';
 import getVonageNumberRoute from './get-vonage-number.js'; // Import get-vonage-number route
 import retrieveLeadsRoute from './retrieve-leads.js'; // Import retrieve-leads route
-
+import verifySessionRouter from './verify-session.js'; 
 
 const app = express();
 
@@ -42,6 +42,9 @@ app.use('/instagram-webhook', instagramWebhookHandler);
 app.use('/get-business', getBusinessRoute);
 app.use('/get-vonage-number', getVonageNumberRoute); // Add get-vonage-number route
 app.use('/retrieve-leads', retrieveLeadsRoute); // Add retrieve-leads route
+app.use('/verify-session', retrieveLeadsRoute); 
+app.use('/verify-session', verifySessionRouter); // Attach /verify-session route
+
 
 // Root Route
 app.get('/', (req, res) => {
