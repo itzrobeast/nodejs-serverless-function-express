@@ -163,30 +163,30 @@ router.post('/', async (req, res) => {
     }
 
     if (existingBusiness) {
-      console.log('[INFO] Business already exists. Updating business details...');
-      const updateFields = {
-        name: businessName || existingBusiness.name,
-        contact_email: contactEmail || existingBusiness.contact_email,
-        locations: locations !== undefined ? locations : existingBusiness.locations, // Preserve existing if not provided
-        insurance_policies:
-          insurancePolicies !== undefined ? insurancePolicies : existingBusiness.insurance_policies,
-        objections: objections !== undefined ? objections : existingBusiness.objections,
-        ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
-        page_id: pageId || existingBusiness.page_id,
-        platform,
-      };
+  console.log('[INFO] Business already exists. Updating business details...');
+  const updateFields = {
+    name: businessName || existingBusiness.name,
+    contact_email: contactEmail || existingBusiness.contact_email,
+    locations: locations !== undefined ? locations : existingBusiness.locations, // Preserve existing if not provided
+    insurance_policies:
+      insurancePolicies !== undefined ? insurancePolicies : existingBusiness.insurance_policies,
+    objections: objections !== undefined ? objections : existingBusiness.objections,
+    ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
+    page_id: pageId || existingBusiness.page_id,
+    platform,
+  };
 
-      const { error: updateError } = await supabase
-        .from('businesses')
-        .update(updateFields)
-        .eq('id', existingBusiness.id);
+  const { error: updateError } = await supabase
+    .from('businesses')
+    .update(updateFields)
+    .eq('id', existingBusiness.id);
 
-      if (updateError) {
-        console.error('[ERROR] Failed to update business:', updateError.message);
-        throw new Error('Failed to update business');
-      }
+  if (updateError) {
+    console.error('[ERROR] Failed to update business:', updateError.message);
+    throw new Error('Failed to update business');
+  }
 
-      // Ensure the business has a Vonage number
+  // Ensure the business has a Vonage number
   const { data: existingNumber, error: numberFetchError } = await supabase
     .from('vonage_numbers')
     .select('vonage_number')
@@ -201,77 +201,45 @@ router.post('/', async (req, res) => {
     });
   }
 
-      return res.status(200).json({
-        message: 'Business updated successfully',
-        data: updateFields,
-      });
-    } else {
-      console.log('[INFO] Business does not exist. Creating new business...');
-      const { error: insertError } = await supabase
-        .from('businesses')
-        .insert([
-          {
-            name: businessName,
-            owner_id: user.id,
-            page_id: pageId || null,
-            access_token: accessToken || null,
-            contact_email: contactEmail,
-            locations: locations || [], // Default only for new business
-            insurance_policies: insurancePolicies || {}, // Default only for new business
-            objections: objections || {}, // Default only for new business
-            ai_knowledge_base: aiKnowledgeBase,
-            platform,
-          },
-        ]);
+  return res.status(200).json({
+    message: 'Business updated successfully',
+    data: updateFields,
+  });
+} else {
+  console.log('[INFO] Business does not exist. Creating new business...');
+  const { data: newBusiness, error: insertError } = await supabase
+    .from('businesses')
+    .insert([
+      {
+        name: businessName,
+        owner_id: user.id,
+        page_id: pageId || null,
+        access_token: accessToken || null,
+        contact_email: contactEmail,
+        locations: locations || [], // Default only for new business
+        insurance_policies: insurancePolicies || {}, // Default only for new business
+        objections: objections || {}, // Default only for new business
+        ai_knowledge_base: aiKnowledgeBase,
+        platform,
+      },
+    ])
+    .single();
 
-      if (insertError) {
-        console.error('[ERROR] Failed to insert new business:', insertError.message);
-        throw new Error('Failed to insert new business');
-      }
+  if (insertError) {
+    console.error('[ERROR] Failed to insert new business:', insertError.message);
+    throw new Error('Failed to insert new business');
+  }
 
-     // Assign a Vonage number to the new business after insertion
-const { data: newBusiness, error: insertError } = await supabase
-  .from('businesses')
-  .insert([
-    {
-      name: businessName,
-      owner_id: user.id,
-      page_id: pageId || null,
-      access_token: accessToken || null,
-      contact_email: contactEmail,
-      locations: locations || [], // Default only for new business
-      insurance_policies: insurancePolicies || {}, // Default only for new business
-      objections: objections || {}, // Default only for new business
-      ai_knowledge_base: aiKnowledgeBase,
-      platform,
-    },
-  ])
-  .single(); // This ensures you get the newly inserted row
+  // Assign a Vonage number to the new business
+  const vonageNumber = await assignVonageNumber(newBusiness.id);
 
-if (insertError) {
-  console.error('[ERROR] Failed to insert new business:', insertError.message);
-  throw new Error('Failed to insert new business');
+  return res.status(201).json({
+    message: 'Business setup successful',
+    data: { ...newBusiness, vonageNumber },
+  });
 }
 
-// Assign a Vonage number to the new business
-const vonageNumber = await assignVonageNumber(newBusiness.id);
 
-return res.status(201).json({ message: 'Business setup successful' });
-
-    }
-  } catch (error) {
-    console.error('[ERROR] /setup-business:', error.message);
-    return res.status(500).json({
-      error: 'Internal server error',
-      details: error.message,
-    });
-  }
-});
-
-// Optional health check for debugging
-router.get('/health', (req, res) => {
-  res.status(200).json({ status: 'Setup-Business endpoint is healthy!' });
-});
-
+  
 export default router;
 
