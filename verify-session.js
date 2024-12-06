@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import supabase from './supabaseClient.js';
 
 const router = express.Router();
 
@@ -37,16 +38,12 @@ router.get('/verify-session', async (req, res) => {
 
     console.log('[DEBUG] Business fetched:', businessData);
 
-    // Now retrieve leads using businessData.id
-    const leads = await getLeadsForBusiness(businessData.id); // Make sure getLeadsForBusiness is defined and works
-    console.log('[DEBUG] Leads retrieved:', leads);
-
-    return res.status(200).json({ user, business: businessData, leads });
+    // Return the user and business data (without fetching leads)
+    return res.status(200).json({ user, business: businessData });
   } catch (error) {
     console.error('[ERROR] Internal error in /verify-session:', error.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
-
 
 export default router;
