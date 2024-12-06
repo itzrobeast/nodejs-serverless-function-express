@@ -15,31 +15,34 @@ router.get('/verify-session', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const user = jwt.verify(token, process.env.MILA_SECRET);
-    console.log('[DEBUG] Token verified:', user);
-
     const businessId = req.query.business_id;
+
+    console.log('[DEBUG] Extracted token:', token);
+    console.log('[DEBUG] Received business_id:', businessId);
+
     if (!businessId) {
       console.error('[ERROR] Missing required parameter: business_id');
       return res.status(400).json({ error: 'Missing required parameter: business_id' });
     }
 
-    // Fetch the business from the database
-    const { data: businessData, error: businessError } = await supabase
+    const user = jwt.verify(token, process.env.MILA_SECRET);
+    console.log('[DEBUG] Token verified successfully:', user);
+
+    // Database lookup for the business
+    const { data: business, error } = await supabase
       .from('businesses')
       .select('*')
       .eq('id', businessId)
       .single();
 
-    if (businessError || !businessData) {
-      console.error('[ERROR] Business not found:', businessError?.message);
+    if (error || !business) {
+      console.error('[ERROR] Business not found:', error?.message);
       return res.status(404).json({ error: 'Business not found' });
     }
 
-    console.log('[DEBUG] Business fetched:', businessData);
+    console.log('[DEBUG] Business retrieved:', business);
 
-    // Return the user and business data (without fetching leads)
-    return res.status(200).json({ user, business: businessData });
+    return res.status(200).json({ user, business });
   } catch (error) {
     console.error('[ERROR] Internal error in /verify-session:', error.message);
     return res.status(500).json({ error: 'Internal server error.' });
