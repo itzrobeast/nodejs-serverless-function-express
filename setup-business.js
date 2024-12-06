@@ -17,6 +17,8 @@ const generateToken = (user) => {
 // POST Handler for /setup-business
 router.post('/', async (req, res) => {
   try {
+    console.log('[DEBUG] Is fetchInstagramId defined?', typeof fetchInstagramId); // Debug
+
     const {
       appId,
       user,
@@ -31,6 +33,7 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
+
 
     // Validate required fields
     if (!appId || !businessName || !user?.id || !contactEmail) {
@@ -49,7 +52,16 @@ router.post('/', async (req, res) => {
     }
 
     // Fetch Instagram User ID (ig_id)
-    const igId = await fetchInstagramId(user.id, accessToken);
+    const igId = await fetchInstagramId(user.id, accessToken); // Ensure function is properly defined here
+    console.log('[DEBUG] Instagram ID fetched:', igId);
+  } catch (error) {
+    console.error('[ERROR] /setup-business:', error.message);
+    return res.status(500).json({
+      error: 'Internal server error',
+      details: error.message,
+    });
+  }
+});
 
     // Step 1: Check or Insert User
     let { data: existingUser, error: userFetchError } = await supabase
