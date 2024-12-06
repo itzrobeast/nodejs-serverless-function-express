@@ -7,11 +7,11 @@ const router = express.Router();
 export const getLeadsFromMeta = async (accessToken, pageId) => {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v14.0/${pageId}/leadgen_forms?access_token=${accessToken}`
+      `https://graph.facebook.com/v14.0/${pageId}/leads?access_token=${accessToken}`
     );
     if (!response.ok) throw new Error('Failed to retrieve leads');
     const data = await response.json();
-    return data.data; // Array of leads
+    return data.data || []; // Array of leads
   } catch (error) {
     console.error('[ERROR] Failed to retrieve leads from Meta:', error.message);
     return [];
@@ -27,17 +27,17 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    // Fetch leads from the database for the specified business_id
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('business_id', business_id);
+    // Fetch business data to get access_token and page_id
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('access_token, page_id')
+      .eq('id', business_id)
+      .single();
 
-    if (error) {
-      console.error('[ERROR] Failed to retrieve leads:', error.message);
-      return res.status(500).json({ error: 'Failed to retrieve leads' });
+    if (businessError || !business) {
+      console.error('[ERROR] Business not found or database error:', businessError?.message);
+      return res.status(404).json({ error: 'Business not found' });
     }
-
 
     const { access_token, page_id } = business;
 
@@ -45,15 +45,10 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: 'Page ID or Access Token missing.' });
     }
 
-    const url = `https://graph.facebook.com/v14.0/${page_id}/leads?access_token=${access_token}`;
-    const response = await fetch(url);
-    const leads = await response.json();
+    // Fetch leads from Meta API
+    const leads = await getLeadsFromMeta(access_token, page_id);
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: leads.error.message });
-    }
-
-    res.status(200).json({ leads: leads.data || [] });
+    res.status(200).json({ leads });
   } catch (error) {
     console.error('[ERROR] Failed to retrieve leads:', error.message);
     res.status(500).json({ error: 'Internal server error.' });
