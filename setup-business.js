@@ -1,61 +1,17 @@
 import express from 'express';
+import jwt from 'jsonwebtoken'; // Add this
 import supabase from './supabaseClient.js';
 import fetch from 'node-fetch';
 
 const router = express.Router();
 
-// Function to determine the platform from the request headers
-function getPlatform(req) {
-  const userAgent = req.headers['user-agent'] || '';
-  if (/mobile/i.test(userAgent)) {
-    return 'Mobile';
-  } else if (/tablet/i.test(userAgent)) {
-    return 'Tablet';
-  }
-  return 'Web';
-}
-
-// Function to fetch Instagram User ID (ig_id) from Facebook Graph API
-async function fetchInstagramId(fbId, accessToken) {
-  const url = `https://graph.facebook.com/v14.0/${fbId}/accounts?fields=instagram_business_account&access_token=${accessToken}`;
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (response.ok && data.data.length > 0) {
-      const instagramAccount = data.data.find(acc => acc.instagram_business_account);
-      if (instagramAccount && instagramAccount.instagram_business_account) {
-        console.log('[INFO] Instagram ID found:', instagramAccount.instagram_business_account.id);
-        return instagramAccount.instagram_business_account.id;
-      }
-    }
-
-    console.warn('[WARN] No linked Instagram account found.');
-    return null;
-  } catch (error) {
-    console.error('[ERROR] Failed to fetch Instagram ID:', error.message);
-    return null;
-  }
-}
-
-const assignVonageNumber = async (businessId) => {
-  try {
-    const vonageNumber = `+1${Math.floor(1000000000 + Math.random() * 9000000000)}`; // Example number generation
-
-    const { error } = await supabase
-      .from('vonage_numbers')
-      .insert([{ business_id: businessId, vonage_number: vonageNumber }]);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    console.log(`[INFO] Assigned Vonage number ${vonageNumber} to business ID ${businessId}`);
-    return vonageNumber;
-  } catch (error) {
-    console.error('[ERROR] Failed to assign Vonage number:', error.message);
-    throw error;
-  }
+// Function to generate JWT
+const generateToken = (user) => {
+  return jwt.sign(
+    { id: user.id, email: user.email, name: user.name }, // Payload
+    process.env.MILA_SECRET, // Secret key from environment variables
+    { expiresIn: '1h' } // Token expires in 1 hour
+  );
 };
 
 // POST Handler for /setup-business
@@ -75,10 +31,6 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     console.log('[DEBUG] POST /setup-business hit:', req.body);
-
-    // Determine platform dynamically
-    const platform = getPlatform(req);
-    console.log('[DEBUG] Detected platform:', platform);
 
     // Validate required fields
     if (!appId || !businessName || !user?.id || !contactEmail) {
@@ -152,10 +104,7 @@ router.post('/', async (req, res) => {
       .eq('owner_id', user.id)
       .single();
 
-    if (businessFetchError && businessFetchError.code !== 'PGRST116') {
-      console.error('[ERROR] Failed to fetch existing business:', businessFetchError.message);
-      throw new Error('Database error while fetching business');
-    }
+    let businessData;
 
     if (existingBusiness) {
       console.log('[INFO] Business already exists. Updating business details...');
@@ -167,7 +116,7 @@ router.post('/', async (req, res) => {
         objections: objections !== undefined ? objections : existingBusiness.objections,
         ai_knowledge_base: aiKnowledgeBase || existingBusiness.ai_knowledge_base,
         page_id: pageId || existingBusiness.page_id,
-        platform,
+        platform: getPlatform(req),
       };
 
       const { error: updateError } = await supabase
@@ -180,24 +129,7 @@ router.post('/', async (req, res) => {
         throw new Error('Failed to update business');
       }
 
-      const { data: existingNumber, error: numberFetchError } = await supabase
-        .from('vonage_numbers')
-        .select('vonage_number')
-        .eq('business_id', existingBusiness.id)
-        .single();
-
-      if (!existingNumber && !numberFetchError) {
-        const vonageNumber = await assignVonageNumber(existingBusiness.id);
-        return res.status(200).json({
-          message: 'Business updated successfully with Vonage number assigned',
-          data: { ...updateFields, vonageNumber },
-        });
-      }
-
-      return res.status(200).json({
-        message: 'Business updated successfully',
-        data: updateFields,
-      });
+      businessData = { ...existingBusiness, ...updateFields };
     } else {
       console.log('[INFO] Business does not exist. Creating new business...');
       const { data: newBusiness, error: insertError } = await supabase
@@ -213,7 +145,7 @@ router.post('/', async (req, res) => {
             insurance_policies: insurancePolicies || {},
             objections: objections || {},
             ai_knowledge_base: aiKnowledgeBase,
-            platform,
+            platform: getPlatform(req),
           },
         ])
         .single();
@@ -223,13 +155,17 @@ router.post('/', async (req, res) => {
         throw new Error('Failed to insert new business');
       }
 
-      const vonageNumber = await assignVonageNumber(newBusiness.id);
-
-      return res.status(201).json({
-        message: 'Business setup successful',
-        data: { ...newBusiness, vonageNumber },
-      });
+      businessData = newBusiness;
     }
+
+    // Step 3: Generate JWT and Return Response
+    const token = generateToken(user);
+
+    res.status(200).json({
+      message: 'Business setup successful',
+      business: businessData,
+      token, // Include the generated token in the response
+    });
   } catch (error) {
     console.error('[ERROR] /setup-business:', error.message);
     return res.status(500).json({
@@ -237,11 +173,6 @@ router.post('/', async (req, res) => {
       details: error.message,
     });
   }
-});
-
-// Optional health check for debugging
-router.get('/health', (req, res) => {
-  res.status(200).json({ status: 'Setup-Business endpoint is healthy!' });
 });
 
 export default router;
