@@ -20,7 +20,7 @@ router.get('/verify-session', (req, res) => {
 
   try {
     // Verify the token
-    const user = jwt.verify(token, process.env.JWT_SECRET);
+    const user = jwt.verify(token, process.env.MILA_SECRET); // Use MILA_SECRET instead of JWT_SECRET
 
     console.log('[DEBUG] Token verified successfully:', user);
 
