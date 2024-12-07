@@ -20,9 +20,5 @@
     { "src": "/favicon.png", "dest": "/public/favicon.png" },
     { "src": "/(.*)", "dest": "index.js" }
   ],
-  "functions": {
-    "index.js": { "runtime": "nodejs20.x" },
-    "setup-business.js": { "runtime": "nodejs20.x" },
-    "api/**/*.js": { "runtime": "nodejs20.x" }
-  }
+  
 }
