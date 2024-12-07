@@ -5,6 +5,11 @@
     { "src": "setup-business.js", "use": "@vercel/node" },
     { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
+  "functions": {
+    "index.js": { "runtime": "nodejs20.x" },
+    "setup-business.js": { "runtime": "nodejs20.x" },
+    "api/**/*.js": { "runtime": "nodejs20.x" }
+  },
   "routes": [
     { "src": "/setup-business", "dest": "index.js" },
     { "src": "/setup-business/health", "dest": "index.js" },
