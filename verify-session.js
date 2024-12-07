@@ -60,6 +60,7 @@ router.get('/verify-session', async (req, res) => {
       console.error('[ERROR] Missing required parameter: business_id');
       return res.status(400).json({ error: 'Missing required parameter: business_id' });
     }
+      console.log('[DEBUG] business_id:', businessId);
 
 
 
@@ -76,18 +77,19 @@ router.get('/verify-session', async (req, res) => {
       return res.status(404).json({ error: 'Business not found' });
     }
 
-    console.log('[DEBUG] Business fetched:', businessData);
+      console.log('[DEBUG] Business fetched:', businessData);
+      console.log('[DEBUG] Supabase response:', { businessData, businessError });
+
 
     // Validate page ID and access token
-    const { page_id: pageId, access_token: accessToken } = businessData;
-    if (!pageId || !accessToken) {
-      console.error('[ERROR] Page ID or Access Token missing');
-      return res.status(400).json({ error: 'Page ID or Access Token missing.' });
-    }
+    cconst { page_id: pageId, access_token: accessToken } = businessData;
+if (!pageId || !accessToken) {
+  return res.status(400).json({ error: 'Page ID or Access Token missing.' });
+}
+console.log('[DEBUG] pageId:', pageId);
+console.log('[DEBUG] accessToken:', accessToken);
 
-    // Fetch leads from Facebook Graph API
-    const leads = await fetchLeads(pageId, accessToken);
-    console.log('[DEBUG] Leads retrieved:', leads);
+
 
     // Return successful response
     return res.status(200).json({ user, business: businessData, leads });
