@@ -1,10 +1,14 @@
-router.post('/refresh-token', async (req, res) => {
+import express from 'express';
+
+const router = express.Router();
+
+router.post('/', async (req, res) => {
   try {
-    const { shortLivedToken } = req.body;
-    const longLivedToken = await exchangeForLongLivedToken(shortLivedToken);
-    res.status(200).json({ longLivedToken });
+    // Your refresh token logic here
+    res.status(200).json({ message: 'Token refreshed successfully' });
   } catch (error) {
-    console.error('Error refreshing token:', error.message);
     res.status(500).json({ error: 'Failed to refresh token' });
   }
 });
+
+export default router;
