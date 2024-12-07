@@ -11,7 +11,7 @@ import refreshTokenRouter from './refresh-token.js';
 import authRouter from './auth.js';
 
 const app = express();
-const router = express.Router();
+
 
 // CORS Configuration
 app.use(cors({
