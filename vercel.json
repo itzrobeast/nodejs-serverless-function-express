@@ -17,6 +17,7 @@
     { "src": "/assistant", "dest": "index.js" },
     { "src": "/instagram-webhook", "dest": "index.js" },
     { "src": "/refresh-token", "dest": "index.js" },
+    { "src": "/auth", "dest": "index.js" },
     { "src": "/verify-session", "dest": "index.js" },
     { "src": "/get-vonage-number", "dest": "index.js" },
     
