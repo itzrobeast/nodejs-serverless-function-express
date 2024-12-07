@@ -1,14 +1,15 @@
 import express from 'express';
-import setupBusinessRouter from './setup-business.js';
-import assistantHandler from './assistant.js';
-import instagramWebhookHandler from './instagram-webhook.js';
+import setupBusinessRouter from './setup-business.js'; // Express Router
+import assistantRouter from './assistant.js'; // Express Router
+import instagramWebhookRouter from './instagram-webhook.js'; // Express Router
 import cors from 'cors';
-import getBusinessRoute from './get-business.js';
-import getVonageNumberRoute from './get-vonage-number.js';
-import retrieveLeadsRoute from './retrieve-leads.js';
-import verifySessionRouter from './verify-session.js';
-import refreshTokenRouter from './refresh-token.js';
-import authRoutes from './auth.js';
+import getBusinessRouter from './get-business.js'; // Express Router
+import getVonageNumberRouter from './get-vonage-number.js'; // Express Router
+import retrieveLeadsRouter from './retrieve-leads.js'; // Express Router
+import verifySessionRouter from './verify-session.js'; // Express Router
+import refreshTokenRouter from './refresh-token.js'; // Express Router
+import authRouter from './auth.js'; // Express Router
+
 
 const app = express();
 
@@ -30,15 +31,17 @@ app.use((req, res, next) => {
 });
 
 // Route Handlers
+// Apply them consistently
 app.use('/setup-business', setupBusinessRouter);
-app.use('/assistant', assistantHandler);
-app.use('/instagram-webhook', instagramWebhookHandler);
-app.use('/get-business', getBusinessRoute);
-app.use('/get-vonage-number', getVonageNumberRoute);
-app.use('/retrieve-leads', retrieveLeadsRoute);
-app.use('/verify-session', verifySessionRouter); // Attach /verify-session route
+app.use('/assistant', assistantRouter);
+app.use('/instagram-webhook', instagramWebhookRouter);
+app.use('/get-business', getBusinessRouter);
+app.use('/get-vonage-number', getVonageNumberRouter);
+app.use('/retrieve-leads', retrieveLeadsRouter);
+app.use('/verify-session', verifySessionRouter);
 app.use('/refresh-token', refreshTokenRouter);
-app.use('/auth', authRoutes);
+app.use('/auth', authRouter);
+
 
 // Root Route
 app.get('/', (req, res) => {
