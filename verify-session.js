@@ -29,18 +29,31 @@ router.get('/verify-session', async (req, res) => {
   try {
     console.log('[DEBUG] Request received:', req.url, req.query);
 
-    // Verify Authorization header
+    // Log Authorization header
     const authHeader = req.headers.authorization;
+    console.log('[DEBUG] Authorization header:', authHeader);
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.error('[ERROR] Missing or malformed Authorization header');
       return res.status(400).json({ error: 'Missing or malformed Authorization header' });
     }
 
-    // Verify the token
+    // Continue with token verification
     const token = authHeader.split(' ')[1];
     const user = jwt.verify(token, process.env.MILA_SECRET);
     console.log('[DEBUG] Token verified:', user);
 
+    // Further logic...
+  } catch (error) {
+    console.error('[ERROR] Internal error in /verify-session:', error.message);
+    return res.status(500).json({ error: 'Internal server error.', details: error.message });
+  }
+});
+
+
+
+
+    
     // Verify business_id query parameter
     const businessId = req.query.business_id;
     if (!businessId) {
@@ -48,6 +61,9 @@ router.get('/verify-session', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameter: business_id' });
     }
 
+
+
+    
     // Fetch the business from the database
     const { data: businessData, error: businessError } = await supabase
       .from('businesses')
