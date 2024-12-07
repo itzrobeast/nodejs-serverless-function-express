@@ -1,8 +1,9 @@
 import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
 import setupBusinessRouter from './setup-business.js';
 import assistantRouter from './assistant.js';
 import instagramWebhookRouter from './instagram-webhook.js';
-import cors from 'cors';
 import getBusinessRouter from './get-business.js';
 import getVonageNumberRouter from './get-vonage-number.js';
 import retrieveLeadsRouter from './retrieve-leads.js';
@@ -12,10 +13,19 @@ import authRouter from './auth.js';
 
 const app = express();
 
+// Security Enhancements
+app.use(helmet());
 
 // CORS Configuration
+const allowedOrigins = ['https://mila-verse.vercel.app'];
 app.use(cors({
-  origin: 'https://mila-verse.vercel.app',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -24,6 +34,16 @@ app.use(cors({
 // Middleware for parsing JSON requests
 app.use(express.json());
 
+// Request Timing Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[DEBUG] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
+
 // Debugging Middleware
 app.use((req, res, next) => {
   console.log(`[DEBUG] Request received: ${req.method} ${req.url}`);
@@ -31,14 +51,31 @@ app.use((req, res, next) => {
 });
 
 // Route Handlers
+console.log('[DEBUG] Initializing route: /setup-business');
 app.use('/setup-business', setupBusinessRouter);
+
+console.log('[DEBUG] Initializing route: /assistant');
 app.use('/assistant', assistantRouter);
+
+console.log('[DEBUG] Initializing route: /instagram-webhook');
 app.use('/instagram-webhook', instagramWebhookRouter);
+
+console.log('[DEBUG] Initializing route: /get-business');
 app.use('/get-business', getBusinessRouter);
+
+console.log('[DEBUG] Initializing route: /get-vonage-number');
 app.use('/get-vonage-number', getVonageNumberRouter);
+
+console.log('[DEBUG] Initializing route: /retrieve-leads');
 app.use('/retrieve-leads', retrieveLeadsRouter);
+
+console.log('[DEBUG] Initializing route: /verify-session');
 app.use('/verify-session', verifySessionRouter);
+
+console.log('[DEBUG] Initializing route: /refresh-token');
 app.use('/refresh-token', refreshTokenRouter);
+
+console.log('[DEBUG] Initializing route: /auth');
 app.use('/auth', authRouter);
 
 // Root Route
@@ -51,6 +88,16 @@ app.get('/', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('[ERROR] Global Error:', err.message);
   res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Graceful Shutdown
+process.on('SIGINT', () => {
+  console.log('[INFO] SIGINT signal received: closing server...');
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  console.log('[INFO] SIGTERM signal received: closing server...');
+  process.exit(0);
 });
 
 export default app;
