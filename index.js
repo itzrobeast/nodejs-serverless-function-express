@@ -9,6 +9,7 @@ import getVonageNumberRouter from './get-vonage-number.js';
 import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './verify-session.js';
 import refreshTokenRouter from './refresh-token.js';
+import authRouter from './auth.js';
 
 const app = express();
 
@@ -32,6 +33,18 @@ app.use(cors({
 
 // Middleware for parsing JSON requests
 app.use(express.json());
+
+
+
+
+// Middleware to make Supabase available in all routes
+app.use((req, res, next) => {
+  req.supabase = supabase; // Attach the Supabase client to the request object
+  next();
+});
+
+
+
 
 // Request Timing Middleware
 app.use((req, res, next) => {
@@ -74,7 +87,7 @@ app.use('/verify-session', verifySessionRouter);
 console.log('[DEBUG] Initializing route: /refresh-token');
 app.use('/refresh-token', refreshTokenRouter);
 
-
+app.use('/auth', authRouter);
 
 // Root Route
 app.get('/', (req, res) => {
