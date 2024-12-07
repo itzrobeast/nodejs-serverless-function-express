@@ -14,6 +14,19 @@ const generateToken = (user) => {
   );
 };
 
+
+const exchangeForLongLivedToken = async (shortLivedToken) => {
+  const url = `https://graph.facebook.com/v14.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.FB_APP_ID}&client_secret=${process.env.FB_APP_SECRET}&fb_exchange_token=${shortLivedToken}`;
+  const response = await fetch(url);
+  const data = await response.json();
+  if (data.access_token) {
+    return data.access_token; // Return long-lived token
+  }
+  throw new Error('Failed to exchange token');
+};
+
+
+
 // Placeholder for fetchInstagramId (ensure this is defined or imported)
 const fetchInstagramId = async (fbId, accessToken) => {
   const url = `https://graph.facebook.com/v14.0/${fbId}/accounts?fields=instagram_business_account&access_token=${accessToken}`;
