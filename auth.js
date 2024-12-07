@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import supabase from './supabaseClient.js';
+import supabase from './supabaseClient.js'; // Adjust path if file is in a subfolder
+
 import fetch from 'node-fetch';
 
 console.log('[DEBUG] Supabase client initialized successfully:', supabase);
