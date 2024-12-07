@@ -1,14 +1,14 @@
-const express = require('express');
-const setupBusinessRouter = require('./setup-business');
-const assistantHandler = require('./assistant');
-const instagramWebhookHandler = require('./instagram-webhook');
-const cors = require('cors');
-const getBusinessRoute = require('./get-business');
-const getVonageNumberRoute = require('./get-vonage-number');
-const retrieveLeadsRoute = require('./retrieve-leads');
-const verifySessionRouter = require('./verify-session');
-const refreshTokenRouter = require('./refresh-token');
-const authRoutes = require('./auth');
+import express from 'express';
+import setupBusinessRouter from './setup-business.js';
+import assistantHandler from './assistant.js';
+import instagramWebhookHandler from './instagram-webhook.js';
+import cors from 'cors';
+import getBusinessRoute from './get-business.js';
+import getVonageNumberRoute from './get-vonage-number.js';
+import retrieveLeadsRoute from './retrieve-leads.js';
+import verifySessionRouter from './verify-session.js';
+import refreshTokenRouter from './refresh-token.js';
+import authRoutes from './auth.js';
 
 const app = express();
 
@@ -52,4 +52,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-module.exports = app;
+export default app;
