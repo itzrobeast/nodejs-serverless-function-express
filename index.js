@@ -10,6 +10,8 @@ import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './verify-session.js';
 import refreshTokenRouter from './refresh-token.js';
 import authRouter from './auth.js';
+import supabaserouter from './supabaeClient.js'; 
+
 
 const app = express();
 
