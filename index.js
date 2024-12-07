@@ -9,7 +9,6 @@ import getVonageNumberRouter from './get-vonage-number.js';
 import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './verify-session.js';
 import refreshTokenRouter from './refresh-token.js';
-import authRouter from './auth.js';
 
 const app = express();
 
@@ -75,8 +74,7 @@ app.use('/verify-session', verifySessionRouter);
 console.log('[DEBUG] Initializing route: /refresh-token');
 app.use('/refresh-token', refreshTokenRouter);
 
-console.log('[DEBUG] Initializing route: /auth');
-app.use('/auth', authRouter);
+
 
 // Root Route
 app.get('/', (req, res) => {
