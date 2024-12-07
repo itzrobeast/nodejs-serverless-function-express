@@ -9,15 +9,17 @@ router.get('/verify-session', async (req, res) => {
     console.log('[DEBUG] Request received:', req.url);
 
     // Validate Authorization header
+   router.get('/verify-session', async (req, res) => {
+  try {
+    console.log('[DEBUG] Request received:', req.url);
+
     const authHeader = req.headers.authorization;
     console.log('[DEBUG] Authorization header:', authHeader);
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('[ERROR] Missing or malformed Authorization header');
       return res.status(400).json({ error: 'Missing or malformed Authorization header' });
     }
 
-    // Extract and verify token
     const token = authHeader.split(' ')[1];
     const user = jwt.verify(token, process.env.MILA_SECRET);
     console.log('[DEBUG] Token verified:', user);
