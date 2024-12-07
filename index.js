@@ -8,7 +8,7 @@ import getVonageNumberRoute from './get-vonage-number.js'; // Import get-vonage-
 import retrieveLeadsRoute from './retrieve-leads.js'; // Import retrieve-leads route
 import verifySessionRouter from './verify-session.js'; 
 import refreshTokenRouter from './refresh-token.js';
-
+import authRoutes from './auth.js';
 
 const app = express();
 
@@ -47,7 +47,7 @@ app.use('/retrieve-leads', retrieveLeadsRoute); // Add retrieve-leads route
 app.use('/verify-session', retrieveLeadsRoute); 
 app.use('/verify-session', verifySessionRouter); // Attach /verify-session route
 app.use('/refresh-token', refreshTokenRouter);
-
+app.use('/auth', authRoutes);
 
 // Root Route
 app.get('/', (req, res) => {
