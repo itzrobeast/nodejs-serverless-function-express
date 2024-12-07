@@ -6,7 +6,7 @@
     { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/setup-business", "dest": "setup-business.js" },
+    { "src": "/setup-business", "dest": "index.js" },
     { "src": "/assistant", "dest": "index.js" },
     { "src": "/instagram-webhook", "dest": "index.js" },
     { "src": "/get-business", "dest": "index.js" },
@@ -15,7 +15,7 @@
     { "src": "/verify-session", "dest": "index.js" },
     { "src": "/refresh-token", "dest": "index.js" },
     { "src": "/auth", "dest": "index.js" },
-    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/api/(.*)", "dest": "index.js" },
     { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
     { "src": "/favicon.png", "dest": "/public/favicon.png" },
     { "src": "/(.*)", "dest": "index.js" }
