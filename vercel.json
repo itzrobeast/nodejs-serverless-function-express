@@ -6,8 +6,8 @@
     { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/setup-business", "dest": "index.js" },
-    { "src": "/setup-business/health", "dest": "index.js" },
+    { "src": "/setup-business", "dest": "setup-business.js" },
+    { "src": "/setup-business/health", "dest": "setup-business.js" },
     { "src": "/get-business", "dest": "index.js" },
     { "src": "/assistant", "dest": "index.js" },
     { "src": "/instagram-webhook", "dest": "index.js" },
@@ -20,5 +20,9 @@
     { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
     { "src": "/favicon.png", "dest": "/public/favicon.png" },
     { "src": "/(.*)", "dest": "index.js" }
-  ]
+  ],
+  "functions": {
+    "index.js": { "runtime": "nodejs16.x" },
+    "setup-business.js": { "runtime": "nodejs16.x" }
+  }
 }
