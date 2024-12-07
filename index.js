@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import supabase from './supabaseClient.js'; // Import the Supabase client
+
+// Import route handlers
 import setupBusinessRouter from './setup-business.js';
 import assistantRouter from './assistant.js';
 import instagramWebhookRouter from './instagram-webhook.js';
@@ -10,8 +13,6 @@ import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './verify-session.js';
 import refreshTokenRouter from './refresh-token.js';
 import authRouter from './auth.js';
-import supabaserouter from './supabaseClient.js'; 
-
 
 const app = express();
 
@@ -36,17 +37,14 @@ app.use(cors({
 // Middleware for parsing JSON requests
 app.use(express.json());
 
-
-
-
-// Middleware to make Supabase available in all routes
+// Middleware to ensure Supabase is initialized
+if (!supabase) {
+  throw new Error('[CRITICAL] Supabase client failed to initialize.');
+}
 app.use((req, res, next) => {
   req.supabase = supabase; // Attach the Supabase client to the request object
   next();
 });
-
-
-
 
 // Request Timing Middleware
 app.use((req, res, next) => {
@@ -65,31 +63,22 @@ app.use((req, res, next) => {
 });
 
 // Route Handlers
-console.log('[DEBUG] Initializing route: /setup-business');
-app.use('/setup-business', setupBusinessRouter);
+const routes = [
+  { path: '/setup-business', router: setupBusinessRouter },
+  { path: '/assistant', router: assistantRouter },
+  { path: '/instagram-webhook', router: instagramWebhookRouter },
+  { path: '/get-business', router: getBusinessRouter },
+  { path: '/get-vonage-number', router: getVonageNumberRouter },
+  { path: '/retrieve-leads', router: retrieveLeadsRouter },
+  { path: '/verify-session', router: verifySessionRouter },
+  { path: '/refresh-token', router: refreshTokenRouter },
+  { path: '/auth', router: authRouter },
+];
 
-console.log('[DEBUG] Initializing route: /assistant');
-app.use('/assistant', assistantRouter);
-
-console.log('[DEBUG] Initializing route: /instagram-webhook');
-app.use('/instagram-webhook', instagramWebhookRouter);
-
-console.log('[DEBUG] Initializing route: /get-business');
-app.use('/get-business', getBusinessRouter);
-
-console.log('[DEBUG] Initializing route: /get-vonage-number');
-app.use('/get-vonage-number', getVonageNumberRouter);
-
-console.log('[DEBUG] Initializing route: /retrieve-leads');
-app.use('/retrieve-leads', retrieveLeadsRouter);
-
-console.log('[DEBUG] Initializing route: /verify-session');
-app.use('/verify-session', verifySessionRouter);
-
-console.log('[DEBUG] Initializing route: /refresh-token');
-app.use('/refresh-token', refreshTokenRouter);
-
-app.use('/auth', authRouter);
+routes.forEach(({ path, router }) => {
+  console.log(`[DEBUG] Initializing route: ${path}`);
+  app.use(path, router);
+});
 
 // Root Route
 app.get('/', (req, res) => {
