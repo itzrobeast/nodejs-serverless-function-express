@@ -14,6 +14,7 @@
     { "src": "/refresh-token", "dest": "index.js" },
     { "src": "/verify-session", "dest": "index.js" },
     { "src": "/get-vonage-number", "dest": "index.js" },
+    { "src": "/auth", "dest": "index.js" },
     { "src": "/retrieve-leads", "dest": "index.js" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
