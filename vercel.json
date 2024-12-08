@@ -5,13 +5,17 @@
     { "src": "setup-business.js", "use": "@vercel/node" },
     { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
-  "functions": {
-    "index.js": { "runtime": "nodejs20.x" },
-    "setup-business.js": { "runtime": "nodejs20.x" },
-    "api/**/*.js": { "runtime": "nodejs20.x" }
-  },
   "routes": [
-    { "src": "/setup-business", "dest": "setup-business.js" },
+    { "src": "/setup-business", "dest": "index.js" },
+    { "src": "/setup-business/health", "dest": "index.js" },
+    { "src": "/get-business", "dest": "index.js" },
+    { "src": "/assistant", "dest": "index.js" },
+    { "src": "/instagram-webhook", "dest": "index.js" },
+    { "src": "/refresh-token", "dest": "index.js" },
+    { "src": "/verify-session", "dest": "index.js" },
+    { "src": "/get-vonage-number", "dest": "index.js" },
+    { "src": "/auth", "dest": "index.js" },
+    { "src": "/retrieve-leads", "dest": "index.js" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
     { "src": "/favicon.png", "dest": "/public/favicon.png" },
