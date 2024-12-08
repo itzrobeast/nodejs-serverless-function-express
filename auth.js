@@ -5,6 +5,7 @@ import supabase from './supabaseClient.js'; // Adjust path if file is in a subfo
 import fetch from 'node-fetch';
 
 console.log('[DEBUG] Supabase client initialized successfully:', supabase);
+console.log('[DEBUG] Resolved path for supabaseClient:', require.resolve('./supabaseClient.js'));
 
 const router = express.Router();
 
