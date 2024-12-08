@@ -13,6 +13,19 @@ if (!process.env.MILA_SECRET) {
   throw new Error('MILA_SECRET environment variable is missing.');
 }
 
+router.get('/debug', (req, res) => {
+  try {
+    const fs = require('fs');
+    const fileExists = fs.existsSync('./supabaseClient.js');
+    res.json({ fileExists });
+  } catch (err) {
+    res.status(500).json({ error: 'Debugging failed', details: err.message });
+  }
+});
+
+
+
+
 // Helper function to verify Facebook access token
 const verifyFacebookToken = async (accessToken) => {
   try {
