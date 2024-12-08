@@ -2,29 +2,33 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import supabase from './supabaseClient.js';
 import fetch from 'node-fetch';
+import fs from 'fs/promises'; // Use ES module-compatible fs
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+// Resolve __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log('[DEBUG] Supabase client initialized successfully:', supabase);
-console.log('[DEBUG] Resolved path for supabaseClient:', require.resolve('./supabaseClient.js'));
 
-
+// Debugging Route: Check if supabaseClient.js exists
 const router = express.Router();
 
-if (!process.env.MILA_SECRET) {
-  throw new Error('MILA_SECRET environment variable is missing.');
-}
-
-router.get('/debug', (req, res) => {
+router.get('/debug', async (req, res) => {
   try {
-    const fs = require('fs');
-    const fileExists = fs.existsSync('./supabaseClient.js');
+    const fileExists = await fs.access(path.join(__dirname, './supabaseClient.js'))
+      .then(() => true)
+      .catch(() => false);
     res.json({ fileExists });
   } catch (err) {
     res.status(500).json({ error: 'Debugging failed', details: err.message });
   }
 });
 
-
-
+if (!process.env.MILA_SECRET) {
+  throw new Error('MILA_SECRET environment variable is missing.');
+}
 
 // Helper function to verify Facebook access token
 const verifyFacebookToken = async (accessToken) => {
