@@ -1,15 +1,13 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import supabase from path.resolve(__dirname, './supabaseClient.js');
-import fs from 'fs';
-import path from 'path';
+
 
 import fetch from 'node-fetch';
 
 console.log('[DEBUG] Supabase client initialized successfully:', supabase);
 console.log('[DEBUG] Resolved path for supabaseClient:', require.resolve('./supabaseClient.js'));
 
-console.log('[DEBUG] Files in current directory:', fs.readdirSync(path.resolve(__dirname)));
 
 const router = express.Router();
 
