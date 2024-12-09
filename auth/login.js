@@ -18,24 +18,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing access token' });
     }
 
-    // Verify the token (example, replace with actual logic)
-  const user = { id: '123', name: 'John Doe' }; // Mock user data
-  const jwtToken = jwt.sign(user, process.env.MILA_SECRET, { expiresIn: '1h' });
-
-  // Set the cookie securely
-  res.cookie('authToken', jwtToken, {
-    httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
-    secure: process.env.NODE_ENV === 'production', // Ensures cookies are only sent over HTTPS in production
-    sameSite: 'Strict', // Ensures the cookie is not sent with cross-site requests
-    maxAge: 3600000, // Cookie expiration in milliseconds (1 hour)
-  });
-
-  res.status(200).json({ message: 'Login successful' });
-});
-
-
-    
-    // Verify the Facebook token
+    // Verify Facebook token
     const fbResponse = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
     );
@@ -45,15 +28,15 @@ router.post('/', async (req, res) => {
 
     const fbData = await fbResponse.json();
 
-    // Find or create the user in the `users` table
+    // Find or create user in Supabase
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('fb_id', fbData.id)
       .single();
 
-    if (!user) {
-      // If user doesn't exist, insert a new one
+    if (userError && userError.code === 'PGRST116') {
+      // If user doesn't exist, create it
       const { data: newUser, error: createUserError } = await supabase
         .from('users')
         .insert({
@@ -67,24 +50,25 @@ router.post('/', async (req, res) => {
       if (createUserError) {
         throw new Error('Failed to create user in Supabase');
       }
-
       user = newUser;
+    } else if (userError) {
+      throw new Error('Error fetching user from Supabase');
     }
 
-    // Check if a business exists for this user's `fb_id`
+    // Find or create business for the user
     let { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
-      .eq('owner_id', fbData.id) // Use `fb_id` for matching
+      .eq('owner_id', fbData.id)
       .single();
 
-    if (!business) {
+    if (businessError && businessError.code === 'PGRST116') {
       // If no business exists, create one
       const { data: newBusiness, error: createBusinessError } = await supabase
         .from('businesses')
         .insert({
-          owner_id: fbData.id, // Use `fb_id` here as `owner_id`
-          name: `${fbData.name}'s Business`, // Default business name
+          owner_id: fbData.id,
+          name: `${fbData.name}'s Business`,
         })
         .select('*')
         .single();
@@ -92,49 +76,32 @@ router.post('/', async (req, res) => {
       if (createBusinessError) {
         throw new Error('Failed to create business for the user');
       }
-
       business = newBusiness;
+    } else if (businessError) {
+      throw new Error('Error fetching business from Supabase');
     }
 
-    // Generate a JWT token
+    // Generate JWT token
     const token = jwt.sign(
       { fb_id: user.fb_id, name: user.name, email: user.email },
       process.env.MILA_SECRET,
       { expiresIn: '1h' }
     );
 
+    // Set the token in a secure cookie
+    res.cookie('authToken', token, {
+      httpOnly: true, // Prevents client-side access
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'Strict', // Restrict cross-site sharing
+      maxAge: 3600000, // 1 hour
+    });
+
+    // Respond with token and business ID
     res.status(200).json({ token, businessId: business.id });
   } catch (err) {
     console.error('[ERROR] Login failed:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
-
-
-// Example of business ID logic
-async function getOrCreateBusinessId(userId) {
-  // Example: Fetch or create a business for the user
-  const { data: business, error: businessError } = await supabase
-    .from('businesses')
-    .select('id')
-    .eq('owner_id', userId)
-    .single();
-
-  if (businessError) {
-    // If no business exists, create one
-    const { data: newBusiness, error: createError } = await supabase
-      .from('businesses')
-      .insert({ owner_id: userId })
-      .select('id')
-      .single();
-
-    if (createError) {
-      throw new Error('Failed to create business for the user');
-    }
-    return newBusiness.id;
-  }
-  return business.id;
-}
 
 export default router;
