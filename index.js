@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import supabase from './supabaseClient.js';
 
 // Import route handlers
@@ -16,53 +17,36 @@ import loginRouter from './auth/login.js';
 
 const app = express();
 
-// Security Enhancements
-app.use(helmet());
-
-// CORS Configuration
-const allowedOrigins = ['https://mila-verse.vercel.app'];
+// Middleware
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cookieParser());
+app.use(express.json());
 app.use(
   cors({
     origin: (origin, callback) => {
-      console.log(`[DEBUG] Incoming Origin: ${origin}`);
+      const allowedOrigins = ['https://mila-verse.vercel.app'];
+      console.log(`[DEBUG] CORS Origin: ${origin}`);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.error(`[ERROR] CORS Blocked Origin: ${origin}`);
+        console.error(`[ERROR] CORS Rejected Origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
-    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true, // Allow cookies
+    credentials: true,
   })
 );
 
-// Middleware for parsing JSON requests
-app.use(express.json());
-
-// Middleware to ensure Supabase is initialized
+// Supabase Validation
 if (!supabase) {
-  throw new Error('[CRITICAL] Supabase client failed to initialize.');
+  console.error('[CRITICAL] Supabase client failed to initialize.');
+  process.exit(1);
 }
-app.use((req, res, next) => {
-  req.supabase = supabase;
-  next();
-});
-
-// Request Timing Middleware
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`[DEBUG] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
-  });
-  next();
-});
 
 // Debugging Middleware
 app.use((req, res, next) => {
-  console.log(`[DEBUG] Request received: ${req.method} ${req.url}`);
+  console.log(`[DEBUG] Request: ${req.method} ${req.url}`);
+  console.log(`[DEBUG] Headers:`, req.headers);
   next();
 });
 
@@ -84,6 +68,11 @@ routes.forEach(({ path, router }) => {
   app.use(path, router);
 });
 
+// Health Check Route
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date() });
+});
+
 // Root Route
 app.get('/', (req, res) => {
   console.log('[DEBUG] Root route hit');
@@ -98,8 +87,15 @@ app.use((req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error('[ERROR] Global Error:', err.stack);
-  res.status(500).json({ error: 'Internal Server Error', details: err.message });
+  console.error('[ERROR] Global Error Handler:', {
+    message: err.message,
+    stack: err.stack,
+    route: req.originalUrl,
+  });
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+  });
 });
 
 // Graceful Shutdown
