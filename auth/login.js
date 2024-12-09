@@ -10,7 +10,6 @@ if (!process.env.MILA_SECRET) {
 }
 
 // POST /auth/login
-// POST /auth/login
 router.post('/', async (req, res) => {
   try {
     const { accessToken } = req.body;
@@ -19,6 +18,23 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing access token' });
     }
 
+    // Verify the token (example, replace with actual logic)
+  const user = { id: '123', name: 'John Doe' }; // Mock user data
+  const jwtToken = jwt.sign(user, process.env.MILA_SECRET, { expiresIn: '1h' });
+
+  // Set the cookie securely
+  res.cookie('authToken', jwtToken, {
+    httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+    secure: process.env.NODE_ENV === 'production', // Ensures cookies are only sent over HTTPS in production
+    sameSite: 'Strict', // Ensures the cookie is not sent with cross-site requests
+    maxAge: 3600000, // Cookie expiration in milliseconds (1 hour)
+  });
+
+  res.status(200).json({ message: 'Login successful' });
+});
+
+
+    
     // Verify the Facebook token
     const fbResponse = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
