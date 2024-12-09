@@ -24,7 +24,7 @@ app.use(express.json());
 app.use(
   cors({
     origin: (origin, callback) => {
-      const allowedOrigins = ['https://mila-verse.vercel.app'];
+      const allowedOrigins = ['https://mila-verse.vercel.app', 'https://mila-verse-7ftxkl9b0-bears-projects-464726ee.vercel.app',];
       console.log(`[DEBUG] CORS Origin: ${origin}`);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
