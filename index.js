@@ -10,9 +10,9 @@ import instagramWebhookRouter from './instagram-webhook.js';
 import getBusinessRouter from './get-business.js';
 import getVonageNumberRouter from './get-vonage-number.js';
 import retrieveLeadsRouter from './retrieve-leads.js';
-import verifySessionRouter from './verify-session.js';
-import refreshTokenRouter from './refresh-token.js';
-import authRouter from './auth.js';
+import verifySessionRouter from './auth/verify-session.js';
+import refreshTokenRouter from './auth/refresh-token.js';
+import loginRouter from './auth/login.js';
 
 const app = express();
 
@@ -72,9 +72,10 @@ const routes = [
   { path: '/get-business', router: getBusinessRouter },
   { path: '/get-vonage-number', router: getVonageNumberRouter },
   { path: '/retrieve-leads', router: retrieveLeadsRouter },
-  { path: '/verify-session', router: verifySessionRouter },
-  { path: '/refresh-token', router: refreshTokenRouter },
-  { path: '/auth', router: authRouter },
+  { path: '/auth/verify-session', router: verifySessionRouter },
+  { path: '/auth/refresh-token', router: refreshTokenRouter },
+  { path: '/auth/login', router: loginRouter },
+  
 ];
 
 routes.forEach(({ path, router }) => {
