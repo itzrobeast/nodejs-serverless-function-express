@@ -123,27 +123,26 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Missing access token' });
     }
 
-    // Step 1: Verify Facebook token
     const fbData = await verifyFacebookToken(accessToken);
-
-    // Step 2: Find or create user
     const userData = await findOrCreateUser(fbData);
-
-    // Step 3: Generate JWT token
     const token = generateToken(userData);
-
-    // Step 4: Fetch business data
     const businessData = await fetchBusinessData(userData.id);
 
-    // Respond with token and business ID
+    // Set cookie with appropriate policies
+    res.cookie('authToken', token, {
+      httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+      secure: process.env.NODE_ENV === 'production', // Ensures cookies are sent over HTTPS only in production
+      sameSite: 'None', // Allows cross-site cookie sharing
+    });
+
     return res.status(200).json({
-      token,
       businessId: businessData?.id || null,
     });
   } catch (error) {
-    console.error(`[ERROR] Login failed at step: ${error.step || 'Unknown'} - ${error.message}`);
+    console.error(`[ERROR] Login failed: ${error.message}`);
     return res.status(500).json({ error: 'Login failed', details: error.message });
   }
 });
+
 
 export default router;
