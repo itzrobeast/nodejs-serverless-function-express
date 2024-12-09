@@ -14,7 +14,6 @@ import verifySessionRouter from './auth/verify-session.js';
 import refreshTokenRouter from './auth/refresh-token.js';
 import loginRouter from './auth/login.js';
 
-
 const app = express();
 
 // Security Enhancements
@@ -25,15 +24,17 @@ const allowedOrigins = ['https://mila-verse.vercel.app'];
 app.use(
   cors({
     origin: (origin, callback) => {
+      console.log(`[DEBUG] Incoming Origin: ${origin}`);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.error(`[ERROR] CORS Blocked Origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
     methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
+    credentials: true, // Allow cookies
   })
 );
 
@@ -76,7 +77,6 @@ const routes = [
   { path: '/auth/verify-session', router: verifySessionRouter },
   { path: '/auth/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
-  
 ];
 
 routes.forEach(({ path, router }) => {
@@ -98,8 +98,8 @@ app.use((req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error('[ERROR] Global Error:', err.message);
-  res.status(500).json({ error: 'Internal Server Error' });
+  console.error('[ERROR] Global Error:', err.stack);
+  res.status(500).json({ error: 'Internal Server Error', details: err.message });
 });
 
 // Graceful Shutdown
