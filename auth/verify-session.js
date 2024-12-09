@@ -5,24 +5,23 @@ import supabase from '../supabaseClient.js';
 const router = express.Router();
 
 // GET /verify-session
-router.get('/verify-session', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     console.log('[DEBUG] Request received:', req.url);
 
     // Validate Authorization header
     const authHeader = req.headers.authorization;
-    console.log('[DEBUG] Authorization header:', authHeader);
-
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[ERROR] Missing or malformed Authorization header');
       return res.status(400).json({ error: 'Missing or malformed Authorization header' });
     }
 
-    // Extract the token from the Authorization header
+    // Extract and verify the token
     const token = authHeader.split(' ')[1];
     const user = jwt.verify(token, process.env.MILA_SECRET);
     console.log('[DEBUG] Token verified:', user);
 
-    // Verify the required business_id query parameter
+    // Check for the business_id query parameter
     const businessId = req.query.business_id;
     if (!businessId) {
       console.error('[ERROR] Missing required parameter: business_id');
@@ -55,7 +54,5 @@ router.get('/verify-session', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error.', details: error.message });
   }
 });
-
-
 
 export default router;
