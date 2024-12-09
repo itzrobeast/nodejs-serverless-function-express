@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import supabase from './supabaseClient.js'; // Import the Supabase client
+import supabase from './supabaseClient.js';
 
 // Import route handlers
 import setupBusinessRouter from './setup-business.js';
@@ -21,18 +21,20 @@ app.use(helmet());
 
 // CORS Configuration
 const allowedOrigins = ['https://mila-verse.vercel.app'];
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  })
+);
 
 // Middleware for parsing JSON requests
 app.use(express.json());
@@ -42,7 +44,7 @@ if (!supabase) {
   throw new Error('[CRITICAL] Supabase client failed to initialize.');
 }
 app.use((req, res, next) => {
-  req.supabase = supabase; // Attach the Supabase client to the request object
+  req.supabase = supabase;
   next();
 });
 
@@ -84,6 +86,12 @@ routes.forEach(({ path, router }) => {
 app.get('/', (req, res) => {
   console.log('[DEBUG] Root route hit');
   res.status(200).send('Welcome to the Node.js Serverless App!');
+});
+
+// 404 Handler
+app.use((req, res) => {
+  console.warn('[WARN] 404 - Route Not Found:', req.originalUrl);
+  res.status(404).json({ error: 'Route Not Found' });
 });
 
 // Global Error Handler
