@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import supabase from './supabaseClient.js';
 import fetch from 'node-fetch';
-import fs from 'fs/promises'; // Use ES module-compatible fs
+import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -10,35 +10,25 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('[DEBUG] Supabase client initialized successfully:', supabase);
-
-// Debugging Route: Check if supabaseClient.js exists
-const router = express.Router();
-
-router.get('/debug', async (req, res) => {
-  try {
-    const fileExists = await fs.access(path.join(__dirname, './supabaseClient.js'))
-      .then(() => true)
-      .catch(() => false);
-    res.json({ fileExists });
-  } catch (err) {
-    res.status(500).json({ error: 'Debugging failed', details: err.message });
-  }
-});
-
 if (!process.env.MILA_SECRET) {
   throw new Error('MILA_SECRET environment variable is missing.');
 }
 
-// Helper function to verify Facebook access token
+const router = express.Router();
+
+/**
+ * Verify Facebook access token using Facebook Graph API
+ */
 const verifyFacebookToken = async (accessToken) => {
   try {
     const fbResponse = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
     );
+
     if (!fbResponse.ok) {
       throw new Error('Invalid Facebook token');
     }
+
     return fbResponse.json();
   } catch (error) {
     error.step = 'Verify Facebook Token';
@@ -46,7 +36,9 @@ const verifyFacebookToken = async (accessToken) => {
   }
 };
 
-// Helper function to find or create a user in Supabase
+/**
+ * Find or create a user in Supabase
+ */
 const findOrCreateUser = async (fbData) => {
   try {
     const { data: userData, error: userError } = await supabase
@@ -65,6 +57,7 @@ const findOrCreateUser = async (fbData) => {
     if (userError || !userData) {
       throw new Error('Failed to fetch or create user in Supabase');
     }
+
     return userData;
   } catch (error) {
     error.step = 'Find or Create User';
@@ -72,7 +65,9 @@ const findOrCreateUser = async (fbData) => {
   }
 };
 
-// Helper function to fetch business data
+/**
+ * Fetch business data for the user
+ */
 const fetchBusinessData = async (ownerId) => {
   try {
     const { data: businessData, error: businessError } = await supabase
@@ -92,7 +87,9 @@ const fetchBusinessData = async (ownerId) => {
   }
 };
 
-// Helper function to generate JWT token
+/**
+ * Generate a JWT token for the user
+ */
 const generateToken = (userData) => {
   return jwt.sign(
     { id: userData.id, name: userData.name, email: userData.email },
@@ -101,7 +98,23 @@ const generateToken = (userData) => {
   );
 };
 
-// POST /login route
+/**
+ * Debug route to check the existence of the Supabase client file
+ */
+router.get('/debug', async (req, res) => {
+  try {
+    const fileExists = await fs.access(path.join(__dirname, './supabaseClient.js'))
+      .then(() => true)
+      .catch(() => false);
+    res.json({ fileExists });
+  } catch (err) {
+    res.status(500).json({ error: 'Debugging failed', details: err.message });
+  }
+});
+
+/**
+ * POST /login - Login a user with Facebook access token
+ */
 router.post('/login', async (req, res) => {
   try {
     const { accessToken } = req.body;
@@ -110,11 +123,19 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Missing access token' });
     }
 
+    // Step 1: Verify Facebook token
     const fbData = await verifyFacebookToken(accessToken);
+
+    // Step 2: Find or create user
     const userData = await findOrCreateUser(fbData);
+
+    // Step 3: Generate JWT token
     const token = generateToken(userData);
+
+    // Step 4: Fetch business data
     const businessData = await fetchBusinessData(userData.id);
 
+    // Respond with token and business ID
     return res.status(200).json({
       token,
       businessId: businessData?.id || null,
