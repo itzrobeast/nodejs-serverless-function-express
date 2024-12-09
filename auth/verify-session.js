@@ -4,6 +4,27 @@ import supabase from '../supabaseClient.js';
 
 const router = express.Router();
 
+
+app.get('/auth/verify-session', (req, res) => {
+  const token = req.cookies.authToken; // Retrieve token from secure cookie
+  if (!token) {
+    console.error('[ERROR] Missing token in cookies');
+    return res.status(401).json({ error: 'Unauthorized: Token not found' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.MILA_SECRET);
+    res.json({ success: true, userId: decoded.userId });
+  } catch (error) {
+    console.error('[ERROR] Invalid token:', error.message);
+    res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+});
+
+
+
+
+
 /**
  * GET /verify-session
  * Endpoint to verify user session and fetch business data.
