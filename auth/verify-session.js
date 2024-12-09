@@ -1,13 +1,17 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import supabase from '../supabaseClient.js';
+import cookieParser from 'cookie-parser';
 
 const router = express.Router();
 
-// Ensure environment variable is present
+// Ensure MILA_SECRET is defined
 if (!process.env.MILA_SECRET) {
   throw new Error('[CRITICAL] MILA_SECRET is not defined in environment variables');
 }
+
+// Middleware to parse cookies
+router.use(cookieParser());
 
 /**
  * GET /auth/verify-session
@@ -18,7 +22,7 @@ router.get('/', async (req, res) => {
     console.log('[DEBUG] Incoming request to /auth/verify-session:', req.url);
     console.log(`[DEBUG] Request Origin: ${req.headers.origin}`);
 
-    // Attempt to retrieve token from cookies
+    // Retrieve token from cookies
     let token = req.cookies?.authToken;
 
     // Fallback: Retrieve token from Authorization header
@@ -46,9 +50,10 @@ router.get('/', async (req, res) => {
           : 'Invalid token. Please log in again.',
       });
     }
+
     console.log('[DEBUG] Token successfully verified. User:', user);
 
-    // Optional: Validate the provided business_id
+    // Optional: Validate business_id query parameter
     const businessId = req.query.business_id;
     if (businessId) {
       console.log('[DEBUG] Validating business ID:', businessId);
@@ -75,7 +80,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Respond with user data only if no business ID is provided
+    // Respond with user data if no business ID is provided
     return res.status(200).json({
       message: 'Session verified successfully',
       user,
