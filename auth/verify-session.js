@@ -4,83 +4,74 @@ import supabase from '../supabaseClient.js';
 
 const router = express.Router();
 
-
-app.get('/auth/verify-session', (req, res) => {
-  const token = req.cookies.authToken; // Retrieve token from secure cookie
-  if (!token) {
-    console.error('[ERROR] Missing token in cookies');
-    return res.status(401).json({ error: 'Unauthorized: Token not found' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.MILA_SECRET);
-    res.json({ success: true, userId: decoded.userId });
-  } catch (error) {
-    console.error('[ERROR] Invalid token:', error.message);
-    res.status(401).json({ error: 'Unauthorized: Invalid token' });
-  }
-});
-
-
-
-
-
 /**
- * GET /verify-session
- * Endpoint to verify user session and fetch business data.
+ * GET /auth/verify-session
+ * Verifies user session and optionally fetches business data.
  */
 router.get('/', async (req, res) => {
   try {
-    console.log('[DEBUG] Incoming request:', req.url);
+    console.log('[DEBUG] Incoming request to /auth/verify-session:', req.url);
 
-    // Validate the Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('[ERROR] Missing or malformed Authorization header');
-      return res.status(400).json({ error: 'Missing or malformed Authorization header' });
+    // Token from cookie
+    let token = req.cookies.authToken;
+
+    // Token from Authorization header (if cookie is not used)
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      }
     }
 
-    // Extract and verify the JWT
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+      console.error('[ERROR] Missing token in cookies or Authorization header');
+      return res.status(401).json({ error: 'Unauthorized: Token not found' });
+    }
+
+    // Verify the token
     let user;
     try {
       user = jwt.verify(token, process.env.MILA_SECRET);
     } catch (jwtError) {
-      console.error('[ERROR] Invalid token:', jwtError.message);
+      console.error('[ERROR] Invalid or expired token:', jwtError.message);
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
     console.log('[DEBUG] Token successfully verified:', user);
 
-    // Validate the business_id query parameter
+    // Optional: Validate business_id if provided
     const businessId = req.query.business_id;
-    if (!businessId) {
-      console.error('[ERROR] Missing required parameter: business_id');
-      return res.status(400).json({ error: 'Missing required parameter: business_id' });
+    if (businessId) {
+      console.log('[DEBUG] Validating business ID:', businessId);
+
+      const { data: businessData, error: businessError } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('id', businessId)
+        .eq('owner_id', user.fb_id)
+        .single();
+
+      if (businessError || !businessData) {
+        console.error('[ERROR] Business not found or unauthorized access:', businessError?.message);
+        return res.status(404).json({ error: 'Business not found or unauthorized access' });
+      }
+
+      console.log('[DEBUG] Business data retrieved:', businessData);
+
+      // Respond with user and business data
+      return res.status(200).json({
+        message: 'Session verified successfully',
+        user,
+        business: businessData,
+      });
     }
-    console.log('[DEBUG] Provided business ID:', businessId);
 
-    // Fetch the business data and validate ownership
-    const { data: businessData, error: businessError } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('id', businessId)
-      .eq('owner_id', user.fb_id)
-      .single();
-
-    if (businessError || !businessData) {
-      console.error('[ERROR] Business not found or unauthorized access:', businessError?.message);
-      return res.status(404).json({ error: 'Business not found or unauthorized access' });
-    }
-    console.log('[DEBUG] Business data retrieved:', businessData);
-
-    // Respond with session and business data
+    // Respond with user data if no business ID is provided
     return res.status(200).json({
       message: 'Session verified successfully',
       user,
-      business: businessData,
     });
   } catch (error) {
-    console.error('[ERROR] Unexpected error in /verify-session:', error.message);
+    console.error('[ERROR] Unexpected error in /auth/verify-session:', error.message);
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
