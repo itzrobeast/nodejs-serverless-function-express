@@ -8,6 +8,16 @@ if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Supabase configuration is invalid.');
 }
 
+// Ensure the client runs server-side only
+if (typeof window !== 'undefined') {
+  throw new Error('[SECURITY] Supabase Service Role Key should only be used server-side.');
+}
+
+// Debugging logs (for development only, remove in production)
+console.log('[DEBUG] Supabase URL:', supabaseUrl);
+console.log('[DEBUG] Supabase Service Role Key is', supabaseServiceKey ? 'provided' : 'missing');
+
+// Create Supabase client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export default supabase;
