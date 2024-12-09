@@ -30,20 +30,16 @@ router.post('/', async (req, res) => {
 
     console.log('[DEBUG] Facebook Data:', fbData);
 
-    // Assign or fetch the business_id (implement your logic for fetching/assigning the correct business_id)
-    const businessId = await getOrCreateBusinessId(fbData.id); // Custom logic here
-
-    // Upsert user in Supabase
+    // Find or create user in Supabase
     const { data: userData, error: userError } = await supabase
       .from('users')
       .upsert(
         {
-          id: fbData.id,
+          fb_id: fbData.id, // Facebook ID field in users
           name: fbData.name,
           email: fbData.email,
-          business_id: businessId, // Ensure this is correct
         },
-        { onConflict: 'id' }
+        { onConflict: 'fb_id' }
       )
       .select('*')
       .single();
@@ -51,6 +47,32 @@ router.post('/', async (req, res) => {
     if (userError) {
       console.error('[ERROR] Supabase Error:', userError.message);
       throw new Error('Failed to create or fetch user in Supabase');
+    }
+
+    // Check if a business exists for this user, or create one
+    const { data: businessData, error: businessError } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('owner_id', userData.id) // Use user.id as the owner_id
+      .single();
+
+    let businessId;
+    if (businessError && businessError.code === 'PGRST116') {
+      // Create a business if none exists
+      const { data: newBusiness, error: createBusinessError } = await supabase
+        .from('businesses')
+        .insert({ owner_id: userData.id, name: `${fbData.name}'s Business` })
+        .select('*')
+        .single();
+
+      if (createBusinessError) {
+        throw new Error('Failed to create business for the user');
+      }
+      businessId = newBusiness.id;
+    } else if (businessError) {
+      throw new Error('Failed to fetch business');
+    } else {
+      businessId = businessData.id;
     }
 
     // Generate a JWT token
@@ -66,6 +88,7 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Example of business ID logic
 async function getOrCreateBusinessId(userId) {
