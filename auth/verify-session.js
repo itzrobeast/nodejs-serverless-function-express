@@ -4,6 +4,11 @@ import supabase from '../supabaseClient.js';
 
 const router = express.Router();
 
+// Ensure environment variable is present
+if (!process.env.MILA_SECRET) {
+  throw new Error('[CRITICAL] MILA_SECRET is not defined in environment variables');
+}
+
 /**
  * GET /auth/verify-session
  * Verifies user session and optionally fetches business data.
@@ -11,11 +16,12 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     console.log('[DEBUG] Incoming request to /auth/verify-session:', req.url);
+    console.log(`[DEBUG] Request Origin: ${req.headers.origin}`);
 
-    // Token from cookie
-    let token = req.cookies.authToken;
+    // Attempt to retrieve token from cookies
+    let token = req.cookies?.authToken;
 
-    // Token from Authorization header (if cookie is not used)
+    // Fallback: Retrieve token from Authorization header
     if (!token && req.headers.authorization) {
       const authHeader = req.headers.authorization;
       if (authHeader.startsWith('Bearer ')) {
@@ -28,17 +34,21 @@ router.get('/', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized: Token not found' });
     }
 
-    // Verify the token
+    // Verify the JWT token
     let user;
     try {
       user = jwt.verify(token, process.env.MILA_SECRET);
-    } catch (jwtError) {
-      console.error('[ERROR] Invalid or expired token:', jwtError.message);
-      return res.status(401).json({ error: 'Invalid or expired token' });
+    } catch (error) {
+      console.error('[ERROR] Invalid or expired token:', error.message);
+      return res.status(401).json({
+        error: error.name === 'TokenExpiredError'
+          ? 'Token expired. Please log in again.'
+          : 'Invalid token. Please log in again.',
+      });
     }
-    console.log('[DEBUG] Token successfully verified:', user);
+    console.log('[DEBUG] Token successfully verified. User:', user);
 
-    // Optional: Validate business_id if provided
+    // Optional: Validate the provided business_id
     const businessId = req.query.business_id;
     if (businessId) {
       console.log('[DEBUG] Validating business ID:', businessId);
@@ -47,7 +57,7 @@ router.get('/', async (req, res) => {
         .from('businesses')
         .select('*')
         .eq('id', businessId)
-        .eq('owner_id', user.fb_id)
+        .eq('owner_id', user.fb_id) // Ensure the user owns the business
         .single();
 
       if (businessError || !businessData) {
@@ -65,7 +75,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Respond with user data if no business ID is provided
+    // Respond with user data only if no business ID is provided
     return res.status(200).json({
       message: 'Session verified successfully',
       user,
