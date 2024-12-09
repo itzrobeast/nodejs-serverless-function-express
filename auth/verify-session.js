@@ -21,7 +21,6 @@ router.get('/', async (req, res) => {
 
     // Extract and verify the JWT
     const token = authHeader.split(' ')[1];
-    console.log('[DEBUG] Raw token:', token);
     let user;
     try {
       user = jwt.verify(token, process.env.MILA_SECRET);
@@ -39,16 +38,17 @@ router.get('/', async (req, res) => {
     }
     console.log('[DEBUG] Provided business ID:', businessId);
 
-    // Fetch the business data from the Supabase database
+    // Fetch the business data and validate ownership
     const { data: businessData, error: businessError } = await supabase
       .from('businesses')
       .select('*')
-      .eq('id', businessId) // Ensure we're querying the "id" field, not "business-id"
+      .eq('id', businessId)
+      .eq('owner_id', user.fb_id)
       .single();
 
     if (businessError || !businessData) {
-      console.error('[ERROR] Business not found:', businessError?.message);
-      return res.status(404).json({ error: 'Business not found' });
+      console.error('[ERROR] Business not found or unauthorized access:', businessError?.message);
+      return res.status(404).json({ error: 'Business not found or unauthorized access' });
     }
     console.log('[DEBUG] Business data retrieved:', businessData);
 
