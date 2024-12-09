@@ -1,6 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import supabase from './supabaseClient.js';
+import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
 
 const router = express.Router();
