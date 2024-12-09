@@ -21,6 +21,7 @@ router.get('/', async (req, res) => {
 
     // Extract and verify the JWT
     const token = authHeader.split(' ')[1];
+    console.log('[DEBUG] Raw token:', token);
     let user;
     try {
       user = jwt.verify(token, process.env.MILA_SECRET);
@@ -42,7 +43,7 @@ router.get('/', async (req, res) => {
     const { data: businessData, error: businessError } = await supabase
       .from('businesses')
       .select('*')
-      .eq('id', businessId)
+      .eq('id', businessId) // Ensure we're querying the "id" field, not "business-id"
       .single();
 
     if (businessError || !businessData) {
