@@ -10,6 +10,7 @@ if (!process.env.MILA_SECRET) {
 }
 
 // POST /auth/login
+// POST /auth/login
 router.post('/', async (req, res) => {
   try {
     const { accessToken } = req.body;
@@ -28,66 +29,71 @@ router.post('/', async (req, res) => {
 
     const fbData = await fbResponse.json();
 
-    console.log('[DEBUG] Facebook Data:', fbData);
-
-    // Find or create user in Supabase
-    const { data: userData, error: userError } = await supabase
+    // Find or create the user in the `users` table
+    let { data: user, error: userError } = await supabase
       .from('users')
-      .upsert(
-        {
-          fb_id: fbData.id, // Facebook ID field in users
+      .select('*')
+      .eq('fb_id', fbData.id)
+      .single();
+
+    if (!user) {
+      // If user doesn't exist, insert a new one
+      const { data: newUser, error: createUserError } = await supabase
+        .from('users')
+        .insert({
+          fb_id: fbData.id,
           name: fbData.name,
           email: fbData.email,
-        },
-        { onConflict: 'fb_id' }
-      )
-      .select('*')
-      .single();
+        })
+        .select('*')
+        .single();
 
-    if (userError) {
-      console.error('[ERROR] Supabase Error:', userError.message);
-      throw new Error('Failed to create or fetch user in Supabase');
+      if (createUserError) {
+        throw new Error('Failed to create user in Supabase');
+      }
+
+      user = newUser;
     }
 
-    // Check if a business exists for this user, or create one
-    const { data: businessData, error: businessError } = await supabase
+    // Check if a business exists for this user's `fb_id`
+    let { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
-      .eq('owner_id', userData.id) // Use user.id as the owner_id
+      .eq('owner_id', fbData.id) // Use `fb_id` for matching
       .single();
 
-    let businessId;
-    if (businessError && businessError.code === 'PGRST116') {
-      // Create a business if none exists
+    if (!business) {
+      // If no business exists, create one
       const { data: newBusiness, error: createBusinessError } = await supabase
         .from('businesses')
-        .insert({ owner_id: userData.id, name: `${fbData.name}'s Business` })
+        .insert({
+          owner_id: fbData.id, // Use `fb_id` here as `owner_id`
+          name: `${fbData.name}'s Business`, // Default business name
+        })
         .select('*')
         .single();
 
       if (createBusinessError) {
         throw new Error('Failed to create business for the user');
       }
-      businessId = newBusiness.id;
-    } else if (businessError) {
-      throw new Error('Failed to fetch business');
-    } else {
-      businessId = businessData.id;
+
+      business = newBusiness;
     }
 
     // Generate a JWT token
     const token = jwt.sign(
-      { id: userData.id, name: userData.name, email: userData.email },
+      { fb_id: user.fb_id, name: user.name, email: user.email },
       process.env.MILA_SECRET,
       { expiresIn: '1h' }
     );
 
-    res.status(200).json({ token, businessId });
+    res.status(200).json({ token, businessId: business.id });
   } catch (err) {
     console.error('[ERROR] Login failed:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // Example of business ID logic
