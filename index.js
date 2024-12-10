@@ -14,6 +14,8 @@ import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './auth/verify-session.js';
 import refreshTokenRouter from './auth/refresh-token.js';
 import loginRouter from './auth/login.js';
+import { getAuthToken } from './utils/authHelpers.js';
+
 
 const app = express();
 
@@ -36,6 +38,19 @@ app.use(
     credentials: true,
   })
 );
+
+// Global middleware to extract auth token
+app.use((req, res, next) => {
+  const token = getAuthToken(req);
+  if (token) {
+    console.log('[DEBUG] Auth Token:', token);
+    req.authToken = token;
+  } else {
+    console.warn('[WARN] No Auth Token Found');
+  }
+  next();
+});
+
 
 // Supabase Validation
 if (!supabase) {
