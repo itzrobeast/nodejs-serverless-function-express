@@ -24,20 +24,32 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cookieParser());
 app.use(express.json());
 app.use(
+  app.use(
   cors({
     origin: (origin, callback) => {
-      const allowedOrigins = ['https://mila-verse.vercel.app', 'https://mila-verse-7ftxkl9b0-bears-projects-464726ee.vercel.app',];
+      const allowedOrigins = [
+        'https://mila-verse.vercel.app',
+        'https://mila-verse-7ftxkl9b0-bears-projects-464726ee.vercel.app',
+      ];
+
+      if (!origin) {
+        // Allow server-to-server or direct requests without origin
+        console.log('[DEBUG] CORS Origin: undefined (server-to-server or direct request)');
+        return callback(null, true);
+      }
+
       console.log(`[DEBUG] CORS Origin: ${origin}`);
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
       } else {
         console.error(`[ERROR] CORS Rejected Origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
+        return callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
   })
 );
+
 
 // Global middleware to extract auth token
 app.use((req, res, next) => {
