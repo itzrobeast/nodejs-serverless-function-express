@@ -31,23 +31,20 @@ app.use(express.json());
         'https://mila-verse-7ftxkl9b0-bears-projects-464726ee.vercel.app',
       ];
 
-      if (!origin) {
-        // Allow server-to-server or direct requests without origin
-        console.log('[DEBUG] CORS Origin: undefined (server-to-server or direct request)');
-        return callback(null, true);
-      }
-
       console.log(`[DEBUG] CORS Origin: ${origin}`);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
+      
+      // Allow requests with no origin (like server-to-server requests or health checks)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
       } else {
         console.error(`[ERROR] CORS Rejected Origin: ${origin}`);
-        return callback(new Error('Not allowed by CORS'));
+        callback(new Error('Not allowed by CORS'));
       }
     },
-    credentials: true,
+    credentials: true, // Allow cookies to be sent
   })
 );
+
 
 
 // Global middleware to extract auth token
