@@ -23,7 +23,6 @@ const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cookieParser());
 app.use(express.json());
-app.use(
   app.use(
   cors({
     origin: (origin, callback) => {
