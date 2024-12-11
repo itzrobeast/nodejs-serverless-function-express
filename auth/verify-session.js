@@ -2,7 +2,6 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import supabase from '../supabaseClient.js';
 import cookieParser from 'cookie-parser';
-import { getAuthToken } from '../utils/authHelpers.js';
 
 const router = express.Router();
 
