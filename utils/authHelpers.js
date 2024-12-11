@@ -1,15 +1,10 @@
-// authHelpers.js
-export const getAuthToken = (req) => {
-  // Retrieve token from cookies
-  let token = req.cookies?.authToken;
-
-  // Fallback: Retrieve token from Authorization header
-  if (!token && req.headers.authorization) {
-    const authHeader = req.headers.authorization;
-    if (authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
+export const getAuthToken = () => {
+  const cookies = document.cookie.split(';');
+  for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'authToken') {
+      return decodeURIComponent(value);
     }
   }
-
-  return token;
+  return null; // Return null if no token found
 };
