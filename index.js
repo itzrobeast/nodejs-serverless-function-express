@@ -14,26 +14,32 @@ import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './auth/verify-session.js';
 import refreshTokenRouter from './auth/refresh-token.js';
 import loginRouter from './auth/login.js';
-import { getAuthToken } from './utils/authHelpers.js';
-
 
 const app = express();
 
 // Middleware
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(
+  helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "https://example.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    } : false,
+  })
+);
 app.use(cookieParser());
 app.use(express.json());
-  app.use(
+
+app.use(
   cors({
     origin: (origin, callback) => {
       const allowedOrigins = [
         'https://mila-verse.vercel.app',
         'https://mila-verse-7ftxkl9b0-bears-projects-464726ee.vercel.app',
       ];
-
-      console.log(`[DEBUG] CORS Origin: ${origin}`);
-      
-      // Allow requests with no origin (like server-to-server requests or health checks)
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -41,37 +47,43 @@ app.use(express.json());
         callback(new Error('Not allowed by CORS'));
       }
     },
-    credentials: true, // Allow cookies to be sent
+    credentials: true,
   })
 );
 
-
-
-// Global middleware to extract auth token
+// Token extraction middleware
 app.use((req, res, next) => {
-  const token = getAuthToken(req);
+  let token = req.cookies?.authToken;
+  if (!token && req.headers.authorization) {
+    const authHeader = req.headers.authorization;
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+  }
+
   if (token) {
-    console.log('[DEBUG] Auth Token:', token);
-    req.authToken = token;
+    console.log('[DEBUG] Token:', token);
+    req.Token = token;
   } else {
-    console.warn('[WARN] No Auth Token Found');
+    console.warn('[WARN] No Token Found');
   }
   next();
 });
 
-
-// Supabase Validation
+// Validate Supabase initialization
 if (!supabase) {
   console.error('[CRITICAL] Supabase client failed to initialize.');
   process.exit(1);
 }
 
-// Debugging Middleware
-app.use((req, res, next) => {
-  console.log(`[DEBUG] Request: ${req.method} ${req.url}`);
-  console.log(`[DEBUG] Headers:`, req.headers);
-  next();
-});
+// Debugging middleware
+if (process.env.NODE_ENV === 'development') {
+  app.use((req, res, next) => {
+    console.log(`[DEBUG] Request: ${req.method} ${req.url}`);
+    console.log(`[DEBUG] Headers:`, req.headers);
+    next();
+  });
+}
 
 // Route Handlers
 const routes = [
@@ -81,8 +93,8 @@ const routes = [
   { path: '/get-business', router: getBusinessRouter },
   { path: '/get-vonage-number', router: getVonageNumberRouter },
   { path: '/retrieve-leads', router: retrieveLeadsRouter },
-  { path: '/auth/verify-session', router: verifySessionRouter },
-  { path: '/auth/refresh-token', router: refreshTokenRouter },
+  { path: '/verify-session', router: verifySessionRouter },
+  { path: '/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
 ];
 
@@ -122,12 +134,15 @@ app.use((err, req, res, next) => {
 });
 
 // Graceful Shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('[INFO] SIGINT signal received: closing server...');
+  // Add async cleanup tasks if needed
   process.exit(0);
 });
-process.on('SIGTERM', () => {
+
+process.on('SIGTERM', async () => {
   console.log('[INFO] SIGTERM signal received: closing server...');
+  // Add async cleanup tasks if needed
   process.exit(0);
 });
 
