@@ -53,6 +53,40 @@ router.post('/', async (req, res) => {
       throw new Error('Error fetching user from Supabase');
     }
 
+    // Find or create business for the user
+    let business;
+    try {
+      const { data: existingBusiness, error: businessError } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('owner_id', fbData.id)
+        .single();
+
+      if (businessError && businessError.code === 'PGRST116') {
+        // If no business exists, create one
+        const { data: newBusiness, error: createBusinessError } = await supabase
+          .from('businesses')
+          .insert({
+            owner_id: fbData.id,
+            name: `${fbData.name}'s Business`,
+          })
+          .select('*')
+          .single();
+
+        if (createBusinessError) {
+          throw new Error('Failed to create business for the user');
+        }
+        business = newBusiness;
+      } else if (businessError) {
+        throw new Error('Error fetching business from Supabase');
+      } else {
+        business = existingBusiness;
+      }
+    } catch (err) {
+      console.error('[ERROR] Business retrieval/creation failed:', err.message);
+      return res.status(500).json({ error: 'Failed to retrieve or create business' });
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { fb_id: user.fb_id, name: user.name, email: user.email },
