@@ -14,7 +14,6 @@
     { "src": "/auth/refresh-token", "dest": "index.js" },
     { "src": "/auth/verify-session", "dest": "index.js" },
     { "src": "/auth/login", "dest": "index.js" },
-    { "src": "/utils/authHelpers", "dest": "index.js" },
     { "src": "/get-vonage-number", "dest": "index.js" },
     { "src": "/retrieve-leads", "dest": "index.js" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
