@@ -90,11 +90,13 @@ router.post('/', async (req, res) => {
 
     // Set the token in a secure cookie
     res.cookie('authToken', token, {
-      httpOnly: true, // Prevents client-side access
-      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-      sameSite: 'Strict', // Restrict cross-site sharing
-      maxAge: 3600000, // 1 hour
-    });
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'Lax', // Use 'Lax' to allow navigation between subdomains if needed
+  maxAge: 3600000, // 1 hour
+  domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined, // Specify domain if needed
+});
+
 
     // Respond with token and business ID
     res.status(200).json({ token, businessId: business.id });
