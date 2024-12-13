@@ -1,5 +1,4 @@
 import express from 'express';
-import jwt from 'jsonwebtoken';
 import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
 
@@ -22,7 +21,7 @@ router.post('/', async (req, res) => {
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
     );
     if (!fbResponse.ok) {
-      throw new Error('Invalid Facebook token');
+      return res.status(401).json({ error: 'Invalid Facebook token' });
     }
 
     const fbData = await fbResponse.json();
@@ -46,11 +45,13 @@ router.post('/', async (req, res) => {
         .single();
 
       if (createUserError) {
-        throw new Error('Failed to create user in Supabase');
+        console.error('[ERROR] Failed to create user:', createUserError.message);
+        return res.status(500).json({ error: 'Failed to create user' });
       }
       user = newUser;
     } else if (userError) {
-      throw new Error('Error fetching user from Supabase');
+      console.error('[ERROR] Error fetching user:', userError.message);
+      return res.status(500).json({ error: 'Error fetching user' });
     }
 
     // Find or create business for the user
@@ -74,11 +75,13 @@ router.post('/', async (req, res) => {
           .single();
 
         if (createBusinessError) {
-          throw new Error('Failed to create business for the user');
+          console.error('[ERROR] Failed to create business:', createBusinessError.message);
+          return res.status(500).json({ error: 'Failed to create business' });
         }
         business = newBusiness;
       } else if (businessError) {
-        throw new Error('Error fetching business from Supabase');
+        console.error('[ERROR] Error fetching business:', businessError.message);
+        return res.status(500).json({ error: 'Error fetching business' });
       } else {
         business = existingBusiness;
       }
@@ -87,15 +90,8 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Failed to retrieve or create business' });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { fb_id: user.fb_id, name: user.name, email: user.email },
-      process.env.MILA_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    // Set the token in a secure cookie
-    res.cookie('authToken', token, {
+    // Set Facebook token in a secure HTTP-only cookie
+    res.cookie('authToken', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'None', // Required for cross-origin requests
@@ -103,8 +99,19 @@ router.post('/', async (req, res) => {
       domain: process.env.NODE_ENV === 'production' ? '.mila-verse.vercel.app' : undefined,
     });
 
-    // Respond with token and business ID
-    res.status(200).json({ token, businessId: business.id });
+    // Respond with user and business details
+    res.status(200).json({
+      message: 'Login successful',
+      user: {
+        fb_id: user.fb_id,
+        name: user.name,
+        email: user.email,
+      },
+      business: {
+        id: business.id,
+        name: business.name,
+      },
+    });
   } catch (err) {
     console.error('[ERROR] Login failed:', err.message);
     res.status(500).json({ error: err.message });
