@@ -26,7 +26,7 @@ const validateFacebookToken = async (token) => {
 
     const { data } = response;
     if (!data || !data.data || !data.data.is_valid) {
-      const errorMessage = data.data.error ? data.data.error.message : 'Invalid token';
+      const errorMessage = data?.data?.error?.message || 'Invalid token';
       throw new Error(errorMessage);
     }
 
@@ -55,7 +55,10 @@ export default async function handler(req, res) {
       const authHeader = req.headers.authorization;
       if (authHeader.startsWith('Bearer ')) {
         token = authHeader.split(' ')[1];
+        console.log('[DEBUG] Token retrieved from Authorization header.');
       }
+    } else if (token) {
+      console.log('[DEBUG] Token retrieved from cookies.');
     }
 
     if (!token) {
