@@ -2,10 +2,41 @@ import axios from 'axios';
 import supabase from '../supabaseClient.js';
 import cookie from 'cookie';
 
-// Ensure FACEBOOK_APP_ID and FACEBOOK_APP_SECRET are defined
+// Ensure critical environment variables are set
 if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
   throw new Error('[CRITICAL] FACEBOOK_APP_ID or FACEBOOK_APP_SECRET is not defined in environment variables');
 }
+
+/**
+ * Validates the Facebook token using the Graph API.
+ * @param {string} token - The user's Facebook access token.
+ * @returns {Object} - The validated token details, including user_id and scopes.
+ * @throws {Error} - If token validation fails.
+ */
+const validateFacebookToken = async (token) => {
+  try {
+    console.log(`[DEBUG] Validating Facebook token: ${token}`);
+    const appAccessToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
+    const response = await axios.get('https://graph.facebook.com/debug_token', {
+      params: {
+        input_token: token,
+        access_token: appAccessToken,
+      },
+    });
+
+    const { data } = response;
+    if (!data || !data.data || !data.data.is_valid) {
+      const errorMessage = data.data.error ? data.data.error.message : 'Invalid token';
+      throw new Error(errorMessage);
+    }
+
+    console.log('[DEBUG] Facebook Token Validated:', data.data);
+    return data.data;
+  } catch (error) {
+    console.error('[ERROR] Facebook token validation failed:', error.message);
+    throw new Error('Your session has expired. Please log in again.');
+  }
+};
 
 export default async function handler(req, res) {
   try {
@@ -33,29 +64,12 @@ export default async function handler(req, res) {
     }
 
     // Validate the Facebook token
-    console.log(`[DEBUG] Validating Facebook token for input token: ${token}`);
-    const appAccessToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
-    const url = `https://graph.facebook.com/debug_token`;
-    const response = await axios.get(url, {
-      params: {
-        input_token: token,
-        access_token: appAccessToken,
-      },
-    });
-
-    const { data } = response;
-    if (!data || !data.data || !data.data.is_valid) {
-      const errorMessage = data.data.error ? data.data.error.message : 'Invalid token';
-      console.error(`[ERROR] Facebook token validation failed: ${errorMessage}`);
-      return res.status(401).json({ error: 'Your session has expired. Please log in again.' });
-    }
-
-    console.log('[DEBUG] Facebook Token Validated:', data.data);
+    const tokenDetails = await validateFacebookToken(token);
 
     // Extract user details
     const user = {
-      fb_id: data.data.user_id,
-      scopes: data.data.scopes,
+      fb_id: tokenDetails.user_id,
+      scopes: tokenDetails.scopes,
     };
 
     // Check if `business_id` is provided in query params
