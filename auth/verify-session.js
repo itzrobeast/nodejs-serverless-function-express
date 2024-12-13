@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // Parse cookies
+    // Parse cookies to get the token
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
     let token = cookies.authToken;
 
@@ -32,9 +32,10 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized: Token not found' });
     }
 
-    // Validate the token with Facebook's Graph API
-    const url = `https://graph.facebook.com/debug_token`;
+    // Validate the Facebook token
+    console.log('[DEBUG] Validating Facebook token...');
     const appAccessToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
+    const url = `https://graph.facebook.com/debug_token`;
     const response = await axios.get(url, {
       params: {
         input_token: token,
@@ -50,13 +51,13 @@ export default async function handler(req, res) {
 
     console.log('[DEBUG] Facebook Token Validated:', data.data);
 
-    // Extract user information
+    // Extract user details
     const user = {
       fb_id: data.data.user_id,
       scopes: data.data.scopes,
     };
 
-    // Validate business_id if provided
+    // Check if `business_id` is provided in query params
     const businessId = req.query.business_id;
     if (businessId) {
       console.log('[DEBUG] Validating business ID:', businessId);
@@ -81,7 +82,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Respond with user data if no business ID is provided
+    // Respond with user data if no `business_id` is provided
     return res.status(200).json({
       message: 'Session verified successfully',
       user,
