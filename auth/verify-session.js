@@ -17,7 +17,7 @@ router.use(cookieParser());
  * GET /auth/verify-session
  * Verifies user session and optionally fetches business data.
  */
-router.get('/', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     console.log('[DEBUG] Incoming request to /auth/verify-session:', req.url);
     console.log(`[DEBUG] Request Origin: ${req.headers.origin}`);
