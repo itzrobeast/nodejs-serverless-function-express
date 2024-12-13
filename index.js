@@ -96,8 +96,8 @@ const routes = [
   { path: '/get-business', router: getBusinessRouter },
   { path: '/get-vonage-number', router: getVonageNumberRouter },
   { path: '/retrieve-leads', router: retrieveLeadsRouter },
-  { path: '/auth/verify-session.js', router: verifySessionRouter },
-  { path: '/auth/refresh-token.js', router: refreshTokenRouter },
+  { path: '/auth/verify-session', router: verifySessionRouter },
+  { path: '/auth/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
 ];
 
