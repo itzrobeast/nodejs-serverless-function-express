@@ -1,29 +1,23 @@
-import express from 'express';
 import jwt from 'jsonwebtoken';
 import supabase from '../supabaseClient.js';
-import cookieParser from 'cookie-parser';
-
-const router = express.Router();
+import cookie from 'cookie';
 
 // Ensure MILA_SECRET is defined
 if (!process.env.MILA_SECRET) {
   throw new Error('[CRITICAL] MILA_SECRET is not defined in environment variables');
 }
 
-// Middleware to parse cookies
-router.use(cookieParser());
-
-/**
- * GET /auth/verify-session
- * Verifies user session and optionally fetches business data.
- */
-router.post('/', async (req, res) => {
+export default async function handler(req, res) {
   try {
-    console.log('[DEBUG] Incoming request to /auth/verify-session:', req.url);
-    console.log(`[DEBUG] Request Origin: ${req.headers.origin}`);
+    console.log('[DEBUG] Incoming request to /auth/verify-session');
 
-    // Retrieve token from cookies
-    let token = req.cookies?.authToken;
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    // Parse cookies
+    const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
+    let token = cookies.authToken;
 
     // Fallback: Retrieve token from Authorization header
     if (!token && req.headers.authorization) {
@@ -34,7 +28,7 @@ router.post('/', async (req, res) => {
     }
 
     if (!token) {
-      console.error('[ERROR] Missing token in cookies or Authorization header');
+      console.error('[ERROR] Missing token');
       return res.status(401).json({ error: 'Unauthorized: Token not found' });
     }
 
@@ -51,13 +45,11 @@ router.post('/', async (req, res) => {
       });
     }
 
-    console.log('[DEBUG] Token successfully verified. User:', user);
+    console.log('[DEBUG] Token verified. User:', user);
 
-    // Optional: Validate business_id query parameter
+    // Validate business_id if provided
     const businessId = req.query.business_id;
     if (businessId) {
-      console.log('[DEBUG] Validating business ID:', businessId);
-
       const { data: businessData, error: businessError } = await supabase
         .from('businesses')
         .select('*')
@@ -66,13 +58,11 @@ router.post('/', async (req, res) => {
         .single();
 
       if (businessError || !businessData) {
-        console.error('[ERROR] Business not found or unauthorized access:', businessError?.message);
+        console.error('[ERROR] Business not found or unauthorized:', businessError?.message);
         return res.status(404).json({ error: 'Business not found or unauthorized access' });
       }
 
       console.log('[DEBUG] Business data retrieved:', businessData);
-
-      // Respond with user and business data
       return res.status(200).json({
         message: 'Session verified successfully',
         user,
@@ -86,9 +76,7 @@ router.post('/', async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error('[ERROR] Unexpected error in /auth/verify-session:', error.message);
+    console.error('[ERROR] Unexpected error:', error.message);
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
-});
-
-export default router;
+}
