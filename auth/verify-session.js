@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     }
 
     // Validate the Facebook token
-    console.log('[DEBUG] Validating Facebook token...');
+    console.log(`[DEBUG] Validating Facebook token for input token: ${token}`);
     const appAccessToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
     const url = `https://graph.facebook.com/debug_token`;
     const response = await axios.get(url, {
@@ -45,8 +45,9 @@ export default async function handler(req, res) {
 
     const { data } = response;
     if (!data || !data.data || !data.data.is_valid) {
-      console.error('[ERROR] Facebook token is invalid or expired');
-      return res.status(401).json({ error: 'Invalid or expired token' });
+      const errorMessage = data.data.error ? data.data.error.message : 'Invalid token';
+      console.error(`[ERROR] Facebook token validation failed: ${errorMessage}`);
+      return res.status(401).json({ error: 'Your session has expired. Please log in again.' });
     }
 
     console.log('[DEBUG] Facebook Token Validated:', data.data);
@@ -60,7 +61,7 @@ export default async function handler(req, res) {
     // Check if `business_id` is provided in query params
     const businessId = req.query.business_id;
     if (businessId) {
-      console.log('[DEBUG] Validating business ID:', businessId);
+      console.log(`[DEBUG] Validating business ID: ${businessId}`);
 
       const { data: businessData, error: businessError } = await supabase
         .from('businesses')
@@ -69,8 +70,13 @@ export default async function handler(req, res) {
         .eq('owner_id', user.fb_id) // Ensure the user owns the business
         .single();
 
-      if (businessError || !businessData) {
-        console.error('[ERROR] Business not found or unauthorized access:', businessError?.message);
+      if (businessError) {
+        console.error('[ERROR] Supabase Error:', businessError.message);
+        return res.status(500).json({ error: 'Database error while validating business' });
+      }
+
+      if (!businessData) {
+        console.error('[ERROR] Business not found or unauthorized access');
         return res.status(404).json({ error: 'Business not found or unauthorized access' });
       }
 
@@ -82,7 +88,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Respond with user data if no `business_id` is provided
+    console.log('[DEBUG] No business ID provided, returning user data only.');
     return res.status(200).json({
       message: 'Session verified successfully',
       user,
