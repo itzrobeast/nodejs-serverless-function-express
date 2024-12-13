@@ -1,9 +1,9 @@
 import express from 'express';
-import supabase from './supabaseClient.js'; // Ensure the path is correct
+import supabase from './supabaseClient.js';
 
 const router = express.Router();
 
-// GET /get-business - Retrieve the business associated with the logged-in user
+// GET /get-business
 router.get('/', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -12,6 +12,8 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing userId in query parameters' });
     }
 
+    console.log(`[DEBUG] Fetching business data for userId: ${userId}`);
+
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
@@ -19,6 +21,9 @@ router.get('/', async (req, res) => {
       .single();
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Business not found' });
+      }
       console.error('[ERROR] Failed to fetch business data:', error.message);
       return res.status(500).json({ error: 'Failed to fetch business data', details: error.message });
     }
@@ -30,9 +35,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /update-business - Update business information
+// PUT /update-business
 router.put('/', async (req, res) => {
- console.log("Request body received:", req.body);
+  console.log('[DEBUG] Incoming request to update business:', req.body);
   try {
     const {
       owner_id,
@@ -49,8 +54,6 @@ router.put('/', async (req, res) => {
     if (!owner_id || !name || !contact_email) {
       return res.status(400).json({ error: 'Missing required fields: id, name, or contact_email' });
     }
-    
-console.log("AI Knowledge:", ai_knowledge_base); // Log the field before updating the database
 
     const updateFields = {
       name,
@@ -63,6 +66,7 @@ console.log("AI Knowledge:", ai_knowledge_base); // Log the field before updatin
       access_token: access_token || null,
     };
 
+    console.log(`[DEBUG] Updating business for owner_id: ${owner_id}`, updateFields);
 
     const { data, error } = await supabase
       .from('businesses')
@@ -74,8 +78,6 @@ console.log("AI Knowledge:", ai_knowledge_base); // Log the field before updatin
       return res.status(500).json({ error: 'Failed to update business data', details: error.message });
     }
 
-    console.log("Updated business data:", data); // Log the updated data
-
     res.status(200).json({ message: 'Business information updated successfully', data });
   } catch (err) {
     console.error('[ERROR] Unexpected error:', err.message);
@@ -83,8 +85,9 @@ console.log("AI Knowledge:", ai_knowledge_base); // Log the field before updatin
   }
 });
 
-// POST /add-or-update-business - Add a new business or update existing business
+// POST /add-or-update-business
 router.post('/', async (req, res) => {
+  console.log('[DEBUG] Incoming request to add or update business:', req.body);
   try {
     const {
       owner_id,
@@ -104,7 +107,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Check if business already exists
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
       .select('*')
@@ -113,11 +115,11 @@ router.post('/', async (req, res) => {
 
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('[ERROR] Failed to fetch existing business data:', fetchError.message);
-      throw new Error('Failed to fetch existing business data');
+      return res.status(500).json({ error: 'Failed to fetch existing business data', details: fetchError.message });
     }
 
     if (existingBusiness) {
-      // Update the existing business
+      console.log(`[DEBUG] Business exists for owner_id: ${owner_id}. Updating data.`);
       const updateFields = {
         name,
         contact_email,
@@ -136,18 +138,12 @@ router.post('/', async (req, res) => {
 
       if (error) {
         console.error('[ERROR] Failed to update business data:', error.message);
-        return res.status(500).json({
-          error: 'Failed to update business data',
-          details: error.message,
-        });
+        return res.status(500).json({ error: 'Failed to update business data', details: error.message });
       }
 
-      return res.status(200).json({
-        message: 'Business information updated successfully',
-        data,
-      });
+      return res.status(200).json({ message: 'Business information updated successfully', data });
     } else {
-      // Insert a new business
+      console.log(`[DEBUG] No business found for owner_id: ${owner_id}. Adding new business.`);
       const { data, error: insertError } = await supabase.from('businesses').insert([
         {
           owner_id,
@@ -164,16 +160,10 @@ router.post('/', async (req, res) => {
 
       if (insertError) {
         console.error('[ERROR] Failed to insert business data:', insertError.message);
-        return res.status(500).json({
-          error: 'Failed to insert business data',
-          details: insertError.message,
-        });
+        return res.status(500).json({ error: 'Failed to insert business data', details: insertError.message });
       }
 
-      return res.status(201).json({
-        message: 'Business information added successfully',
-        data,
-      });
+      return res.status(201).json({ message: 'Business information added successfully', data });
     }
   } catch (err) {
     console.error('[ERROR] Unexpected error:', err.message);
