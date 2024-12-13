@@ -33,9 +33,12 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 
+
+
 app.use(
   cors({
     origin: (origin, callback) => {
+      console.log(`[DEBUG] CORS Origin Header: ${origin}`);
       const allowedOrigins = [
         'https://mila-verse.vercel.app',
         'https://mila-verse-7ftxkl9b0-bears-projects-464726ee.vercel.app',
@@ -93,8 +96,8 @@ const routes = [
   { path: '/get-business', router: getBusinessRouter },
   { path: '/get-vonage-number', router: getVonageNumberRouter },
   { path: '/retrieve-leads', router: retrieveLeadsRouter },
-  { path: '/verify-session', router: verifySessionRouter },
-  { path: '/refresh-token', router: refreshTokenRouter },
+  { path: '/auth/verify-session.js', router: verifySessionRouter },
+  { path: '/auth/refresh-token.js', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
 ];
 
