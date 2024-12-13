@@ -1,10 +1,10 @@
-import jwt from 'jsonwebtoken';
+import axios from 'axios';
 import supabase from '../supabaseClient.js';
 import cookie from 'cookie';
 
-// Ensure MILA_SECRET is defined
-if (!process.env.MILA_SECRET) {
-  throw new Error('[CRITICAL] MILA_SECRET is not defined in environment variables');
+// Ensure FACEBOOK_APP_ID and FACEBOOK_APP_SECRET are defined
+if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
+  throw new Error('[CRITICAL] FACEBOOK_APP_ID or FACEBOOK_APP_SECRET is not defined in environment variables');
 }
 
 export default async function handler(req, res) {
@@ -32,24 +32,35 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized: Token not found' });
     }
 
-    // Verify the JWT token
-    let user;
-    try {
-      user = jwt.verify(token, process.env.MILA_SECRET);
-    } catch (error) {
-      console.error('[ERROR] Invalid or expired token:', error.message);
-      return res.status(401).json({
-        error: error.name === 'TokenExpiredError'
-          ? 'Token expired. Please log in again.'
-          : 'Invalid token. Please log in again.',
-      });
+    // Validate the token with Facebook's Graph API
+    const url = `https://graph.facebook.com/debug_token`;
+    const appAccessToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
+    const response = await axios.get(url, {
+      params: {
+        input_token: token,
+        access_token: appAccessToken,
+      },
+    });
+
+    const { data } = response;
+    if (!data || !data.data || !data.data.is_valid) {
+      console.error('[ERROR] Facebook token is invalid or expired');
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    console.log('[DEBUG] Token verified. User:', user);
+    console.log('[DEBUG] Facebook Token Validated:', data.data);
+
+    // Extract user information
+    const user = {
+      fb_id: data.data.user_id,
+      scopes: data.data.scopes,
+    };
 
     // Validate business_id if provided
     const businessId = req.query.business_id;
     if (businessId) {
+      console.log('[DEBUG] Validating business ID:', businessId);
+
       const { data: businessData, error: businessError } = await supabase
         .from('businesses')
         .select('*')
@@ -58,7 +69,7 @@ export default async function handler(req, res) {
         .single();
 
       if (businessError || !businessData) {
-        console.error('[ERROR] Business not found or unauthorized:', businessError?.message);
+        console.error('[ERROR] Business not found or unauthorized access:', businessError?.message);
         return res.status(404).json({ error: 'Business not found or unauthorized access' });
       }
 
