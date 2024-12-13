@@ -9,7 +9,7 @@ if (
   !process.env.FACEBOOK_APP_ID || 
   !process.env.FACEBOOK_APP_SECRET || 
   !process.env.SUPABASE_URL || 
-  !process.env.SUPABASE_KEY
+  !process.env.SUPABASE_SERVICE_ROLE_KEY
 ) {
   console.error('[CRITICAL] Missing environment variables. Ensure FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, SUPABASE_URL, and SUPABASE_SERVICE_ROLE_KEY are set.');
   process.exit(1); // Exit the process if variables are missing
