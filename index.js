@@ -54,24 +54,7 @@ app.use(
   })
 );
 
-// Token extraction middleware
-app.use((req, res, next) => {
-  let token = req.cookies?.authToken;
-  if (!token && req.headers.authorization) {
-    const authHeader = req.headers.authorization;
-    if (authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-    }
-  }
 
-  if (token) {
-    console.log('[DEBUG] Token:', token);
-    req.Token = token;
-  } else {
-    console.warn('[WARN] No Token Found');
-  }
-  next();
-});
 
 // Validate Supabase initialization
 if (!supabase) {
