@@ -48,7 +48,13 @@ export default async function handler(req, res) {
 
     // Parse cookies to get the token
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
-    let token = cookies.authToken;
+const token = cookies.authToken;
+
+if (!token) {
+  console.error('[ERROR] Missing authToken in cookies');
+  return res.status(401).json({ error: 'Unauthorized: Token not found' });
+}
+
 
     // Fallback: Retrieve token from Authorization header
     if (!token && req.headers.authorization) {
