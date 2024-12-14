@@ -74,6 +74,15 @@ router.post('/', async (req, res) => {
 
     const ownerId = user?.id || fbId;
 
+    // Set the request.user_id in Supabase for RLS policies
+try {
+  await supabase.rpc('set_user_id', { user_id: ownerId });
+  console.log('[DEBUG] set_user_id RPC executed successfully with:', ownerId);
+} catch (rpcError) {
+  console.error('[ERROR] Failed to set request.user_id:', rpcError.message);
+  return res.status(500).json({ error: 'Failed to set user context for RLS.' });
+}
+
     // Find or create business for the user
     const { data: business, error: businessError } = await supabase
       .from('businesses')
