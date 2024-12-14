@@ -28,23 +28,26 @@ router.post('/', async (req, res) => {
     const fbData = await fbResponse.json();
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
     const userIdFromFrontend = cookies.userId || req.body.userId;
-    
-    if (!userIdFromFrontend && !fbData.id) {
-      return res.status(400).json({ error: 'Missing user identifiers (userId or fb_id)' });
-}
+
+    const fbId = parseInt(fbData.id, 10);
+    const userId = userIdFromFrontend ? parseInt(userIdFromFrontend, 10) : null;
+
+    if (!fbId && !userId) {
+      throw new Error('User identifiers (userId or fb_id) are missing.');
+    }
 
     // Find or create user in Supabase
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
-      .or(`fb_id.eq.${fbData.id},id.eq.${userIdFromFrontend}`)
+      .or(`fb_id.eq.${fbId},id.eq.${userId}`)
       .single();
 
     if (userError && userError.code === 'PGRST116') {
       const { data: newUser, error: createUserError } = await supabase
         .from('users')
         .insert({
-          fb_id: fbData.id,
+          fb_id: fbId,
           name: fbData.name,
           email: fbData.email,
         })
@@ -62,60 +65,51 @@ router.post('/', async (req, res) => {
     }
 
     // Find or create business for the user
+    const ownerId = user?.id || fbId;
+
+    const { data: existingBusiness, error: businessError } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .single();
+
     let business;
-    try {
-      const { data: existingBusiness, error: businessError } = await supabase
+    if (businessError && businessError.code === 'PGRST116') {
+      const { data: newBusiness, error: createBusinessError } = await supabase
         .from('businesses')
+        .insert({
+          owner_id: ownerId,
+          name: `${fbData.name}'s Business`,
+        })
         .select('*')
-        .or(`owner_id.eq.${user.id},owner_id.eq.${fbData.id}`)
         .single();
 
-      if (businessError && businessError.code === 'PGRST116') {
-        // If no business exists, create one
-        const { data: newBusiness, error: createBusinessError } = await supabase
-          .from('businesses')
-          .insert({
-            owner_id: fbData.id,
-            name: `${fbData.name}'s Business`,
-          })
-          .select('*')
-          .single();
-
-        if (createBusinessError) {
-          console.error('[ERROR] Failed to create business:', createBusinessError.message);
-          return res.status(500).json({ error: 'Failed to create business' });
-        }
-        business = newBusiness;
-      } else if (businessError) {
-        console.error('[ERROR] Error fetching business:', businessError.message);
-        return res.status(500).json({ error: 'Error fetching business' });
-      } else {
-        business = existingBusiness;
+      if (createBusinessError) {
+        console.error('[ERROR] Failed to create business:', createBusinessError.message);
+        return res.status(500).json({ error: 'Failed to create business' });
       }
-    } catch (err) {
-      console.error('[ERROR] Business retrieval/creation failed:', err.message);
-      return res.status(500).json({ error: 'Failed to retrieve or create business' });
+      business = newBusiness;
+    } else if (businessError) {
+      console.error('[ERROR] Error fetching business:', businessError.message);
+      return res.status(500).json({ error: 'Error fetching business' });
+    } else {
+      business = existingBusiness;
     }
 
-    // Set Facebook token in a secure HTTP-only cookie
-   res.cookie('authToken', accessToken, 'userId', fbData.id, {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-  sameSite: 'None', // Ensure cross-site cookies work
-  maxAge: 3600000, // 1 hour
-  
-});
+    // Set cookies
+    res.cookie('authToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'None',
+      maxAge: 3600000,
+    });
+    res.cookie('userId', fbId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'None',
+      maxAge: 3600000,
+    });
 
-    // Set userId in a secure HTTP-only cookie
-res.cookie('userId', fbData.id, {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-  sameSite: 'None', // Ensure cross-site cookies work
-  maxAge: 3600000, // 1 hour
-  
-});
-
-    
     // Respond with user and business details
     res.status(200).json({
       message: 'Login successful',
