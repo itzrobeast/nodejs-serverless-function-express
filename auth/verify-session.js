@@ -43,37 +43,23 @@ export default async function handler(req, res) {
     console.log('[DEBUG] Incoming request to /auth/verify-session');
 
     if (req.method !== 'POST') {
+      console.error('[ERROR] Invalid HTTP method used');
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // Parse cookies to get the token
+    // Parse cookies to retrieve the auth token
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
-const token = cookies.authToken;
+    const authToken = cookies.authToken;
 
-if (!token) {
-  console.error('[ERROR] Missing authToken in cookies');
-  return res.status(401).json({ error: 'Unauthorized: Token not found' });
-}
-
-
-    // Fallback: Retrieve token from Authorization header
-    if (!token && req.headers.authorization) {
-      const authHeader = req.headers.authorization;
-      if (authHeader.startsWith('Bearer ')) {
-        token = authHeader.split(' ')[1];
-        console.log('[DEBUG] Token retrieved from Authorization header.');
-      }
-    } else if (token) {
-      console.log('[DEBUG] Token retrieved from cookies.');
-    }
-
-    if (!token) {
-      console.error('[ERROR] Missing token');
+    if (!authToken) {
+      console.error('[ERROR] Missing authToken in cookies');
       return res.status(401).json({ error: 'Unauthorized: Token not found' });
     }
 
+    console.log('[DEBUG] Validating authToken from cookies...');
+
     // Validate the Facebook token
-    const tokenDetails = await validateFacebookToken(token);
+    const tokenDetails = await validateFacebookToken(authToken);
 
     // Extract user details
     const user = {
@@ -81,11 +67,10 @@ if (!token) {
       scopes: tokenDetails.scopes,
     };
 
-    // Check if `business_id` is provided in query params
+    // Check for `business_id` if provided
     const businessId = req.query.business_id;
     if (businessId) {
       console.log(`[DEBUG] Validating business ID: ${businessId}`);
-
       const { data: businessData, error: businessError } = await supabase
         .from('businesses')
         .select('*')
@@ -94,16 +79,16 @@ if (!token) {
         .single();
 
       if (businessError) {
-        console.error('[ERROR] Supabase Error:', businessError.message);
+        console.error('[ERROR] Supabase Error while fetching business:', businessError.message);
         return res.status(500).json({ error: 'Database error while validating business' });
       }
 
       if (!businessData) {
-        console.error('[ERROR] Business not found or unauthorized access');
+        console.warn('[WARN] Business not found or unauthorized access');
         return res.status(404).json({ error: 'Business not found or unauthorized access' });
       }
 
-      console.log('[DEBUG] Business data retrieved:', businessData);
+      console.log('[DEBUG] Business data retrieved successfully:', businessData);
       return res.status(200).json({
         message: 'Session verified successfully',
         user,
@@ -111,7 +96,7 @@ if (!token) {
       });
     }
 
-    console.log('[DEBUG] No business ID provided, returning user data only.');
+    console.log('[DEBUG] No business ID provided. Returning user data only.');
     return res.status(200).json({
       message: 'Session verified successfully',
       user,
