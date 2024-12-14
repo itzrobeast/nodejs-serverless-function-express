@@ -7,12 +7,11 @@ const router = express.Router();
  * Fetches business data for a specific user.
  * GET /get-business
  */
-router.get('/', async (req, res) => {
+router.get('/get-business', async (req, res) => {
   try {
     const { userId } = req.query;
 
     if (!userId) {
-      console.error('[ERROR] Missing userId in query parameters');
       return res.status(400).json({ error: 'Missing userId in query parameters' });
     }
 
@@ -21,25 +20,23 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
-      .eq('owner_id', userId)
+      .eq('user_id', userId)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        console.warn(`[WARN] No business found for userId: ${userId}`);
         return res.status(404).json({ error: 'Business not found' });
       }
-      console.error('[ERROR] Failed to fetch business data:', error.message);
       return res.status(500).json({ error: 'Failed to fetch business data', details: error.message });
     }
 
-    console.log('[DEBUG] Business data retrieved successfully:', data);
     res.status(200).json(data);
   } catch (err) {
     console.error('[ERROR] Unexpected error in GET /get-business:', err.message);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
+
 
 /**
  * Updates business data for a specific owner.
