@@ -91,7 +91,7 @@ router.post('/', async (req, res) => {
     }
 
     // Set Facebook token in a secure HTTP-only cookie
-   res.cookie('authToken', accessToken, {
+   res.cookie('authToken', accessToken, 'userId', fbData.id, {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
   sameSite: 'None', // Ensure cross-site cookies work
@@ -99,7 +99,16 @@ router.post('/', async (req, res) => {
   
 });
 
+    // Set userId in a secure HTTP-only cookie
+res.cookie('userId', fbData.id, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+  sameSite: 'None', // Ensure cross-site cookies work
+  maxAge: 3600000, // 1 hour
+  
+});
 
+    
     // Respond with user and business details
     res.status(200).json({
       message: 'Login successful',
