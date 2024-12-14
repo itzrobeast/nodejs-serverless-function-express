@@ -1,6 +1,7 @@
 import express from 'express';
 import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
+import Cookies from 'js-cookie';
 
 const router = express.Router();
 
