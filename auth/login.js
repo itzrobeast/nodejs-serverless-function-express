@@ -89,15 +89,17 @@ if (businessError && businessError.code === 'PGRST116') {
     // Set cookies
     res.cookie('authToken', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
+      domain: '.mila-verse.vercel.app', // Set for frontend domain
     });
     res.cookie('userId', user.id, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
+      domain: '.mila-verse.vercel.app', // Set for frontend domain
     });
 
     console.log('[DEBUG] Cookies Set: authToken, userId:', {
