@@ -25,6 +25,12 @@ router.post('/', async (req, res) => {
     }
 
     const fbData = await fbResponse.json();
+    const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
+    const userIdFromFrontend = cookies.userId || req.body.userId;
+    
+    if (!userIdFromFrontend && !fbData.id) {
+      return res.status(400).json({ error: 'Missing user identifiers (userId or fb_id)' });
+}
 
     // Find or create user in Supabase
     let { data: user, error: userError } = await supabase
