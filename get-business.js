@@ -3,12 +3,16 @@ import supabase from './supabaseClient.js';
 
 const router = express.Router();
 
-// GET /get-business
+/**
+ * Fetches business data for a specific user.
+ * GET /get-business
+ */
 router.get('/', async (req, res) => {
   try {
     const { userId } = req.query;
 
     if (!userId) {
+      console.error('[ERROR] Missing userId in query parameters');
       return res.status(400).json({ error: 'Missing userId in query parameters' });
     }
 
@@ -22,22 +26,26 @@ router.get('/', async (req, res) => {
 
     if (error) {
       if (error.code === 'PGRST116') {
+        console.warn(`[WARN] No business found for userId: ${userId}`);
         return res.status(404).json({ error: 'Business not found' });
       }
       console.error('[ERROR] Failed to fetch business data:', error.message);
       return res.status(500).json({ error: 'Failed to fetch business data', details: error.message });
     }
 
+    console.log('[DEBUG] Business data retrieved successfully:', data);
     res.status(200).json(data);
   } catch (err) {
-    console.error('[ERROR] Unexpected error:', err.message);
+    console.error('[ERROR] Unexpected error in GET /get-business:', err.message);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
-// PUT /update-business
+/**
+ * Updates business data for a specific owner.
+ * PUT /update-business
+ */
 router.put('/', async (req, res) => {
-  console.log('[DEBUG] Incoming request to update business:', req.body);
   try {
     const {
       owner_id,
@@ -52,7 +60,8 @@ router.put('/', async (req, res) => {
     } = req.body;
 
     if (!owner_id || !name || !contact_email) {
-      return res.status(400).json({ error: 'Missing required fields: id, name, or contact_email' });
+      console.error('[ERROR] Missing required fields: owner_id, name, or contact_email');
+      return res.status(400).json({ error: 'Missing required fields: owner_id, name, or contact_email' });
     }
 
     const updateFields = {
@@ -71,23 +80,27 @@ router.put('/', async (req, res) => {
     const { data, error } = await supabase
       .from('businesses')
       .update(updateFields)
-      .eq('owner_id', owner_id);
+      .eq('owner_id', owner_id)
+      .select('*'); // Return the updated record
 
     if (error) {
       console.error('[ERROR] Failed to update business data:', error.message);
       return res.status(500).json({ error: 'Failed to update business data', details: error.message });
     }
 
+    console.log('[DEBUG] Business data updated successfully:', data);
     res.status(200).json({ message: 'Business information updated successfully', data });
   } catch (err) {
-    console.error('[ERROR] Unexpected error:', err.message);
+    console.error('[ERROR] Unexpected error in PUT /update-business:', err.message);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
-// POST /add-or-update-business
+/**
+ * Adds a new business or updates an existing one.
+ * POST /add-or-update-business
+ */
 router.post('/', async (req, res) => {
-  console.log('[DEBUG] Incoming request to add or update business:', req.body);
   try {
     const {
       owner_id,
@@ -102,10 +115,13 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     if (!owner_id || !name || !contact_email) {
+      console.error('[ERROR] Missing required fields: owner_id, name, or contact_email');
       return res.status(400).json({
         error: 'Missing required fields: owner_id, name, or contact_email',
       });
     }
+
+    console.log(`[DEBUG] Processing business data for owner_id: ${owner_id}`);
 
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
@@ -134,39 +150,45 @@ router.post('/', async (req, res) => {
       const { data, error } = await supabase
         .from('businesses')
         .update(updateFields)
-        .eq('id', existingBusiness.id);
+        .eq('id', existingBusiness.id)
+        .select('*'); // Return the updated record
 
       if (error) {
         console.error('[ERROR] Failed to update business data:', error.message);
         return res.status(500).json({ error: 'Failed to update business data', details: error.message });
       }
 
+      console.log('[DEBUG] Business updated successfully:', data);
       return res.status(200).json({ message: 'Business information updated successfully', data });
     } else {
       console.log(`[DEBUG] No business found for owner_id: ${owner_id}. Adding new business.`);
-      const { data, error: insertError } = await supabase.from('businesses').insert([
-        {
-          owner_id,
-          name,
-          contact_email,
-          locations: locations || [],
-          insurance_policies: insurance_policies || {},
-          objections: objections || {},
-          ai_knowledge_base: ai_knowledge_base || '',
-          page_id: page_id || null,
-          access_token: access_token || null,
-        },
-      ]);
+      const { data, error: insertError } = await supabase
+        .from('businesses')
+        .insert([
+          {
+            owner_id,
+            name,
+            contact_email,
+            locations: locations || [],
+            insurance_policies: insurance_policies || {},
+            objections: objections || {},
+            ai_knowledge_base: ai_knowledge_base || '',
+            page_id: page_id || null,
+            access_token: access_token || null,
+          },
+        ])
+        .select('*'); // Return the newly inserted record
 
       if (insertError) {
         console.error('[ERROR] Failed to insert business data:', insertError.message);
         return res.status(500).json({ error: 'Failed to insert business data', details: insertError.message });
       }
 
+      console.log('[DEBUG] Business added successfully:', data);
       return res.status(201).json({ message: 'Business information added successfully', data });
     }
   } catch (err) {
-    console.error('[ERROR] Unexpected error:', err.message);
+    console.error('[ERROR] Unexpected error in POST /add-or-update-business:', err.message);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
