@@ -26,36 +26,20 @@ router.post('/', async (req, res) => {
     }
 
     const fbData = await fbResponse.json();
-    const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
-    const userIdFromFrontend = cookies.userId || req.body.userId;
 
-    const fbId = fbData.id ? parseInt(fbData.id, 10) : null;
-    const userId = userIdFromFrontend ? parseInt(userIdFromFrontend, 10) : null;
-
-    if (!fbId && !userId) {
-      console.error('[ERROR] Both fbId and userId are missing or invalid.');
-      return res.status(400).json({ error: 'Missing user identifiers (fbId or userId).' });
-    }
-
-    console.log('[DEBUG] fbId:', fbId);
-    console.log('[DEBUG] userId:', userId);
-
-    // Find or create user in Supabase
-    let userQuery = supabase.from('users').select('*');
-
-    if (fbId) {
-      userQuery = userQuery.eq('fb_id', fbId);
-    } else if (userId) {
-      userQuery = userQuery.eq('id', userId);
-    }
-
-    const { data: user, error: userError } = await userQuery.single();
+    // Retrieve or create the user in Supabase using `fb_id`
+    let { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('fb_id', fbData.id)
+      .single();
 
     if (userError && userError.code === 'PGRST116') {
+      // If the user doesn't exist, create a new one
       const { data: newUser, error: createUserError } = await supabase
         .from('users')
         .insert({
-          fb_id: fbId,
+          fb_id: fbData.id,
           name: fbData.name,
           email: fbData.email,
         })
@@ -64,7 +48,7 @@ router.post('/', async (req, res) => {
 
       if (createUserError) {
         console.error('[ERROR] Failed to create user:', createUserError.message);
-        return res.status(500).json({ error: 'Failed to create user' });
+        return res.status(500).json({ error: 'Failed to create user.' });
       }
       user = newUser;
     } else if (userError) {
@@ -72,29 +56,22 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Error fetching user.' });
     }
 
-    const ownerId = user?.id || fbId;
+    // Use `users.id` as `owner_id` for business creation
+    const ownerId = user.id;
 
-    // Set the request.user_id in Supabase for RLS policies
-try {
-  await supabase.rpc('set_user_id', { user_id: ownerId });
-  console.log('[DEBUG] set_user_id RPC executed successfully with:', ownerId);
-} catch (rpcError) {
-  console.error('[ERROR] Failed to set request.user_id:', rpcError.message);
-  return res.status(500).json({ error: 'Failed to set user context for RLS.' });
-}
-
-    // Find or create business for the user
-    const { data: business, error: businessError } = await supabase
+    // Find or create a business for the user
+    let { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
       .eq('owner_id', ownerId)
       .single();
 
     if (businessError && businessError.code === 'PGRST116') {
+      // If no business exists, create one
       const { data: newBusiness, error: createBusinessError } = await supabase
         .from('businesses')
         .insert({
-          owner_id: ownerId,
+          owner_id: ownerId, // Reference `users.id`
           name: `${fbData.name}'s Business`,
         })
         .select('*')
@@ -115,19 +92,20 @@ try {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'None',
-      maxAge: 3600000,
+      maxAge: 3600000, // 1 hour
     });
     res.cookie('userId', ownerId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'None',
-      maxAge: 3600000,
+      maxAge: 3600000, // 1 hour
     });
 
     // Respond with user and business details
     res.status(200).json({
       message: 'Login successful',
       user: {
+        id: user.id,
         fb_id: user.fb_id,
         name: user.name,
         email: user.email,
