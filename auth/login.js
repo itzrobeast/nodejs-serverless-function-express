@@ -29,19 +29,27 @@ router.post('/', async (req, res) => {
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
     const userIdFromFrontend = cookies.userId || req.body.userId;
 
-    const fbId = parseInt(fbData.id, 10);
+    const fbId = fbData.id ? parseInt(fbData.id, 10) : null;
     const userId = userIdFromFrontend ? parseInt(userIdFromFrontend, 10) : null;
 
     if (!fbId && !userId) {
-      throw new Error('User identifiers (userId or fb_id) are missing.');
+      console.error('[ERROR] Both fbId and userId are missing or invalid.');
+      return res.status(400).json({ error: 'Missing user identifiers (fbId or userId).' });
     }
 
+    console.log('[DEBUG] fbId:', fbId);
+    console.log('[DEBUG] userId:', userId);
+
     // Find or create user in Supabase
-    let { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .or(`fb_id.eq.${fbId},id.eq.${userId}`)
-      .single();
+    let userQuery = supabase.from('users').select('*');
+
+    if (fbId) {
+      userQuery = userQuery.eq('fb_id', fbId);
+    } else if (userId) {
+      userQuery = userQuery.eq('id', userId);
+    }
+
+    const { data: user, error: userError } = await userQuery.single();
 
     if (userError && userError.code === 'PGRST116') {
       const { data: newUser, error: createUserError } = await supabase
@@ -61,19 +69,18 @@ router.post('/', async (req, res) => {
       user = newUser;
     } else if (userError) {
       console.error('[ERROR] Error fetching user:', userError.message);
-      return res.status(500).json({ error: 'Error fetching user' });
+      return res.status(500).json({ error: 'Error fetching user.' });
     }
 
-    // Find or create business for the user
     const ownerId = user?.id || fbId;
 
-    const { data: existingBusiness, error: businessError } = await supabase
+    // Find or create business for the user
+    const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
       .eq('owner_id', ownerId)
       .single();
 
-    let business;
     if (businessError && businessError.code === 'PGRST116') {
       const { data: newBusiness, error: createBusinessError } = await supabase
         .from('businesses')
@@ -86,14 +93,12 @@ router.post('/', async (req, res) => {
 
       if (createBusinessError) {
         console.error('[ERROR] Failed to create business:', createBusinessError.message);
-        return res.status(500).json({ error: 'Failed to create business' });
+        return res.status(500).json({ error: 'Failed to create business.' });
       }
       business = newBusiness;
     } else if (businessError) {
       console.error('[ERROR] Error fetching business:', businessError.message);
-      return res.status(500).json({ error: 'Error fetching business' });
-    } else {
-      business = existingBusiness;
+      return res.status(500).json({ error: 'Error fetching business.' });
     }
 
     // Set cookies
@@ -103,7 +108,7 @@ router.post('/', async (req, res) => {
       sameSite: 'None',
       maxAge: 3600000,
     });
-    res.cookie('userId', fbId, {
+    res.cookie('userId', ownerId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'None',
