@@ -93,13 +93,19 @@ if (businessError && businessError.code === 'PGRST116') {
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
-    res.cookie('userId', ownerId, {
+    res.cookie('userId', user.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
 
+    console.log('[DEBUG] Cookies Set: authToken, userId:', {
+  authToken: accessToken,
+  userId: user.id,
+});
+
+  
     // Respond with user and business details
     res.status(200).json({
       message: 'Login successful',
