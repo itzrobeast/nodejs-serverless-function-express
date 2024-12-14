@@ -30,7 +30,7 @@ router.post('/', async (req, res) => {
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('fb_id', fbData.id)
+      .or(`fb_id.eq.${fbData.id},id.eq.${userIdFromFrontend}`)
       .single();
 
     if (userError && userError.code === 'PGRST116') {
@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
       const { data: existingBusiness, error: businessError } = await supabase
         .from('businesses')
         .select('*')
-        .eq('owner_id', fbData.id)
+        .or(`owner_id.eq.${user.id},owner_id.eq.${fbData.id}`)
         .single();
 
       if (businessError && businessError.code === 'PGRST116') {
