@@ -96,7 +96,7 @@ router.post('/', async (req, res) => {
   secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
   sameSite: 'None', // Ensure cross-site cookies work
   maxAge: 3600000, // 1 hour
-  domain: process.env.NODE_ENV === 'production' ? '.mila-verse.vercel.app' : undefined,
+  
 });
 
 
