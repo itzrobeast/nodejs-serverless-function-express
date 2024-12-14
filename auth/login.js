@@ -56,36 +56,35 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Error fetching user.' });
     }
 
-    // Use `users.id` as `owner_id` for business creation
-    const ownerId = user.id;
+  const ownerId = user.id; // Use the user's primary ID for the user_id field
 
-    // Find or create a business for the user
-    let { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .single();
+// Find or create business for the user
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .select('*')
+  .eq('user_id', ownerId) // Match on user_id
+  .single();
 
-    if (businessError && businessError.code === 'PGRST116') {
-      // If no business exists, create one
-      const { data: newBusiness, error: createBusinessError } = await supabase
-        .from('businesses')
-        .insert({
-          owner_id: ownerId, // Reference `users.id`
-          name: `${fbData.name}'s Business`,
-        })
-        .select('*')
-        .single();
+if (businessError && businessError.code === 'PGRST116') {
+  const { data: newBusiness, error: createBusinessError } = await supabase
+    .from('businesses')
+    .insert({
+      user_id: ownerId, // Assign the user's ID
+      name: `${fbData.name}'s Business`,
+    })
+    .select('*')
+    .single();
 
-      if (createBusinessError) {
-        console.error('[ERROR] Failed to create business:', createBusinessError.message);
-        return res.status(500).json({ error: 'Failed to create business.' });
-      }
-      business = newBusiness;
-    } else if (businessError) {
-      console.error('[ERROR] Error fetching business:', businessError.message);
-      return res.status(500).json({ error: 'Error fetching business.' });
-    }
+  if (createBusinessError) {
+    console.error('[ERROR] Failed to create business:', createBusinessError.message);
+    return res.status(500).json({ error: 'Failed to create business.' });
+  }
+  business = newBusiness;
+} else if (businessError) {
+  console.error('[ERROR] Error fetching business:', businessError.message);
+  return res.status(500).json({ error: 'Error fetching business.' });
+}
+
 
     // Set cookies
     res.cookie('authToken', accessToken, {
