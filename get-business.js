@@ -6,13 +6,12 @@ const router = express.Router();
 /**
  * Fetch business data for a specific user.
  * GET /get-business?user_id=XYZ
- *   (Because index.js calls app.use('/get-business', getBusinessRouter))
  */
 router.get('/', async (req, res) => {
   try {
     const user_id = parseInt(req.query.user_id, 10); // Ensure `user_id` is an integer
     if (isNaN(user_id)) {
-      console.error('[ERROR] Invalid or missing user_id in query parameters:', req.query.user_id);
+      console.error('[ERROR] Invalid or missing user_id in query params:', req.query.user_id);
       return res.status(400).json({ error: 'Invalid or missing user_id in query parameters' });
     }
 
@@ -44,7 +43,7 @@ router.get('/', async (req, res) => {
  */
 router.put('/update-business', async (req, res) => {
   try {
-    const user_id = parseInt(req.body.user_id, 10); // Ensure `user_id` is an integer
+    const user_id = parseInt(req.body.user_id, 10);
     if (isNaN(user_id)) {
       console.error('[ERROR] Invalid or missing user_id in request body:', req.body.user_id);
       return res.status(400).json({ error: 'Invalid or missing user_id in request body' });
@@ -59,6 +58,7 @@ router.put('/update-business', async (req, res) => {
       ai_knowledge_base,
       page_id,
       access_token,
+      vonage_number,
     } = req.body;
 
     if (!name || !contact_email) {
@@ -66,15 +66,17 @@ router.put('/update-business', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: name or contact_email' });
     }
 
+    // Ensure these fields match your DB column names
     const updateFields = {
       name,
       contact_email,
-      locations: locations || [],
-      insurance_policies: insurance_policies || {},
-      objections: objections || {},
+      locations: locations || '',
+      insurance_policies: insurance_policies || '',
+      objections: objections || '',
       ai_knowledge_base: ai_knowledge_base || '',
       page_id: page_id || null,
       access_token: access_token || null,
+      vonage_number: vonage_number || null,
     };
 
     console.log(`[DEBUG] Updating business for user_id: ${user_id}`, updateFields);
@@ -103,7 +105,7 @@ router.put('/update-business', async (req, res) => {
  */
 router.post('/add-or-update-business', async (req, res) => {
   try {
-    const user_id = parseInt(req.body.user_id, 10); // Ensure `user_id` is an integer
+    const user_id = parseInt(req.body.user_id, 10);
     if (isNaN(user_id)) {
       console.error('[ERROR] Invalid or missing user_id in request body:', req.body.user_id);
       return res.status(400).json({ error: 'Invalid or missing user_id in request body' });
@@ -118,6 +120,7 @@ router.post('/add-or-update-business', async (req, res) => {
       ai_knowledge_base,
       page_id,
       access_token,
+      vonage_number,
     } = req.body;
 
     if (!name || !contact_email) {
@@ -132,7 +135,6 @@ router.post('/add-or-update-business', async (req, res) => {
       .eq('user_id', user_id)
       .single();
 
-    // If fetchError is anything other than 'PGRST116' (row not found), it's a real error
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('[ERROR] Failed to fetch existing business data:', fetchError.message);
       return res.status(500).json({ error: 'Failed to fetch existing business data', details: fetchError.message });
@@ -143,12 +145,13 @@ router.post('/add-or-update-business', async (req, res) => {
       const updateFields = {
         name,
         contact_email,
-        locations: locations || [],
-        insurance_policies: insurance_policies || {},
-        objections: objections || {},
+        locations: locations || '',
+        insurance_policies: insurance_policies || '',
+        objections: objections || '',
         ai_knowledge_base: ai_knowledge_base || '',
         page_id: page_id || null,
         access_token: access_token || null,
+        vonage_number: vonage_number || null,
       };
 
       const { data, error } = await supabase
@@ -173,12 +176,13 @@ router.post('/add-or-update-business', async (req, res) => {
             user_id,
             name,
             contact_email,
-            locations: locations || [],
-            insurance_policies: insurance_policies || {},
-            objections: objections || {},
+            locations: locations || '',
+            insurance_policies: insurance_policies || '',
+            objections: objections || '',
             ai_knowledge_base: ai_knowledge_base || '',
             page_id: page_id || null,
             access_token: access_token || null,
+            vonage_number: vonage_number || null,
           },
         ])
         .select('*');
