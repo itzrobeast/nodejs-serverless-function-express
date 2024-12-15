@@ -1,6 +1,5 @@
 import axios from 'axios';
 import cookie from 'cookie';
-import supabase from '../supabaseClient.js';
 
 // Ensure critical environment variables are set
 if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
@@ -43,14 +42,14 @@ export default async function handler(req, res) {
     // Parse cookies to get the token
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
     const authToken = cookies.authToken;
-    const userId = cookies.userId;
+    const userId = parseInt(cookies.userId, 10); // Parse userId as an integer
 
     console.log('[DEBUG] Cookies Parsed in Verify-Session:', cookies);
 
-    if (!authToken || !userId) {
-      console.error('[ERROR] Missing required cookies:', { authToken, userId });
+    if (!authToken || isNaN(userId)) {
+      console.error('[ERROR] Missing or invalid cookies:', { authToken, userId });
       return res.status(401).json({
-        error: 'Unauthorized: Missing authToken or userId',
+        error: 'Unauthorized: Missing or invalid authToken or userId',
         details: { authToken, userId },
       });
     }
@@ -66,12 +65,12 @@ export default async function handler(req, res) {
     };
 
     console.log('[DEBUG] Session verified successfully:', user);
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Session verified successfully',
       user,
     });
   } catch (error) {
     console.error('[ERROR] Unexpected error:', error.message);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 }
