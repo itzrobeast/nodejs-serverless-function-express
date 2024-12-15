@@ -8,33 +8,28 @@ const router = express.Router();
  * GET /get-business
  */
 router.get('/get-business', async (req, res) => {
-  try {
-    const { userId } = req.query;
+  const { userId } = req.query; // Extract userId from query parameters
 
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId in query parameters' });
-    }
-
-    console.log(`[DEBUG] Fetching business data for userId: ${userId}`);
-
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Business not found' });
-      }
-      return res.status(500).json({ error: 'Failed to fetch business data', details: error.message });
-    }
-
-    res.status(200).json(data);
-  } catch (err) {
-    console.error('[ERROR] Unexpected error in GET /get-business:', err.message);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
+  if (!userId) {
+    return res.status(400).json({ error: 'Missing userId in query parameters' });
   }
+
+  console.log(`[DEBUG] Fetching business data for userId: ${userId}`);
+
+  const { data, error } = await supabase
+    .from('businesses')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+    return res.status(500).json({ error: 'Failed to fetch business data', details: error.message });
+  }
+
+  res.status(200).json(data);
 });
 
 
