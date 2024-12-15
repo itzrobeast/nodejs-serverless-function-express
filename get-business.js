@@ -76,7 +76,7 @@ router.put('/update-business', async (req, res) => {
       ai_knowledge_base: ai_knowledge_base || '',
       page_id: page_id || null,
       access_token: access_token || null,
-      vonage_number: vonage_number || null,
+      
     };
 
     console.log(`[DEBUG] Updating business for user_id: ${user_id}`, updateFields);
