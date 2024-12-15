@@ -1,10 +1,10 @@
 import express from 'express';
 import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
-import cookie from 'cookie';
 
 const router = express.Router();
 
+// Ensure required environment variables are set
 if (!process.env.MILA_SECRET) {
   throw new Error('MILA_SECRET environment variable is missing.');
 }
@@ -13,21 +13,25 @@ router.post('/', async (req, res) => {
   try {
     const { accessToken } = req.body;
 
+    // Validate input
     if (!accessToken) {
       return res.status(400).json({ error: 'Missing access token' });
     }
 
-    // Verify Facebook token
+    // Verify the Facebook token
     const fbResponse = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
     );
+
     if (!fbResponse.ok) {
+      console.error('[ERROR] Invalid Facebook token.');
       return res.status(401).json({ error: 'Invalid Facebook token' });
     }
 
     const fbData = await fbResponse.json();
+    console.log('[DEBUG] Facebook data fetched:', fbData);
 
-    // Retrieve or create the user in Supabase using `fb_id`
+    // Retrieve or create the user in Supabase
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -35,7 +39,7 @@ router.post('/', async (req, res) => {
       .single();
 
     if (userError && userError.code === 'PGRST116') {
-      // If the user doesn't exist, create a new one
+      console.log('[DEBUG] User not found. Creating new user.');
       const { data: newUser, error: createUserError } = await supabase
         .from('users')
         .insert({
@@ -56,58 +60,57 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Error fetching user.' });
     }
 
-  const ownerId = user.id; // Use the user's primary ID for the user_id field
+    const ownerId = user.id;
 
-// Find or create business for the user
-const { data: business, error: businessError } = await supabase
-  .from('businesses')
-  .select('*')
-  .eq('user_id', ownerId) // Match on user_id
-  .single();
+    // Retrieve or create the business for the user
+    let { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('user_id', ownerId)
+      .single();
 
-if (businessError && businessError.code === 'PGRST116') {
-  const { data: newBusiness, error: createBusinessError } = await supabase
-    .from('businesses')
-    .insert({
-      user_id: ownerId, // Assign the user's ID
-      name: `${fbData.name}'s Business`,
-    })
-    .select('*')
-    .single();
+    if (businessError && businessError.code === 'PGRST116') {
+      console.log('[DEBUG] Business not found. Creating new business.');
+      const { data: newBusiness, error: createBusinessError } = await supabase
+        .from('businesses')
+        .insert({
+          user_id: ownerId,
+          name: `${fbData.name}'s Business`,
+        })
+        .select('*')
+        .single();
 
-  if (createBusinessError) {
-    console.error('[ERROR] Failed to create business:', createBusinessError.message);
-    return res.status(500).json({ error: 'Failed to create business.' });
-  }
-  business = newBusiness;
-} else if (businessError) {
-  console.error('[ERROR] Error fetching business:', businessError.message);
-  return res.status(500).json({ error: 'Error fetching business.' });
-}
+      if (createBusinessError) {
+        console.error('[ERROR] Failed to create business:', createBusinessError.message);
+        return res.status(500).json({ error: 'Failed to create business.' });
+      }
+      business = newBusiness;
+    } else if (businessError) {
+      console.error('[ERROR] Error fetching business:', businessError.message);
+      return res.status(500).json({ error: 'Error fetching business.' });
+    }
 
-
-    // Set cookies
+    // Set cookies for authentication
     res.cookie('authToken', accessToken, {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
-      domain: '.mila-verse.vercel.app', // Set for frontend domain
+      domain: '.mila-verse.vercel.app',
     });
     res.cookie('userId', user.id, {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
-      domain: '.mila-verse.vercel.app', // Set for frontend domain
+      domain: '.mila-verse.vercel.app',
     });
 
-    console.log('[DEBUG] Cookies Set: authToken, userId:', {
-  authToken: accessToken,
-  userId: user.id,
-});
+    console.log('[DEBUG] Cookies Set:', {
+      authToken: accessToken,
+      userId: user.id,
+    });
 
-  
     // Respond with user and business details
     res.status(200).json({
       message: 'Login successful',
@@ -124,7 +127,7 @@ if (businessError && businessError.code === 'PGRST116') {
     });
   } catch (err) {
     console.error('[ERROR] Login failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
