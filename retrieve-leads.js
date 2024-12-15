@@ -1,8 +1,12 @@
 import fetch from 'node-fetch';
 import express from 'express';
 import supabase from './supabaseClient.js';
+import authMiddleware from './authMiddleware.js'; // Ensure you have this middleware
 
 const router = express.Router();
+
+// Authentication middleware applied to all routes in this router
+router.use(authMiddleware);
 
 export const getLeadsFromMeta = async (accessToken, pageId) => {
   try {
@@ -24,6 +28,11 @@ router.get('/', async (req, res) => {
 
   if (!business_id) {
     return res.status(400).json({ error: 'Missing required parameter: business_id' });
+  }
+
+  // Ensure the authenticated user has access to this business_id
+  if (req.user.businessId !== business_id) {
+    return res.status(403).json({ error: 'Unauthorized access to this business' });
   }
 
   try {
