@@ -42,16 +42,16 @@ export default async function handler(req, res) {
 
     // Parse cookies to get the token
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
-    const authToken = cookies.authToken; // Correctly initialize authToken
-    const userId = cookies.userId;
+const authToken = cookies.authToken;
+const userId = cookies.userId;
 
-    if (!authToken) {
-      console.error('[ERROR] Missing authToken in cookies');
-      return res.status(401).json({ error: 'Unauthorized: Token not found' });
-    }
+if (!authToken) {
+  console.error('[ERROR] Missing authToken in cookies');
+  return res.status(401).json({ error: 'Unauthorized: Token not found' });
+}
 
-    console.log('[DEBUG] Received authToken:', authToken);
-    console.log('[DEBUG] Received userId:', userId);
+console.log('[DEBUG] Cookies Parsed:', { authToken, userId });
+
 
 
     // Validate the Facebook token
