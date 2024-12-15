@@ -42,19 +42,21 @@ export default async function handler(req, res) {
 
     // Parse cookies to get the token
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
-const authToken = cookies.authToken;
-const userId = cookies.userId;
+    const authToken = cookies.authToken;
+    const userId = cookies.userId;
 
-if (!authToken) {
-  console.error('[ERROR] Missing authToken in cookies');
-  return res.status(401).json({ error: 'Unauthorized: Token not found' });
-}
+    console.log('[DEBUG] Cookies Parsed in Verify-Session:', cookies);
 
-console.log('[DEBUG] Cookies Parsed:', { authToken, userId });
-
-
+    if (!authToken || !userId) {
+      console.error('[ERROR] Missing required cookies:', { authToken, userId });
+      return res.status(401).json({
+        error: 'Unauthorized: Missing authToken or userId',
+        details: { authToken, userId },
+      });
+    }
 
     // Validate the Facebook token
+    console.log('[DEBUG] Sending request to Facebook for token validation');
     const tokenDetails = await validateFacebookToken(authToken);
 
     // Extract user details
@@ -63,7 +65,7 @@ console.log('[DEBUG] Cookies Parsed:', { authToken, userId });
       scopes: tokenDetails.scopes,
     };
 
-    console.log('[DEBUG] Session verified successfully');
+    console.log('[DEBUG] Session verified successfully:', user);
     res.status(200).json({
       message: 'Session verified successfully',
       user,
