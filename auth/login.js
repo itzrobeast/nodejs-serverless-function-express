@@ -37,6 +37,7 @@ router.post('/', async (req, res) => {
       .select('*')
       .eq('fb_id', fbData.id)
       .single();
+    console.log('[DEBUG] User fetched from Supabase:', user);
 
     if (userError && userError.code === 'PGRST116') {
       console.log('[DEBUG] User not found. Creating new user.');
@@ -49,6 +50,8 @@ router.post('/', async (req, res) => {
         })
         .select('*')
         .single();
+      console.log('[DEBUG] User fetched from Supabase:', user);
+
 
       if (createUserError) {
         console.error('[ERROR] Failed to create user:', createUserError.message);
