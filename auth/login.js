@@ -96,14 +96,14 @@ router.post('/', async (req, res) => {
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
-      domain: '.mila-verse.vercel.app',
+      
     });
     res.cookie('userId', user.id, {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
-      domain: '.mila-verse.vercel.app',
+      
     });
 
     // Include userId in the response body
