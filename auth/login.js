@@ -37,11 +37,6 @@ router.post('/', async (req, res) => {
       .select('*')
       .eq('fb_id', fbData.id)
       .single();
-    console.log('[DEBUG] User fetched from Supabase:', user); // Add this log
-if (userError) {
-  console.error('[ERROR] Fetching user failed:', userError);
-  return res.status(500).json({ error: 'Error fetching user from Supabase.' });
-}
 
     if (userError && userError.code === 'PGRST116') {
       console.log('[DEBUG] User not found. Creating new user.');
@@ -54,9 +49,6 @@ if (userError) {
         })
         .select('*')
         .single();
-      console.log('[DEBUG] Newly created user in Supabase:', newUser); 
-
-
 
       if (createUserError) {
         console.error('[ERROR] Failed to create user:', createUserError.message);
@@ -68,7 +60,11 @@ if (userError) {
       return res.status(500).json({ error: 'Error fetching user.' });
     }
 
-    const ownerId = user.id;
+    const ownerId = parseInt(user.id, 10);
+    if (isNaN(ownerId)) {
+      console.error('[ERROR] user.id is not a valid integer:', user.id);
+      return res.status(500).json({ error: 'Invalid user ID from Supabase.' });
+    }
 
     // Retrieve or create the business for the user
     let { data: business, error: businessError } = await supabase
@@ -98,15 +94,6 @@ if (userError) {
       return res.status(500).json({ error: 'Error fetching business.' });
     }
 
-
-
-        // Check user.id exists
-if (!user?.id) {
-  console.error('[ERROR] User ID is undefined before setting cookie.');
-  return res.status(500).json({ error: 'Failed to retrieve user ID.' });
-}
-
-    
     // Set cookies for authentication
     res.cookie('authToken', accessToken, {
       httpOnly: true,
@@ -116,10 +103,7 @@ if (!user?.id) {
       maxAge: 3600000, // 1 hour
     });
 
-
-
-    console.log('[DEBUG] User ID before setting cookie:', user?.id);
-    res.cookie('userId', user?.id, {
+    res.cookie('userId', ownerId.toString(), { // Ensure it's stored as a string
       httpOnly: true,
       secure: true,
       sameSite: 'None',
@@ -129,10 +113,10 @@ if (!user?.id) {
 
     console.log('[DEBUG] Cookies Set:', {
       authToken: accessToken,
-      userId: user.id,
+      userId: ownerId,
     });
 
-    // Send a single response
+    // Send response
     return res.status(200).json({
       message: 'Login successful',
       user: {
