@@ -1,11 +1,12 @@
+// retrieve-leads.js
 import fetch from 'node-fetch';
 import express from 'express';
 import supabase from './supabaseClient.js';
-import authMiddleware from './authMiddleware.js'; // Ensure you have this middleware
+import authMiddleware from './authMiddleware.js';
 
 const router = express.Router();
 
-// Authentication middleware applied to all routes in this router
+// Apply authentication middleware
 router.use(authMiddleware);
 
 export const getLeadsFromMeta = async (accessToken, pageId) => {
@@ -24,23 +25,33 @@ export const getLeadsFromMeta = async (accessToken, pageId) => {
 
 // GET Handler for Leads Retrieval
 router.get('/', async (req, res) => {
-  const { business_id } = req.query;
+  const { userId, businessId } = req;
 
-  if (!business_id) {
-    return res.status(400).json({ error: 'Missing required parameter: business_id' });
-  }
+  console.log('[DEBUG] Received request with userId:', userId, 'and businessId:', businessId);
 
-  // Ensure the authenticated user has access to this business_id
-  if (req.user.businessId !== business_id) {
-    return res.status(403).json({ error: 'Unauthorized access to this business' });
+  if (!userId || !businessId) {
+    return res.status(400).json({ error: 'Missing userId or businessId in headers' });
   }
 
   try {
+    // Authorization: Verify user-business association
+    const { data: userBusiness, error: userBusinessError } = await supabase
+      .from('user_businesses')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (userBusinessError || !userBusiness) {
+      console.error('[ERROR] User not associated with the business:', userBusinessError?.message);
+      return res.status(403).json({ error: 'Unauthorized access to this business' });
+    }
+
     // Fetch business data to get access_token and page_id
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('access_token, page_id')
-      .eq('id', business_id)
+      .eq('id', businessId)
       .single();
 
     if (businessError || !business) {
@@ -56,6 +67,8 @@ router.get('/', async (req, res) => {
 
     // Fetch leads from Meta API
     const leads = await getLeadsFromMeta(access_token, page_id);
+
+    console.log('[DEBUG] Retrieved leads:', leads);
 
     res.status(200).json({ leads });
   } catch (error) {
