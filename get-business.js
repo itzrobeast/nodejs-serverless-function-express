@@ -4,56 +4,56 @@ import supabase from './supabaseClient.js';
 const router = express.Router();
 
 /**
- * Fetches business data for a specific user.
+ * Fetch business data for a specific user.
  * GET /get-business
  */
 router.get('/get-business', async (req, res) => {
-  const { userId } = req.query; // Extract userId from query parameters
-
-  if (!userId) {
-    return res.status(400).json({ error: 'Missing userId in query parameters' });
-  }
-
-  console.log(`[DEBUG] Fetching business data for userId: ${userId}`);
-
-  const { data, error } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return res.status(404).json({ error: 'Business not found' });
+  try {
+    const userId = parseInt(req.query.userId, 10); // Ensure `userId` is an integer
+    if (isNaN(userId)) {
+      console.error('[ERROR] Invalid or missing userId in query parameters:', req.query.userId);
+      return res.status(400).json({ error: 'Invalid or missing userId in query parameters' });
     }
-    return res.status(500).json({ error: 'Failed to fetch business data', details: error.message });
-  }
 
-  res.status(200).json(data);
+    console.log(`[DEBUG] Fetching business data for userId: ${userId}`);
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('[ERROR] Failed to fetch business data:', error.message);
+      return error.code === 'PGRST116'
+        ? res.status(404).json({ error: 'Business not found' })
+        : res.status(500).json({ error: 'Failed to fetch business data', details: error.message });
+    }
+
+    res.status(200).json(data);
+  } catch (err) {
+    console.error('[ERROR] Unexpected error in GET /get-business:', err.message);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
 });
 
-
 /**
- * Updates business data for a specific owner.
+ * Update existing business data.
  * PUT /update-business
  */
-router.put('/', async (req, res) => {
+router.put('/update-business', async (req, res) => {
   try {
-    const {
-      owner_id,
-      name,
-      contact_email,
-      locations,
-      insurance_policies,
-      objections,
-      ai_knowledge_base,
-      page_id,
-      access_token,
-    } = req.body;
+    const owner_id = parseInt(req.body.owner_id, 10); // Ensure `owner_id` is an integer
+    if (isNaN(owner_id)) {
+      console.error('[ERROR] Invalid or missing owner_id in request body:', req.body.owner_id);
+      return res.status(400).json({ error: 'Invalid or missing owner_id in request body' });
+    }
 
-    if (!owner_id || !name || !contact_email) {
-      console.error('[ERROR] Missing required fields: owner_id, name, or contact_email');
-      return res.status(400).json({ error: 'Missing required fields: owner_id, name, or contact_email' });
+    const { name, contact_email, locations, insurance_policies, objections, ai_knowledge_base, page_id, access_token } =
+      req.body;
+
+    if (!name || !contact_email) {
+      console.error('[ERROR] Missing required fields: name or contact_email');
+      return res.status(400).json({ error: 'Missing required fields: name or contact_email' });
     }
 
     const updateFields = {
@@ -68,19 +68,18 @@ router.put('/', async (req, res) => {
     };
 
     console.log(`[DEBUG] Updating business for owner_id: ${owner_id}`, updateFields);
-
     const { data, error } = await supabase
       .from('businesses')
       .update(updateFields)
       .eq('owner_id', owner_id)
-      .select('*'); // Return the updated record
+      .select('*');
 
     if (error) {
       console.error('[ERROR] Failed to update business data:', error.message);
       return res.status(500).json({ error: 'Failed to update business data', details: error.message });
     }
 
-    console.log('[DEBUG] Business data updated successfully:', data);
+    console.log('[DEBUG] Business updated successfully:', data);
     res.status(200).json({ message: 'Business information updated successfully', data });
   } catch (err) {
     console.error('[ERROR] Unexpected error in PUT /update-business:', err.message);
@@ -89,32 +88,26 @@ router.put('/', async (req, res) => {
 });
 
 /**
- * Adds a new business or updates an existing one.
+ * Add or update a business for a user.
  * POST /add-or-update-business
  */
-router.post('/', async (req, res) => {
+router.post('/add-or-update-business', async (req, res) => {
   try {
-    const {
-      owner_id,
-      name,
-      contact_email,
-      locations,
-      insurance_policies,
-      objections,
-      ai_knowledge_base,
-      page_id,
-      access_token,
-    } = req.body;
+    const owner_id = parseInt(req.body.owner_id, 10); // Ensure `owner_id` is an integer
+    if (isNaN(owner_id)) {
+      console.error('[ERROR] Invalid or missing owner_id in request body:', req.body.owner_id);
+      return res.status(400).json({ error: 'Invalid or missing owner_id in request body' });
+    }
 
-    if (!owner_id || !name || !contact_email) {
-      console.error('[ERROR] Missing required fields: owner_id, name, or contact_email');
-      return res.status(400).json({
-        error: 'Missing required fields: owner_id, name, or contact_email',
-      });
+    const { name, contact_email, locations, insurance_policies, objections, ai_knowledge_base, page_id, access_token } =
+      req.body;
+
+    if (!name || !contact_email) {
+      console.error('[ERROR] Missing required fields: name or contact_email');
+      return res.status(400).json({ error: 'Missing required fields: name or contact_email' });
     }
 
     console.log(`[DEBUG] Processing business data for owner_id: ${owner_id}`);
-
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
       .select('*')
@@ -143,7 +136,7 @@ router.post('/', async (req, res) => {
         .from('businesses')
         .update(updateFields)
         .eq('id', existingBusiness.id)
-        .select('*'); // Return the updated record
+        .select('*');
 
       if (error) {
         console.error('[ERROR] Failed to update business data:', error.message);
@@ -169,7 +162,7 @@ router.post('/', async (req, res) => {
             access_token: access_token || null,
           },
         ])
-        .select('*'); // Return the newly inserted record
+        .select('*');
 
       if (insertError) {
         console.error('[ERROR] Failed to insert business data:', insertError.message);
