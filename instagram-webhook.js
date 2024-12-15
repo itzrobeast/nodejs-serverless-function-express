@@ -2,13 +2,11 @@ import assistantHandler from './assistant.js'; // Centralized logic
 import fetch from 'node-fetch'; // For Instagram API
 import supabase from './supabaseClient.js';
 
-// Typically, you'd store your Page Access Token in an environment variable.
+// Use your Page Access Token for Instagram Business Messaging
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 
 /**
- * Function to send a direct reply to an Instagram user using your Page Access Token.
- * For Instagram API on a Business account, we must use the page access token associated
- * with the Instagram business/creator account. 
+ * Send a direct reply to an Instagram user using your Page Access Token.
  */
 async function sendInstagramMessage(recipientId, message) {
   try {
@@ -18,7 +16,6 @@ async function sendInstagramMessage(recipientId, message) {
 
     console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
 
-    // Ensure we have a valid page access token
     if (!PAGE_ACCESS_TOKEN) {
       throw new Error('Missing PAGE_ACCESS_TOKEN environment variable.');
     }
@@ -51,15 +48,45 @@ async function sendInstagramMessage(recipientId, message) {
 
 /**
  * Process individual messaging events from the Instagram webhook callback.
+ * This version includes checks for non-text events (reactions, read receipts, unsend, etc.).
  */
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    const userMessage = message?.message?.text;  // Extract the user message text
+    // 1. Handle special event types early
+    if (message?.reaction) {
+      // Reaction event: user reacted with a heart, etc.
+      console.log('[INFO] Received a reaction event:', message.reaction);
+      return;
+    }
+    if (message?.delivery) {
+      // Delivery receipt: Facebook acknowledging message(s) delivered
+      console.log('[INFO] Delivery receipt event:', message.delivery);
+      return;
+    }
+    if (message?.read) {
+      // Read receipt: user opened/seen the message
+      console.log('[INFO] Read receipt event:', message.read);
+      return;
+    }
+    if (message?.message?.is_unsent) {
+      // User unsent/deleted their message
+      console.log('[INFO] User unsent a message:', message);
+      return;
+    }
+    if (message?.message?.attachments) {
+      // Attachments event: user sent images, videos, or other media
+      console.log('[INFO] Received an attachment event:', message.message.attachments);
+      // Optionally handle attachments or skip
+      return;
+    }
+
+    // 2. Now handle standard text messages
+    const userMessage = message?.message?.text;  // Extract text
     const igId = message?.recipient?.id;         // Our Instagram business account ID
     const senderId = message?.sender?.id;        // The user interacting with the bot
-    const platform = 'instagram';                // Define the platform as Instagram
+    const platform = 'instagram';
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted Instagram User ID (ig_id):', igId);
@@ -71,17 +98,16 @@ async function processMessagingEvent(message) {
         igId,
         senderId,
       });
-      return; // Skip processing this message
+      return; // Skip processing if it's not a valid text event
     }
 
-    // Step 1: Find or insert the user by ig_id (matching our bot's ID)
+    // 3. Find or create user in Supabase
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('ig_id', igId)
       .maybeSingle();
 
-    // If user doesn’t exist, create a new record
     if (!user && !userError) {
       console.log('[INFO] User not found by ig_id. Creating new user.');
       const { data: newUser, error: insertError } = await supabase
@@ -109,16 +135,16 @@ async function processMessagingEvent(message) {
 
     console.log('[DEBUG] Found or created user:', user);
 
-    // Step 2: Pass the extracted data to the assistant
+    // 4. Pass data to the assistant for a response
     console.log('[DEBUG] Sending user message to assistant for processing.');
     const assistantResponse = await assistantHandler({
       userMessage,
-      recipientId: senderId,   // Used for sending responses back to Instagram (the user)
+      recipientId: senderId,
       platform,
-      businessId: user.fb_id, // Pass the user’s fb_id for business lookups
+      businessId: user.fb_id, // If you need the user's fb_id for any reason
     });
 
-    // Step 3: Send the assistant's response back to Instagram
+    // 5. Send the assistant's response back to the user (if any)
     if (assistantResponse && assistantResponse.message) {
       console.log('[DEBUG] Assistant response:', assistantResponse.message);
       await sendInstagramMessage(senderId, assistantResponse.message);
@@ -132,10 +158,9 @@ async function processMessagingEvent(message) {
 }
 
 /**
- * Primary webhook handler.
- * This route will:
- *   - Verify webhook setup on GET
- *   - Process incoming Instagram webhook events on POST
+ * Primary webhook handler (route).
+ * - Verify webhook setup on GET
+ * - Process incoming Instagram webhook events on POST
  */
 export default async function handler(req, res) {
   console.log('Received request:', req.method);
