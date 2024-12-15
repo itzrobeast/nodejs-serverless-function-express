@@ -5,9 +5,10 @@ const router = express.Router();
 
 /**
  * Fetch business data for a specific user.
- * GET /get-business
+ * GET /get-business?user_id=XYZ
+ *   (Because index.js calls app.use('/get-business', getBusinessRouter))
  */
-router.get('/get-business', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const user_id = parseInt(req.query.user_id, 10); // Ensure `user_id` is an integer
     if (isNaN(user_id)) {
@@ -30,16 +31,16 @@ router.get('/get-business', async (req, res) => {
     }
 
     console.log('[DEBUG] Business data fetched successfully:', data);
-    res.status(200).json(data);
+    return res.status(200).json(data);
   } catch (err) {
     console.error('[ERROR] Unexpected error in GET /get-business:', err.message);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
+    return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
 /**
  * Update existing business data.
- * PUT /update-business
+ * PUT /get-business/update-business
  */
 router.put('/update-business', async (req, res) => {
   try {
@@ -49,8 +50,16 @@ router.put('/update-business', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or missing user_id in request body' });
     }
 
-    const { name, contact_email, locations, insurance_policies, objections, ai_knowledge_base, page_id, access_token } =
-      req.body;
+    const {
+      name,
+      contact_email,
+      locations,
+      insurance_policies,
+      objections,
+      ai_knowledge_base,
+      page_id,
+      access_token,
+    } = req.body;
 
     if (!name || !contact_email) {
       console.error('[ERROR] Missing required fields: name or contact_email');
@@ -81,16 +90,16 @@ router.put('/update-business', async (req, res) => {
     }
 
     console.log('[DEBUG] Business updated successfully:', data);
-    res.status(200).json({ message: 'Business information updated successfully', data });
+    return res.status(200).json({ message: 'Business information updated successfully', data });
   } catch (err) {
     console.error('[ERROR] Unexpected error in PUT /update-business:', err.message);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
+    return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
 /**
  * Add or update a business for a user.
- * POST /add-or-update-business
+ * POST /get-business/add-or-update-business
  */
 router.post('/add-or-update-business', async (req, res) => {
   try {
@@ -100,8 +109,16 @@ router.post('/add-or-update-business', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or missing user_id in request body' });
     }
 
-    const { name, contact_email, locations, insurance_policies, objections, ai_knowledge_base, page_id, access_token } =
-      req.body;
+    const {
+      name,
+      contact_email,
+      locations,
+      insurance_policies,
+      objections,
+      ai_knowledge_base,
+      page_id,
+      access_token,
+    } = req.body;
 
     if (!name || !contact_email) {
       console.error('[ERROR] Missing required fields: name or contact_email');
@@ -115,6 +132,7 @@ router.post('/add-or-update-business', async (req, res) => {
       .eq('user_id', user_id)
       .single();
 
+    // If fetchError is anything other than 'PGRST116' (row not found), it's a real error
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('[ERROR] Failed to fetch existing business data:', fetchError.message);
       return res.status(500).json({ error: 'Failed to fetch existing business data', details: fetchError.message });
@@ -175,7 +193,7 @@ router.post('/add-or-update-business', async (req, res) => {
     }
   } catch (err) {
     console.error('[ERROR] Unexpected error in POST /add-or-update-business:', err.message);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
+    return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
