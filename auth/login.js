@@ -106,6 +106,13 @@ router.post('/', async (req, res) => {
       domain: '.mila-verse.vercel.app',
     });
 
+    // Include userId in the response body
+res.status(200).json({
+  message: 'Login successful',
+  userId: user.id,
+  accessToken,
+});
+
     console.log('[DEBUG] Cookies Set:', {
       authToken: accessToken,
       userId: user.id,
