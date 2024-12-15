@@ -99,7 +99,6 @@ router.post('/', async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-      
       maxAge: 3600000, // 1 hour
     });
 
@@ -107,10 +106,17 @@ router.post('/', async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-    
       maxAge: 3600000, // 1 hour
     });
 
+    res.cookie('businessId', businessId.toString(), { 
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      maxAge: 3600000, // 1 hour
+    });
+
+    
     console.log('[DEBUG] Cookies Set:', {
       authToken: accessToken,
       userId: ownerId,
