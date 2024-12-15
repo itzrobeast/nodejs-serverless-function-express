@@ -109,7 +109,7 @@ router.post('/', async (req, res) => {
       maxAge: 3600000, // 1 hour
     });
 
-    res.cookie('businessId', businessId.toString(), { 
+    res.cookie('businessId', business.id.toString(), { 
       httpOnly: true,
       secure: true,
       sameSite: 'None',
