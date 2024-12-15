@@ -96,30 +96,21 @@ router.post('/', async (req, res) => {
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
-      
     });
     res.cookie('userId', user.id, {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
-      
     });
-
-    // Include userId in the response body
-res.status(200).json({
-  message: 'Login successful',
-  userId: user.id,
-  accessToken,
-});
 
     console.log('[DEBUG] Cookies Set:', {
       authToken: accessToken,
       userId: user.id,
     });
 
-    // Respond with user and business details
-    res.status(200).json({
+    // Send a single response
+    return res.status(200).json({
       message: 'Login successful',
       user: {
         id: user.id,
@@ -134,7 +125,7 @@ res.status(200).json({
     });
   } catch (err) {
     console.error('[ERROR] Login failed:', err.message);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
+    return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
