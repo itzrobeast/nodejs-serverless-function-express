@@ -37,7 +37,11 @@ router.post('/', async (req, res) => {
       .select('*')
       .eq('fb_id', fbData.id)
       .single();
-    console.log('[DEBUG] User fetched from Supabase:', user);
+    console.log('[DEBUG] User fetched from Supabase:', user); // Add this log
+if (userError) {
+  console.error('[ERROR] Fetching user failed:', userError);
+  return res.status(500).json({ error: 'Error fetching user from Supabase.' });
+}
 
     if (userError && userError.code === 'PGRST116') {
       console.log('[DEBUG] User not found. Creating new user.');
@@ -50,7 +54,8 @@ router.post('/', async (req, res) => {
         })
         .select('*')
         .single();
-      console.log('[DEBUG] User fetched from Supabase:', user);
+      console.log('[DEBUG] Newly created user in Supabase:', newUser); 
+
 
 
       if (createUserError) {
@@ -93,6 +98,15 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Error fetching business.' });
     }
 
+
+
+        // Check user.id exists
+if (!user?.id) {
+  console.error('[ERROR] User ID is undefined before setting cookie.');
+  return res.status(500).json({ error: 'Failed to retrieve user ID.' });
+}
+
+    
     // Set cookies for authentication
     res.cookie('authToken', accessToken, {
       httpOnly: true,
@@ -102,11 +116,7 @@ router.post('/', async (req, res) => {
       maxAge: 3600000, // 1 hour
     });
 
-    // Check user.id exists
-if (!user?.id) {
-  console.error('[ERROR] User ID is undefined before setting cookie.');
-  return res.status(500).json({ error: 'Failed to retrieve user ID.' });
-}
+
 
     console.log('[DEBUG] User ID before setting cookie:', user?.id);
     res.cookie('userId', user?.id, {
