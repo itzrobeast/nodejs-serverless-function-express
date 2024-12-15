@@ -4,34 +4,41 @@ import supabase from './supabaseClient.js';
 const router = express.Router();
 
 /**
- * GET /vonage-number?userId=XYZ
- * Fetch the Vonage number from the vonage_numbers table by userId.
+ * GET /vonage-number?business_id=123
+ * or GET /vonage-number?userId=456
+ * 
+ * If business_id is provided, we skip the fetch-by-user step.
+ * If userId is provided (and no business_id), we fetch the matching business row first.
  */
 router.get('/', async (req, res) => {
   try {
-    const { userId } = req.query;
+    let { business_id, userId } = req.query;
 
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing required parameter: userId' });
+    // Convert numeric strings to actual numbers
+    if (business_id) business_id = parseInt(business_id, 10);
+    if (userId) userId = parseInt(userId, 10);
+
+    // If front-end directly supplies business_id, skip the userId logic
+    if (!business_id && !userId) {
+      return res.status(400).json({ error: 'Missing required parameter: business_id or userId' });
     }
 
-    // Fetch the business row using userId. 
-    // Change .eq('user_id', userId) to .eq('owner_id', userId) ONLY IF
-    // your DB actually stores the user’s ID in a column named 'owner_id'.
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('user_id', userId)    // <-- If your table uses "owner_id", swap this to .eq('owner_id', userId).
-      .single();
+    if (!business_id && userId) {
+      // We only have userId, so fetch the business to get its ID
+      const { data: business, error: businessError } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('user_id', userId) 
+        .single();
 
-    if (businessError || !business) {
-      console.error('[ERROR] Failed to fetch business:', businessError?.message || 'No business found');
-      return res.status(404).json({ error: 'No business found for the provided userId' });
+      if (businessError || !business) {
+        console.error('[ERROR] Failed to fetch business from userId:', businessError?.message || 'No business found');
+        return res.status(404).json({ error: 'No business found for the provided userId' });
+      }
+      business_id = business.id;
     }
 
-    const business_id = business.id;
-
-    // Fetch Vonage number from vonage_numbers by the matching business_id
+    // Now we definitely have a business_id
     const { data: vonage, error: vonageError } = await supabase
       .from('vonage_numbers')
       .select('vonage_number')
