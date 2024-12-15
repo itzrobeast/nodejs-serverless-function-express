@@ -1,8 +1,15 @@
-import assistantHandler from './assistant.js';// Centralized logic
+import assistantHandler from './assistant.js'; // Centralized logic
 import fetch from 'node-fetch'; // For Instagram API
 import supabase from './supabaseClient.js';
 
-// Function to send a direct reply to an Instagram user
+// Typically, you'd store your Page Access Token in an environment variable.
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+
+/**
+ * Function to send a direct reply to an Instagram user using your Page Access Token.
+ * For Instagram API on a Business account, we must use the page access token associated
+ * with the Instagram business/creator account. 
+ */
 async function sendInstagramMessage(recipientId, message) {
   try {
     if (!message || typeof message !== 'string') {
@@ -11,8 +18,13 @@ async function sendInstagramMessage(recipientId, message) {
 
     console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
 
+    // Ensure we have a valid page access token
+    if (!PAGE_ACCESS_TOKEN) {
+      throw new Error('Missing PAGE_ACCESS_TOKEN environment variable.');
+    }
+
     const response = await fetch(
-      `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`,
+      `https://graph.facebook.com/v14.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -37,15 +49,17 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-// Process individual messaging events
+/**
+ * Process individual messaging events from the Instagram webhook callback.
+ */
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    const userMessage = message?.message?.text; // Extract the user message text
-    const igId = message?.recipient?.id; // Instagram User ID (our bot)
-    const senderId = message?.sender?.id; // Customer ID (person interacting with the bot)
-    const platform = 'instagram'; // Define the platform as Instagram
+    const userMessage = message?.message?.text;  // Extract the user message text
+    const igId = message?.recipient?.id;         // Our Instagram business account ID
+    const senderId = message?.sender?.id;        // The user interacting with the bot
+    const platform = 'instagram';                // Define the platform as Instagram
 
     console.log('[DEBUG] Extracted user message:', userMessage);
     console.log('[DEBUG] Extracted Instagram User ID (ig_id):', igId);
@@ -60,13 +74,14 @@ async function processMessagingEvent(message) {
       return; // Skip processing this message
     }
 
-    // Step 1: Find or insert the user by Instagram ID (igId matches our bot's ID)
+    // Step 1: Find or insert the user by ig_id (matching our bot's ID)
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('ig_id', igId)
       .maybeSingle();
 
+    // If user doesn’t exist, create a new record
     if (!user && !userError) {
       console.log('[INFO] User not found by ig_id. Creating new user.');
       const { data: newUser, error: insertError } = await supabase
@@ -98,9 +113,9 @@ async function processMessagingEvent(message) {
     console.log('[DEBUG] Sending user message to assistant for processing.');
     const assistantResponse = await assistantHandler({
       userMessage,
-      recipientId: senderId, // Used for sending responses back to Instagram (customer ID)
+      recipientId: senderId,   // Used for sending responses back to Instagram (the user)
       platform,
-      businessId: user.fb_id, // Pass the user's `fb_id` for business lookups
+      businessId: user.fb_id, // Pass the user’s fb_id for business lookups
     });
 
     // Step 3: Send the assistant's response back to Instagram
@@ -116,10 +131,16 @@ async function processMessagingEvent(message) {
   }
 }
 
-// Primary webhook handler
+/**
+ * Primary webhook handler.
+ * This route will:
+ *   - Verify webhook setup on GET
+ *   - Process incoming Instagram webhook events on POST
+ */
 export default async function handler(req, res) {
   console.log('Received request:', req.method);
 
+  // Instagram webhook verification
   if (req.method === 'GET') {
     const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
@@ -130,7 +151,9 @@ export default async function handler(req, res) {
       console.error('Verification failed.');
       return res.status(403).send('Verification failed.');
     }
-  } else if (req.method === 'POST') {
+  } 
+  // Handle incoming messages/events
+  else if (req.method === 'POST') {
     const body = req.body;
 
     if (!body || !body.object) {
