@@ -104,7 +104,7 @@ router.post('/', async (req, res) => {
 
     // Check user.id exists
 if (!user?.id) {
-  console.error('[ERROR] User ID is undefined.');
+  console.error('[ERROR] User ID is undefined before setting cookie.');
   return res.status(500).json({ error: 'Failed to retrieve user ID.' });
 }
 
