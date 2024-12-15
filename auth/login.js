@@ -97,7 +97,15 @@ router.post('/', async (req, res) => {
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
-    res.cookie('userId', user.id, {
+
+    // Check user.id exists
+if (!user?.id) {
+  console.error('[ERROR] User ID is undefined.');
+  return res.status(500).json({ error: 'Failed to retrieve user ID.' });
+}
+
+    console.log('[DEBUG] User ID before setting cookie:', user?.id);
+    res.cookie('userId', user?.id, {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
