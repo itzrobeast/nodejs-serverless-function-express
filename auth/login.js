@@ -99,7 +99,7 @@ router.post('/', async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-      domain: '.mila-verse.vercel.app',
+      
       maxAge: 3600000, // 1 hour
     });
 
@@ -107,7 +107,7 @@ router.post('/', async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
-      domain: '.mila-verse.vercel.app',
+    
       maxAge: 3600000, // 1 hour
     });
 
