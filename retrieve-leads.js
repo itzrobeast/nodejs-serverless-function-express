@@ -111,9 +111,9 @@ const storeLeadsInSupabase = async (leads, businessId) => {
     // Prepare leads for insertion
     const formattedLeads = leads.map((lead) => ({
       lead_id: lead.id,
-      created_time: lead.created_time,
+      created_time: new Date(lead.created_time), // Ensure proper date format
       business_id: businessId,
-      field_data: JSON.stringify(lead.field_data), // Store as JSON string
+      field_data: lead.field_data, // Store as JSON object
     }));
 
     // Insert leads, ignoring duplicates based on lead_id
