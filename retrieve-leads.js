@@ -1,8 +1,29 @@
+import Joi from 'joi';
 import fetch from 'node-fetch';
 import express from 'express';
 import supabase from './supabaseClient.js';
 
 const router = express.Router();
+
+/**
+ * Define the Joi schema for a lead
+ */
+const leadSchema = Joi.object({
+  lead_id: Joi.string().required(),
+  created_time: Joi.date().required(),
+  business_id: Joi.number().required(),
+  field_data: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      values: Joi.array().items(Joi.string()).required(),
+    })
+  ).required(),
+  name: Joi.string().allow(null),
+  phone: Joi.string().allow(null),
+  email: Joi.string().email().allow(null),
+  city: Joi.string().allow(null),
+  // Add other fields as necessary
+});
 
 /**
  * Helper function to fetch leadgen forms from Facebook Graph API
@@ -156,15 +177,67 @@ const storeLeadsInSupabase = async (leads, businessId) => {
       };
     });
 
-    // Insert leads, ignoring duplicates based on lead_id and business_id
+    // Validate each lead against the schema
+    const validatedLeads = [];
+    const invalidLeads = [];
+
+    formattedLeads.forEach((lead) => {
+      const { error, value } = leadSchema.validate(lead, { abortEarly: false });
+
+      if (error) {
+        console.error(`[ERROR] Validation failed for lead ID ${lead.lead_id}:`, error.details);
+        invalidLeads.push({ lead, errors: error.details });
+        // Optionally, you can skip inserting this lead or handle it differently
+      } else {
+        validatedLeads.push(value);
+      }
+    });
+
+    // Optionally, handle invalid leads (e.g., log, notify, etc.)
+    if (invalidLeads.length > 0) {
+      console.warn(`[WARN] ${invalidLeads.length} leads failed validation and will not be inserted.`);
+      // Further handling can be implemented here
+      // Example: Store invalid leads in a separate table
+      const invalidFormattedLeads = invalidLeads.map(({ lead, errors }) => ({
+        lead_id: lead.lead_id,
+        business_id: lead.business_id,
+        errors: errors.map(err => err.message).join('; '),
+        field_data: lead.field_data,
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email,
+        city: lead.city,
+        created_time: lead.created_time,
+        // Include other relevant fields as needed
+      }));
+
+      if (invalidFormattedLeads.length > 0) {
+        const { error: insertInvalidError } = await supabase
+          .from('invalid_leads') // Ensure you have this table created
+          .insert(invalidFormattedLeads);
+
+        if (insertInvalidError) {
+          console.error('[ERROR] Failed to insert invalid leads into Supabase:', insertInvalidError.message);
+        } else {
+          console.log(`[DEBUG] Successfully inserted ${invalidFormattedLeads.length} invalid leads into Supabase.`);
+        }
+      }
+    }
+
+    if (validatedLeads.length === 0) {
+      console.warn('[WARN] No valid leads to insert into Supabase.');
+      return;
+    }
+
+    // Insert validated leads, ignoring duplicates based on lead_id and business_id
     const { error } = await supabase
       .from('leads')
-      .upsert(formattedLeads, { onConflict: ['business_id', 'lead_id'] });
+      .upsert(validatedLeads, { onConflict: ['business_id', 'lead_id'] });
 
     if (error) {
       console.error('[ERROR] Failed to insert leads into Supabase:', error.message);
     } else {
-      console.log(`[DEBUG] Successfully inserted ${formattedLeads.length} leads into Supabase.`);
+      console.log(`[DEBUG] Successfully inserted ${validatedLeads.length} leads into Supabase.`);
     }
   } catch (error) {
     console.error('[ERROR] Exception while storing leads:', error.message);
