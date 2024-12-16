@@ -1,10 +1,11 @@
-const express = require("express");
-const axios = require("axios");
+import express from "express";
+import axios from "axios";
+
 const router = express.Router();
 
 // Load environment variables
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN; // Your webhook verify token
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // Your Facebook page access token
+const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN; // Webhook verify token
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // Facebook Page Access Token
 
 // Webhook verification endpoint
 router.get("/", (req, res) => {
@@ -13,10 +14,10 @@ router.get("/", (req, res) => {
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verified!");
+    console.log("Instagram Webhook verified successfully!");
     res.status(200).send(challenge);
   } else {
-    console.log("Webhook verification failed.");
+    console.log("Instagram Webhook verification failed.");
     res.sendStatus(403);
   }
 });
@@ -25,6 +26,7 @@ router.get("/", (req, res) => {
 router.post("/", async (req, res) => {
   const body = req.body;
 
+  // Check for Facebook Page events
   if (body.object === "page") {
     body.entry.forEach(async (entry) => {
       const changes = entry.changes;
@@ -37,7 +39,7 @@ router.post("/", async (req, res) => {
           console.log(`New lead received! Lead ID: ${leadgenId}, Form ID: ${formId}`);
 
           try {
-            // Fetch the lead data
+            // Fetch lead data from Graph API
             const response = await axios.get(
               `https://graph.facebook.com/v17.0/${leadgenId}?access_token=${PAGE_ACCESS_TOKEN}`
             );
@@ -45,10 +47,12 @@ router.post("/", async (req, res) => {
             const leadData = response.data;
             console.log("Lead Data:", leadData);
 
-            // Store lead data or send it to the frontend
-            // e.g., Save to DB, or integrate with a third-party CRM
+            // TODO: Store or process lead data here
           } catch (error) {
-            console.error("Error fetching lead:", error.response ? error.response.data : error.message);
+            console.error(
+              "Error fetching lead:",
+              error.response ? error.response.data : error.message
+            );
           }
         }
       }
@@ -61,4 +65,5 @@ router.post("/", async (req, res) => {
   }
 });
 
-module.exports = router;
+// Export the router as an ES Module
+export default router;
