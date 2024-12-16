@@ -1,7 +1,9 @@
+// retrieve-leads.js
+
 import Joi from 'joi';
 import fetch from 'node-fetch';
 import express from 'express';
-import supabase from './supabaseClient.js';
+import supabase from './supabaseClient.js'; // Ensure supabaseClient.js is correctly configured
 
 const router = express.Router();
 
@@ -18,23 +20,24 @@ const leadSchema = Joi.object({
       values: Joi.array().items(Joi.string()).required(),
     })
   ).required(),
-  name: Joi.string().allow(null),
-  phone: Joi.string().allow(null),
-  email: Joi.string().email().allow(null),
-  city: Joi.string().allow(null),
-  status: Joi.string().allow(null),
+  name: Joi.string().optional().allow(null, ''),
+  phone: Joi.string().optional().allow(null, ''),
+  email: Joi.string().email().optional().allow(null, ''),
+  city: Joi.string().optional().allow(null, ''),
+  status: Joi.string().optional().allow(null, ''),
   // Add other fields as necessary
 });
 
 /**
  * Mapping of desired field keys to actual field names in field_data
+ * Ensure this mapping includes all possible variations used in your Facebook Leadgen forms
  */
 const FIELD_NAME_MAPPING = {
-  name: ['name', 'full name', 'fullname', 'contact name'],
-  phone: ['phone', 'phone number', 'telephone', 'contact number'],
-  email: ['email', 'email address'],
-  city: ['city', 'town'],
-  status: ['status', 'lead status'],
+  name: ['name', 'full name', 'fullname', 'contact name', 'contactfullname', 'contactfullname'],
+  phone: ['phone', 'phone number', 'telephone', 'contact number', 'contactphone'],
+  email: ['email', 'email address', 'contact email'],
+  city: ['city', 'town', 'location'],
+  status: ['status', 'lead status', 'lead_status'],
 };
 
 /**
@@ -45,8 +48,10 @@ const FIELD_NAME_MAPPING = {
  */
 const sanitizeFieldData = (fieldData) => {
   return fieldData.map((field) => ({
-    name: field.name ? field.name.trim() : 'Unnamed Field',
-    values: Array.isArray(field.values) ? field.values.map(value => value.trim()) : [field.values ? field.values.trim() : 'No Value'],
+    name: field.name ? field.name.trim().toLowerCase() : 'unnamed field',
+    values: Array.isArray(field.values)
+      ? field.values.map(value => value.trim())
+      : [field.values ? field.values.trim() : 'no value'],
   }));
 };
 
@@ -61,12 +66,12 @@ const getFieldValue = (fieldData, fieldKey) => {
   const field = fieldData.find(item => possibleNames.includes(item.name.toLowerCase()));
 
   if (field && Array.isArray(field.values)) {
-    const joinedValues = field.values.map(value => value.trim()).join(', ');
-    console.log(`[DEBUG] Extracted ${fieldKey}:`, joinedValues);
+    const joinedValues = field.values.join(', ');
+    console.log(`[DEBUG] Extracted ${fieldKey}: ${joinedValues}`);
     return joinedValues;
   }
 
-  console.log(`[DEBUG] ${fieldKey} not found or invalid in lead. Possible names:`, possibleNames);
+  console.log(`[DEBUG] ${fieldKey} not found in field_data. Possible names: ${possibleNames.join(', ')}`);
   return null;
 };
 
@@ -79,10 +84,12 @@ const getFieldValue = (fieldData, fieldKey) => {
 const fetchLeadForms = async (pageId, pageAccessToken) => {
   const url = `https://graph.facebook.com/v14.0/${pageId}/leadgen_forms?access_token=${pageAccessToken}`;
   const response = await fetch(url);
+
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(`Failed to fetch leadgen forms: ${JSON.stringify(errorData)}`);
   }
+
   const data = await response.json();
   return data.data || [];
 };
@@ -96,12 +103,14 @@ const fetchLeadForms = async (pageId, pageAccessToken) => {
 const fetchLeadsForForm = async (formId, pageAccessToken) => {
   const url = `https://graph.facebook.com/v14.0/${formId}/leads?access_token=${pageAccessToken}`;
   const response = await fetch(url);
+
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(`Failed to fetch leads for form ${formId}: ${JSON.stringify(errorData)}`);
   }
+
   const data = await response.json();
-  console.log(`[DEBUG] Fetched leads for form ${formId}:`, data.data);
+  console.log(`[DEBUG] Fetched ${data.data.length} leads for form ${formId}`);
   return data.data || [];
 };
 
@@ -121,22 +130,22 @@ const fetchAllLeadsForPage = async (pageId, pageAccessToken) => {
         console.log(`[DEBUG] Fetching leads for form: ${form.name} (ID: ${form.id})`);
         try {
           const leads = await fetchLeadsForForm(form.id, pageAccessToken);
-          // Validate each lead's field_data
-          const validatedLeads = leads.filter((lead) => Array.isArray(lead.field_data));
-          if (validatedLeads.length !== leads.length) {
-            console.warn(`[WARN] Some leads from form ${form.id} have invalid field_data and were skipped.`);
+          // Filter out leads without valid field_data
+          const validLeads = leads.filter(lead => Array.isArray(lead.field_data));
+          if (validLeads.length !== leads.length) {
+            console.warn(`[WARN] ${leads.length - validLeads.length} leads from form ${form.id} have invalid field_data and were skipped.`);
           }
-          allLeads.push(...validatedLeads);
+          allLeads.push(...validLeads);
         } catch (formError) {
           console.error(`[ERROR] Error fetching leads for form ${form.id}: ${formError.message}`);
-          // Continue fetching other forms even if one fails
+          // Continue with other forms
         }
       }
     }
 
     return allLeads;
   } catch (error) {
-    console.error('[ERROR] Failed to fetch leads for page:', error.message);
+    console.error(`[ERROR] Failed to fetch all leads for page ${pageId}: ${error.message}`);
     throw error;
   }
 };
@@ -169,7 +178,7 @@ const validatePageToken = async (pageAccessToken) => {
       return false;
     }
   } catch (error) {
-    console.error('[ERROR] Failed to validate page token:', error.message);
+    console.error(`[ERROR] Failed to validate page token: ${error.message}`);
     return false;
   }
 };
@@ -182,7 +191,10 @@ const validatePageToken = async (pageAccessToken) => {
  */
 const storeLeadsInSupabase = async (leads, businessId) => {
   try {
-    if (!leads.length) return;
+    if (!leads.length) {
+      console.log('[INFO] No leads to process.');
+      return;
+    }
 
     // Prepare leads for insertion
     const formattedLeads = leads.map((lead) => {
@@ -241,7 +253,7 @@ const storeLeadsInSupabase = async (leads, businessId) => {
           .insert(invalidFormattedLeads);
 
         if (insertInvalidError) {
-          console.error('[ERROR] Failed to insert invalid leads into Supabase:', insertInvalidError.message);
+          console.error(`[ERROR] Failed to insert invalid leads into Supabase: ${insertInvalidError.message}`);
         } else {
           console.log(`[DEBUG] Successfully inserted ${invalidFormattedLeads.length} invalid leads into Supabase.`);
         }
@@ -259,12 +271,12 @@ const storeLeadsInSupabase = async (leads, businessId) => {
       .upsert(validatedLeads, { onConflict: ['business_id', 'lead_id'] });
 
     if (error) {
-      console.error('[ERROR] Failed to insert leads into Supabase:', error.message);
+      console.error(`[ERROR] Failed to insert leads into Supabase: ${error.message}`);
     } else {
       console.log(`[DEBUG] Successfully inserted ${validatedLeads.length} leads into Supabase.`);
     }
   } catch (error) {
-    console.error('[ERROR] Exception while storing leads:', error.message);
+    console.error(`[ERROR] Exception while storing leads: ${error.message}`);
   }
 };
 
@@ -280,6 +292,7 @@ router.get('/', async (req, res) => {
     console.log('[DEBUG] Parsed Cookies:', { userId, businessId });
 
     if (!userId || !businessId) {
+      console.error('[ERROR] Missing userId or businessId in cookies.');
       return res.status(400).json({ error: 'Missing userId or businessId in cookies.' });
     }
 
@@ -292,7 +305,7 @@ router.get('/', async (req, res) => {
       .single();
 
     if (pageRowError || !pageRow) {
-      console.error('[ERROR] Page access token not found:', pageRowError?.message);
+      console.error(`[ERROR] Page access token not found for userId: ${userId}, businessId: ${businessId}. Error: ${pageRowError?.message}`);
       return res.status(404).json({ error: 'Page access token not found.' });
     }
 
@@ -302,12 +315,13 @@ router.get('/', async (req, res) => {
     // 2. (Optional) Validate the page access token
     const isValid = await validatePageToken(pageAccessToken);
     if (!isValid) {
+      console.error('[ERROR] Invalid or expired page access token.');
       return res.status(403).json({ error: 'Invalid or expired page access token.' });
     }
 
     // 3. Fetch all leads for the page
     const leads = await fetchAllLeadsForPage(pageId, pageAccessToken);
-    console.log('[DEBUG] Retrieved Leads:', leads);
+    console.log(`[DEBUG] Retrieved ${leads.length} leads for businessId: ${businessId}`);
 
     // 4. Store leads in Supabase
     await storeLeadsInSupabase(leads, businessId);
@@ -320,13 +334,13 @@ router.get('/', async (req, res) => {
       .order('created_time', { ascending: false });
 
     if (insertError) {
-      console.error('[ERROR] Failed to fetch inserted leads:', insertError.message);
+      console.error(`[ERROR] Failed to fetch inserted leads for businessId: ${businessId}: ${insertError.message}`);
       return res.status(500).json({ error: 'Failed to fetch leads after insertion.' });
     }
 
     return res.status(200).json({ leads: insertedLeads });
   } catch (error) {
-    console.error('[ERROR] Failed to retrieve leads:', error.message);
+    console.error(`[ERROR] Failed to retrieve leads: ${error.message}`);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
