@@ -1,4 +1,3 @@
-// retrieve-leads.js
 import fetch from 'node-fetch';
 import express from 'express';
 import supabase from './supabaseClient.js';
@@ -53,8 +52,18 @@ const fetchAllLeadsForPage = async (pageId, pageAccessToken) => {
     for (const form of forms) {
       if (form.status === 'ACTIVE') {
         console.log(`[DEBUG] Fetching leads for form: ${form.name} (ID: ${form.id})`);
-        const leads = await fetchLeadsForForm(form.id, pageAccessToken);
-        allLeads.push(...leads);
+        try {
+          const leads = await fetchLeadsForForm(form.id, pageAccessToken);
+          // Validate each lead's field_data
+          const validatedLeads = leads.filter((lead) => Array.isArray(lead.field_data));
+          if (validatedLeads.length !== leads.length) {
+            console.warn(`[WARN] Some leads from form ${form.id} have invalid field_data and were skipped.`);
+          }
+          allLeads.push(...validatedLeads);
+        } catch (formError) {
+          console.error(`[ERROR] Error fetching leads for form ${form.id}: ${formError.message}`);
+          // Continue fetching other forms even if one fails
+        }
       }
     }
 
@@ -99,6 +108,19 @@ const validatePageToken = async (pageAccessToken) => {
 };
 
 /**
+ * Helper function to sanitize field_data
+ * Ensures that each field has a 'name' and 'values' as an array
+ * @param {Array} fieldData - Array of field data objects
+ * @returns {Array} Sanitized field data
+ */
+const sanitizeFieldData = (fieldData) => {
+  return fieldData.map((field) => ({
+    name: field.name || 'Unnamed Field',
+    values: Array.isArray(field.values) ? field.values : [field.values || 'No Value'],
+  }));
+};
+
+/**
  * Helper function to store leads in Supabase
  * @param {Array} leads - Array of lead objects
  * @param {string} businessId - Business ID to associate the leads with
@@ -113,13 +135,13 @@ const storeLeadsInSupabase = async (leads, businessId) => {
       lead_id: lead.id,
       created_time: new Date(lead.created_time), // Ensure proper date format
       business_id: businessId,
-      field_data: lead.field_data, // Store as JSON object
+      field_data: sanitizeFieldData(lead.field_data), // Sanitize field_data
     }));
 
-    // Insert leads, ignoring duplicates based on lead_id
+    // Insert leads, ignoring duplicates based on lead_id and business_id
     const { error } = await supabase
       .from('leads')
-       .upsert(formattedLeads, { onConflict: ['business_id', 'lead_id'] });  
+      .upsert(formattedLeads, { onConflict: ['business_id', 'lead_id'] });
 
     if (error) {
       console.error('[ERROR] Failed to insert leads into Supabase:', error.message);
