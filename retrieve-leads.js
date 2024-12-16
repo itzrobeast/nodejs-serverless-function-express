@@ -4,6 +4,12 @@ import Joi from 'joi';
 import fetch from 'node-fetch';
 import express from 'express';
 import supabase from './supabaseClient.js'; // Ensure supabaseClient.js is correctly configured
+import * as Sentry from '@sentry/node';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN, // Ensure this is set in your environment variables
+  tracesSampleRate: 1.0,
+});
 
 const router = express.Router();
 
@@ -141,16 +147,25 @@ const getFieldValue = (fieldData, fieldKey) => {
  * @returns {Array} Array of leadgen forms
  */
 const fetchLeadForms = async (pageId, pageAccessToken) => {
-  const url = `https://graph.facebook.com/v14.0/${pageId}/leadgen_forms?access_token=${pageAccessToken}`;
-  const response = await fetch(url);
+  let allForms = [];
+  let nextPageUrl = `https://graph.facebook.com/v14.0/${pageId}/leadgen_forms?access_token=${pageAccessToken}&limit=100`;
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Failed to fetch leadgen forms: ${JSON.stringify(errorData)}`);
+  while (nextPageUrl) {
+    const response = await fetch(nextPageUrl);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Failed to fetch leadgen forms: ${JSON.stringify(errorData)}`);
+    }
+
+    const data = await response.json();
+    allForms.push(...(data.data || []));
+
+    nextPageUrl = data.paging?.next || null;
   }
 
-  const data = await response.json();
-  return data.data || [];
+  console.log(`[DEBUG] Total fetched forms: ${allForms.length}`);
+  return allForms;
 };
 
 /**
@@ -160,17 +175,25 @@ const fetchLeadForms = async (pageId, pageAccessToken) => {
  * @returns {Array} Array of leads
  */
 const fetchLeadsForForm = async (formId, pageAccessToken) => {
-  const url = `https://graph.facebook.com/v14.0/${formId}/leads?access_token=${pageAccessToken}`;
-  const response = await fetch(url);
+  let allLeads = [];
+  let nextPageUrl = `https://graph.facebook.com/v14.0/${formId}/leads?access_token=${pageAccessToken}&limit=100`;
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Failed to fetch leads for form ${formId}: ${JSON.stringify(errorData)}`);
+  while (nextPageUrl) {
+    const response = await fetch(nextPageUrl);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Failed to fetch leads for form ${formId}: ${JSON.stringify(errorData)}`);
+    }
+
+    const data = await response.json();
+    allLeads.push(...(data.data || []));
+
+    nextPageUrl = data.paging?.next || null;
   }
 
-  const data = await response.json();
-  console.log(`[DEBUG] Fetched ${data.data.length} leads for form ${formId}`);
-  return data.data || [];
+  console.log(`[DEBUG] Total fetched leads for form ${formId}: ${allLeads.length}`);
+  return allLeads;
 };
 
 /**
@@ -185,20 +208,19 @@ const fetchAllLeadsForPage = async (pageId, pageAccessToken) => {
     const allLeads = [];
 
     for (const form of forms) {
-      if (form.status === 'ACTIVE') {
-        console.log(`[DEBUG] Fetching leads for form: ${form.name} (ID: ${form.id})`);
-        try {
-          const leads = await fetchLeadsForForm(form.id, pageAccessToken);
-          // Filter out leads without valid field_data
-          const validLeads = leads.filter(lead => Array.isArray(lead.field_data));
-          if (validLeads.length !== leads.length) {
-            console.warn(`[WARN] ${leads.length - validLeads.length} leads from form ${form.id} have invalid field_data and were skipped.`);
-          }
-          allLeads.push(...validLeads);
-        } catch (formError) {
-          console.error(`[ERROR] Error fetching leads for form ${form.id}: ${formError.message}`);
-          // Continue with other forms
+      // Optionally, include all forms or filter based on criteria
+      console.log(`[DEBUG] Fetching leads for form: ${form.name} (ID: ${form.id})`);
+      try {
+        const leads = await fetchLeadsForForm(form.id, pageAccessToken);
+        // Filter out leads without valid field_data
+        const validLeads = leads.filter(lead => Array.isArray(lead.field_data));
+        if (validLeads.length !== leads.length) {
+          console.warn(`[WARN] ${leads.length - validLeads.length} leads from form ${form.id} have invalid field_data and were skipped.`);
         }
+        allLeads.push(...validLeads);
+      } catch (formError) {
+        console.error(`[ERROR] Error fetching leads for form ${form.id}: ${formError.message}`);
+        // Continue with other forms
       }
     }
 
@@ -336,6 +358,7 @@ const storeLeadsInSupabase = async (leads, businessId) => {
     }
   } catch (error) {
     console.error(`[ERROR] Exception while storing leads: ${error.message}`);
+    Sentry.captureException(error);
   }
 };
 
@@ -344,7 +367,7 @@ const storeLeadsInSupabase = async (leads, businessId) => {
  * Fetches leads from Facebook using stored page access tokens and stores them in Supabase
  * Requires userId and businessId from cookies
  */
-router.get('/', async (req, res) => {
+router.get('/', Sentry.Handlers.requestHandler(), async (req, res) => {
   try {
     const { userId, businessId } = req.cookies;
 
@@ -400,8 +423,11 @@ router.get('/', async (req, res) => {
     return res.status(200).json({ leads: insertedLeads });
   } catch (error) {
     console.error(`[ERROR] Failed to retrieve leads: ${error.message}`);
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
+
+router.use(Sentry.Handlers.errorHandler());
 
 export default router;
