@@ -99,8 +99,41 @@ const validatePageToken = async (pageAccessToken) => {
 };
 
 /**
+ * Helper function to store leads in Supabase
+ * @param {Array} leads - Array of lead objects
+ * @param {string} businessId - Business ID to associate the leads with
+ * @returns {void}
+ */
+const storeLeadsInSupabase = async (leads, businessId) => {
+  try {
+    if (!leads.length) return;
+
+    // Prepare leads for insertion
+    const formattedLeads = leads.map((lead) => ({
+      lead_id: lead.id,
+      created_time: lead.created_time,
+      business_id: businessId,
+      field_data: JSON.stringify(lead.field_data), // Store as JSON string
+    }));
+
+    // Insert leads, ignoring duplicates based on lead_id
+    const { error } = await supabase
+      .from('leads')
+      .upsert(formattedLeads, { onConflict: 'lead_id' }); // Ensure 'lead_id' is unique
+
+    if (error) {
+      console.error('[ERROR] Failed to insert leads into Supabase:', error.message);
+    } else {
+      console.log(`[DEBUG] Successfully inserted ${formattedLeads.length} leads into Supabase.`);
+    }
+  } catch (error) {
+    console.error('[ERROR] Exception while storing leads:', error.message);
+  }
+};
+
+/**
  * GET /retrieve-leads
- * Fetches leads from Facebook using stored page access tokens
+ * Fetches leads from Facebook using stored page access tokens and stores them in Supabase
  * Requires userId and businessId from cookies
  */
 router.get('/', async (req, res) => {
@@ -139,6 +172,10 @@ router.get('/', async (req, res) => {
     const leads = await fetchAllLeadsForPage(pageId, pageAccessToken);
     console.log('[DEBUG] Retrieved Leads:', leads);
 
+    // 4. Store leads in Supabase
+    await storeLeadsInSupabase(leads, businessId);
+
+    // 5. Return the leads to frontend
     return res.status(200).json({ leads });
   } catch (error) {
     console.error('[ERROR] Failed to retrieve leads:', error.message);
