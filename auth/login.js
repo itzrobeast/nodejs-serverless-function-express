@@ -126,6 +126,7 @@ router.post('/', async (req, res) => {
     return res.status(200).json({
       message: 'Login successful',
       userId: user.id,
+      businessId: business.id,
       user: {
         id: user.id,
         fb_id: user.fb_id,
