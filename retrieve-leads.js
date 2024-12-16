@@ -99,23 +99,36 @@ const sanitizeFieldData = (fieldData) => {
 
 /**
  * Helper function to extract specific fields from field_data based on mappings
+ * and deduplicate values if necessary.
  * @param {Array} fieldData - Array of field data objects
  * @param {string} fieldKey - The key of the field to extract (e.g., 'name', 'phone')
  * @returns {string|null} - The extracted field value or null if not found
  */
 const getFieldValue = (fieldData, fieldKey) => {
   const possibleNames = FIELD_NAME_MAPPING[fieldKey.toLowerCase()] || [fieldKey.toLowerCase()];
-  const matchingFields = fieldData.filter(item => possibleNames.includes(item.name.toLowerCase()));
+  
+  // Filter fields that match the possible names (case-insensitive)
+  const matchingFields = fieldData.filter(item =>
+    possibleNames.includes(item.name.trim().toLowerCase())
+  );
 
   if (matchingFields.length > 0) {
-    const combinedValues = matchingFields
-      .map(field => Array.isArray(field.values) ? field.values.join(', ') : field.values)
-      .join(', ');
+    // Extract all values from matching fields
+    const allValues = matchingFields.flatMap(field =>
+      Array.isArray(field.values) ? field.values.map(val => val.trim()) : [field.values ? field.values.trim() : '']
+    );
+
+    // Deduplicate the values
+    const uniqueValues = [...new Set(allValues)];
+
+    // Join the unique values into a single string
+    const combinedValues = uniqueValues.join(', ');
+
     console.log(`[DEBUG] Extracted ${fieldKey}: ${combinedValues}`);
     return combinedValues;
   }
 
-  // Log the entire field_data for debugging
+  // Log the entire field_data for debugging purposes
   console.log(`[DEBUG] ${fieldKey} not found in field_data. Possible names: ${possibleNames.join(', ')}`);
   console.log(`[DEBUG] Current field_data: ${JSON.stringify(fieldData, null, 2)}`);
   return null;
