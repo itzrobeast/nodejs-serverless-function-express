@@ -19,7 +19,7 @@ if (
 import setupBusinessRouter from './setup-business.js';
 import assistantRouter from './assistant.js';
 import instagramWebhookRouter from './instagram-webhook.js';
-import leadgenRouter from './leadgen-webhook.js';
+import leadgenWebhookRouter from './leadgen-webhook.js';
 import getBusinessRouter from './get-business.js';
 import getVonageNumberRouter from './get-vonage-number.js';
 import retrieveLeadsRouter from './retrieve-leads.js';
@@ -88,7 +88,7 @@ const routes = [
   { path: '/setup-business', router: setupBusinessRouter },
   { path: '/assistant', router: assistantRouter },
   { path: '/instagram-webhook', router: instagramWebhookRouter },
-  { path: '/leadgen-webhook', router: leadgenRouter },
+  { path: '/leadgen-webhook', router: leadgenWebhookRouter },
   { path: '/get-business', router: getBusinessRouter },
   { path: '/get-vonage-number', router: getVonageNumberRouter },
   { path: '/retrieve-leads', router: retrieveLeadsRouter },
