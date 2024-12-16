@@ -22,6 +22,7 @@ const leadSchema = Joi.object({
   phone: Joi.string().allow(null),
   email: Joi.string().email().allow(null),
   city: Joi.string().allow(null),
+  status: Joi.string().allow(null),
   // Add other fields as necessary
 });
 
@@ -29,11 +30,11 @@ const leadSchema = Joi.object({
  * Mapping of desired field keys to actual field names in field_data
  */
 const FIELD_NAME_MAPPING = {
-  name: ['name', 'full name', 'fullname'],
-  phone: ['phone', 'phone number', 'telephone'],
-  email: ['email'],
-  city: ['city'],
-  status: ['status'],
+  name: ['name', 'full name', 'fullname', 'contact name'],
+  phone: ['phone', 'phone number', 'telephone', 'contact number'],
+  email: ['email', 'email address'],
+  city: ['city', 'town'],
+  status: ['status', 'lead status'],
 };
 
 /**
@@ -58,14 +59,14 @@ const sanitizeFieldData = (fieldData) => {
 const getFieldValue = (fieldData, fieldKey) => {
   const possibleNames = FIELD_NAME_MAPPING[fieldKey.toLowerCase()] || [fieldKey.toLowerCase()];
   const field = fieldData.find(item => possibleNames.includes(item.name.toLowerCase()));
-  
+
   if (field && Array.isArray(field.values)) {
     const joinedValues = field.values.map(value => value.trim()).join(', ');
     console.log(`[DEBUG] Extracted ${fieldKey}:`, joinedValues);
     return joinedValues;
   }
-  
-  console.log(`[DEBUG] ${fieldKey} not found or invalid in lead.`);
+
+  console.log(`[DEBUG] ${fieldKey} not found or invalid in lead. Possible names:`, possibleNames);
   return null;
 };
 
@@ -196,6 +197,7 @@ const storeLeadsInSupabase = async (leads, businessId) => {
         phone: getFieldValue(sanitizedFieldData, 'phone'),
         email: getFieldValue(sanitizedFieldData, 'email'),
         city: getFieldValue(sanitizedFieldData, 'city'),
+        status: getFieldValue(sanitizedFieldData, 'status'),
         // Add other fields as necessary
       };
     });
@@ -228,6 +230,7 @@ const storeLeadsInSupabase = async (leads, businessId) => {
         phone: lead.phone,
         email: lead.email,
         city: lead.city,
+        status: lead.status,
         created_time: lead.created_time,
         // Include other relevant fields as needed
       }));
