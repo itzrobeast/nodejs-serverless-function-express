@@ -35,6 +35,7 @@ const fetchLeadsForForm = async (formId, pageAccessToken) => {
     throw new Error(`Failed to fetch leads for form ${formId}: ${JSON.stringify(errorData)}`);
   }
   const data = await response.json();
+  console.log(`[DEBUG] Fetched leads for form ${formId}:`, data.data);
   return data.data || [];
 };
 
@@ -115,8 +116,8 @@ const validatePageToken = async (pageAccessToken) => {
  */
 const sanitizeFieldData = (fieldData) => {
   return fieldData.map((field) => ({
-    name: field.name || 'Unnamed Field',
-    values: Array.isArray(field.values) ? field.values : [field.values || 'No Value'],
+    name: field.name ? field.name.trim() : 'Unnamed Field',
+    values: Array.isArray(field.values) ? field.values.map(value => value.trim()) : [field.values ? field.values.trim() : 'No Value'],
   }));
 };
 
@@ -131,12 +132,29 @@ const storeLeadsInSupabase = async (leads, businessId) => {
     if (!leads.length) return;
 
     // Prepare leads for insertion
-    const formattedLeads = leads.map((lead) => ({
-      lead_id: lead.id,
-      created_time: new Date(lead.created_time), // Ensure proper date format
-      business_id: businessId,
-      field_data: sanitizeFieldData(lead.field_data), // Sanitize field_data
-    }));
+    const formattedLeads = leads.map((lead) => {
+      const sanitizedFieldData = sanitizeFieldData(lead.field_data);
+
+      // Extract specific fields
+      const getFieldValue = (fieldName) => {
+        const field = sanitizedFieldData.find(
+          (item) => item.name.toLowerCase() === fieldName.toLowerCase()
+        );
+        return field && Array.isArray(field.values) ? field.values.join(', ') : null;
+      };
+
+      return {
+        lead_id: lead.id,
+        created_time: new Date(lead.created_time), // Ensure proper date format
+        business_id: businessId,
+        field_data: sanitizedFieldData, // Store as JSON object
+        name: getFieldValue('name') || getFieldValue('full name'), // Adjust based on actual field names
+        phone: getFieldValue('phone') || getFieldValue('phone number'), // Adjust as needed
+        email: getFieldValue('email'),
+        city: getFieldValue('city'),
+        // Add other fields as necessary
+      };
+    });
 
     // Insert leads, ignoring duplicates based on lead_id and business_id
     const { error } = await supabase
@@ -197,8 +215,19 @@ router.get('/', async (req, res) => {
     // 4. Store leads in Supabase
     await storeLeadsInSupabase(leads, businessId);
 
-    // 5. Return the leads to frontend
-    return res.status(200).json({ leads });
+    // 5. Fetch and return the leads to frontend
+    const { data: insertedLeads, error: insertError } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_time', { ascending: false });
+
+    if (insertError) {
+      console.error('[ERROR] Failed to fetch inserted leads:', insertError.message);
+      return res.status(500).json({ error: 'Failed to fetch leads after insertion.' });
+    }
+
+    return res.status(200).json({ leads: insertedLeads });
   } catch (error) {
     console.error('[ERROR] Failed to retrieve leads:', error.message);
     return res.status(500).json({ error: 'Internal server error.' });
