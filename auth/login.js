@@ -9,6 +9,16 @@ if (!process.env.MILA_SECRET) {
   throw new Error('MILA_SECRET environment variable is missing.');
 }
 
+/**
+ * POST /auth/login
+ * Flow:
+ * 1. Verify the user's Facebook token (user token).
+ * 2. Upsert user & business rows in DB.
+ * 3. Fetch the pages the user manages (via /me/accounts).
+ * 4. Store each page token in the 'page_access_tokens' table, linking user_id & business_id.
+ * 5. Set cookies (authToken, userId, businessId).
+ * 6. Return user & business info in response.
+ */
 router.post('/', async (req, res) => {
   try {
     const { accessToken } = req.body;
@@ -18,20 +28,18 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing access token' });
     }
 
-    // Verify the Facebook token
+    // 1. Verify the Facebook user token
     const fbResponse = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
     );
-
     if (!fbResponse.ok) {
       console.error('[ERROR] Invalid Facebook token.');
       return res.status(401).json({ error: 'Invalid Facebook token' });
     }
-
     const fbData = await fbResponse.json();
-    console.log('[DEBUG] Facebook data fetched:', fbData);
+    console.log('[DEBUG] Facebook user data fetched:', fbData);
 
-    // Retrieve or create the user in Supabase
+    // 2. Upsert user in DB
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -66,7 +74,7 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Invalid user ID from Supabase.' });
     }
 
-    // Retrieve or create the business for the user
+    // 3. Upsert business for the user
     let { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
@@ -94,7 +102,71 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ error: 'Error fetching business.' });
     }
 
-    // Set cookies for authentication
+    // 4. Fetch user’s pages & upsert page tokens
+    //    Calls /me/accounts to get a list of pages where the user is an admin, plus page tokens
+    const pagesResponse = await fetch(`https://graph.facebook.com/me/accounts?access_token=${accessToken}`);
+    if (!pagesResponse.ok) {
+      console.error('[ERROR] Failed to fetch pages for user.');
+      // Not fatal for login, but means no pages were fetched
+    } else {
+      const pagesData = await pagesResponse.json();
+      console.log('[DEBUG] /me/accounts returned:', pagesData?.data);
+
+      if (Array.isArray(pagesData?.data)) {
+        for (const pageInfo of pagesData.data) {
+          // pageInfo has { access_token, id (page_id), name, category, etc. }
+          const pageId = pageInfo.id;
+          const pageAccessToken = pageInfo.access_token;
+
+          // Upsert into page_access_tokens table
+          // Table schema might be: (id PK, user_id, business_id, page_id, page_access_token)
+          // Using user_id + business_id + page_id as unique
+          let { data: existingPageRow, error: fetchPageError } = await supabase
+            .from('page_access_tokens')
+            .select('*')
+            .eq('user_id', ownerId)
+            .eq('business_id', business.id)
+            .eq('page_id', pageId)
+            .single();
+
+          if (fetchPageError && fetchPageError.code !== 'PGRST116') {
+            console.error('[ERROR] Fetching existing page token row:', fetchPageError.message);
+            // Not a showstopper for login
+            continue;
+          }
+
+          if (!existingPageRow) {
+            console.log(`[DEBUG] Inserting new page token for page_id=${pageId}.`);
+            const { error: insertError } = await supabase
+              .from('page_access_tokens')
+              .insert([
+                {
+                  user_id: ownerId,
+                  business_id: business.id,
+                  page_id: pageId,
+                  page_access_token: pageAccessToken,
+                },
+              ]);
+            if (insertError) {
+              console.error('[ERROR] Failed to insert page token:', insertError.message);
+            }
+          } else {
+            console.log(`[DEBUG] Updating existing page token for page_id=${pageId}.`);
+            const { error: updateError } = await supabase
+              .from('page_access_tokens')
+              .update({
+                page_access_token: pageAccessToken,
+              })
+              .eq('id', existingPageRow.id);
+            if (updateError) {
+              console.error('[ERROR] Failed to update page token:', updateError.message);
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Set cookies for authentication
     res.cookie('authToken', accessToken, {
       httpOnly: true,
       secure: true,
@@ -102,27 +174,27 @@ router.post('/', async (req, res) => {
       maxAge: 3600000, // 1 hour
     });
 
-     res.cookie('userId', user.id?.toString(), { // Ensure it's stored as a string
+    res.cookie('userId', user.id?.toString(), {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
 
-    res.cookie('businessId', business.id.toString(), { 
+    res.cookie('businessId', business.id.toString(), {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
 
-    
     console.log('[DEBUG] Cookies Set:', {
       authToken: accessToken,
       userId: ownerId,
+      businessId: business.id,
     });
 
-    // Send response
+    // 6. Send JSON response
     return res.status(200).json({
       message: 'Login successful',
       userId: user.id,
