@@ -26,6 +26,50 @@ const leadSchema = Joi.object({
 });
 
 /**
+ * Mapping of desired field keys to actual field names in field_data
+ */
+const FIELD_NAME_MAPPING = {
+  name: ['name', 'full name', 'fullname'],
+  phone: ['phone', 'phone number', 'telephone'],
+  email: ['email'],
+  city: ['city'],
+  status: ['status'],
+};
+
+/**
+ * Helper function to sanitize field_data
+ * Ensures that each field has a 'name' and 'values' as an array
+ * @param {Array} fieldData - Array of field data objects
+ * @returns {Array} Sanitized field data
+ */
+const sanitizeFieldData = (fieldData) => {
+  return fieldData.map((field) => ({
+    name: field.name ? field.name.trim() : 'Unnamed Field',
+    values: Array.isArray(field.values) ? field.values.map(value => value.trim()) : [field.values ? field.values.trim() : 'No Value'],
+  }));
+};
+
+/**
+ * Helper function to extract specific fields from field_data based on mappings
+ * @param {Array} fieldData - Array of field data objects
+ * @param {string} fieldKey - The key of the field to extract (e.g., 'name', 'phone')
+ * @returns {string|null} - The extracted field value or null if not found
+ */
+const getFieldValue = (fieldData, fieldKey) => {
+  const possibleNames = FIELD_NAME_MAPPING[fieldKey.toLowerCase()] || [fieldKey.toLowerCase()];
+  const field = fieldData.find(item => possibleNames.includes(item.name.toLowerCase()));
+  
+  if (field && Array.isArray(field.values)) {
+    const joinedValues = field.values.map(value => value.trim()).join(', ');
+    console.log(`[DEBUG] Extracted ${fieldKey}:`, joinedValues);
+    return joinedValues;
+  }
+  
+  console.log(`[DEBUG] ${fieldKey} not found or invalid in lead.`);
+  return null;
+};
+
+/**
  * Helper function to fetch leadgen forms from Facebook Graph API
  * @param {string} pageId - Facebook Page ID
  * @param {string} pageAccessToken - Page-specific access token
@@ -130,19 +174,6 @@ const validatePageToken = async (pageAccessToken) => {
 };
 
 /**
- * Helper function to sanitize field_data
- * Ensures that each field has a 'name' and 'values' as an array
- * @param {Array} fieldData - Array of field data objects
- * @returns {Array} Sanitized field data
- */
-const sanitizeFieldData = (fieldData) => {
-  return fieldData.map((field) => ({
-    name: field.name ? field.name.trim() : 'Unnamed Field',
-    values: Array.isArray(field.values) ? field.values.map(value => value.trim()) : [field.values ? field.values.trim() : 'No Value'],
-  }));
-};
-
-/**
  * Helper function to store leads in Supabase
  * @param {Array} leads - Array of lead objects
  * @param {string} businessId - Business ID to associate the leads with
@@ -156,23 +187,15 @@ const storeLeadsInSupabase = async (leads, businessId) => {
     const formattedLeads = leads.map((lead) => {
       const sanitizedFieldData = sanitizeFieldData(lead.field_data);
 
-      // Extract specific fields
-      const getFieldValue = (fieldName) => {
-        const field = sanitizedFieldData.find(
-          (item) => item.name.toLowerCase() === fieldName.toLowerCase()
-        );
-        return field && Array.isArray(field.values) ? field.values.join(', ') : null;
-      };
-
       return {
         lead_id: lead.id,
         created_time: new Date(lead.created_time), // Ensure proper date format
         business_id: businessId,
         field_data: sanitizedFieldData, // Store as JSON object
-        name: getFieldValue('name') || getFieldValue('full name'), // Adjust based on actual field names
-        phone: getFieldValue('phone') || getFieldValue('phone number'), // Adjust as needed
-        email: getFieldValue('email'),
-        city: getFieldValue('city'),
+        name: getFieldValue(sanitizedFieldData, 'name'),
+        phone: getFieldValue(sanitizedFieldData, 'phone'),
+        email: getFieldValue(sanitizedFieldData, 'email'),
+        city: getFieldValue(sanitizedFieldData, 'city'),
         // Add other fields as necessary
       };
     });
@@ -187,17 +210,15 @@ const storeLeadsInSupabase = async (leads, businessId) => {
       if (error) {
         console.error(`[ERROR] Validation failed for lead ID ${lead.lead_id}:`, error.details);
         invalidLeads.push({ lead, errors: error.details });
-        // Optionally, you can skip inserting this lead or handle it differently
       } else {
         validatedLeads.push(value);
       }
     });
 
-    // Optionally, handle invalid leads (e.g., log, notify, etc.)
+    // Handle invalid leads (e.g., log, notify, etc.)
     if (invalidLeads.length > 0) {
       console.warn(`[WARN] ${invalidLeads.length} leads failed validation and will not be inserted.`);
-      // Further handling can be implemented here
-      // Example: Store invalid leads in a separate table
+      // Optionally, insert invalid leads into a separate table for review
       const invalidFormattedLeads = invalidLeads.map(({ lead, errors }) => ({
         lead_id: lead.lead_id,
         business_id: lead.business_id,
