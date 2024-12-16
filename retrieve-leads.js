@@ -43,6 +43,7 @@ const FIELD_NAME_MAPPING = {
     'fullName',
     'FullName',
     'Full Name',
+    'full_name', // Added variation
   ],
   phone: [
     'phone',
@@ -50,8 +51,10 @@ const FIELD_NAME_MAPPING = {
     'telephone',
     'contact number',
     'contactphone',
-    'PhoneNumber',
-    'Phone Number',
+    'phonenumber',
+    'mobile number', // Added variation
+    'phone_number', // Added variation
+    'user_provided_phone_number', // Added variation
   ],
   email: [
     'email',
@@ -102,15 +105,19 @@ const sanitizeFieldData = (fieldData) => {
  */
 const getFieldValue = (fieldData, fieldKey) => {
   const possibleNames = FIELD_NAME_MAPPING[fieldKey.toLowerCase()] || [fieldKey.toLowerCase()];
-  const field = fieldData.find(item => possibleNames.includes(item.name.toLowerCase()));
+  const matchingFields = fieldData.filter(item => possibleNames.includes(item.name.toLowerCase()));
 
-  if (field && Array.isArray(field.values)) {
-    const joinedValues = field.values.join(', ');
-    console.log(`[DEBUG] Extracted ${fieldKey}: ${joinedValues}`);
-    return joinedValues;
+  if (matchingFields.length > 0) {
+    const combinedValues = matchingFields
+      .map(field => Array.isArray(field.values) ? field.values.join(', ') : field.values)
+      .join(', ');
+    console.log(`[DEBUG] Extracted ${fieldKey}: ${combinedValues}`);
+    return combinedValues;
   }
 
+  // Log the entire field_data for debugging
   console.log(`[DEBUG] ${fieldKey} not found in field_data. Possible names: ${possibleNames.join(', ')}`);
+  console.log(`[DEBUG] Current field_data: ${JSON.stringify(fieldData, null, 2)}`);
   return null;
 };
 
