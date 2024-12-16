@@ -3,8 +3,8 @@ const axios = require("axios");
 const router = express.Router();
 
 // Load environment variables
-const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN; // Your webhook verify token
-const PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN; // Your Facebook page access token
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN; // Your webhook verify token
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // Your Facebook page access token
 
 // Webhook verification endpoint
 router.get("/", (req, res) => {
