@@ -119,7 +119,7 @@ const storeLeadsInSupabase = async (leads, businessId) => {
     // Insert leads, ignoring duplicates based on lead_id
     const { error } = await supabase
       .from('leads')
-      .upsert(formattedLeads, { onConflict: 'lead_id' }); // Ensure 'lead_id' is unique
+       .upsert(formattedLeads, { onConflict: ['business_id', 'lead_id'] });  
 
     if (error) {
       console.error('[ERROR] Failed to insert leads into Supabase:', error.message);
