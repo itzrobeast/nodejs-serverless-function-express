@@ -1,102 +1,148 @@
+// retrieve-leads.js
 import fetch from 'node-fetch';
 import express from 'express';
 import supabase from './supabaseClient.js';
 
 const router = express.Router();
 
-/** 
- * Fetch Lead Gen Forms for a given Facebook Page
+/**
+ * Helper function to fetch leadgen forms from Facebook Graph API
+ * @param {string} pageId - Facebook Page ID
+ * @param {string} pageAccessToken - Page-specific access token
+ * @returns {Array} Array of leadgen forms
  */
-async function fetchLeadForms(pageId, pageAccessToken) {
+const fetchLeadForms = async (pageId, pageAccessToken) => {
   const url = `https://graph.facebook.com/v14.0/${pageId}/leadgen_forms?access_token=${pageAccessToken}`;
   const response = await fetch(url);
-
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(`Failed to fetch leadgen forms: ${JSON.stringify(errorData)}`);
   }
-
   const data = await response.json();
   return data.data || [];
-}
+};
 
 /**
- * Fetch leads for a single form
+ * Helper function to fetch leads for a specific leadgen form
+ * @param {string} formId - Leadgen Form ID
+ * @param {string} pageAccessToken - Page-specific access token
+ * @returns {Array} Array of leads
  */
-async function fetchLeadsForForm(formId, pageAccessToken) {
+const fetchLeadsForForm = async (formId, pageAccessToken) => {
   const url = `https://graph.facebook.com/v14.0/${formId}/leads?access_token=${pageAccessToken}`;
   const response = await fetch(url);
-
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(`Failed to fetch leads for form ${formId}: ${JSON.stringify(errorData)}`);
   }
-
   const data = await response.json();
   return data.data || [];
-}
+};
 
 /**
- * Fetch leads for all active forms on a given page
+ * Helper function to fetch all leads for a page by fetching all active forms and their leads
+ * @param {string} pageId - Facebook Page ID
+ * @param {string} pageAccessToken - Page-specific access token
+ * @returns {Array} Array of all leads
  */
-async function fetchAllLeadsForPage(pageId, pageAccessToken) {
-  // 1. Get all leadgen forms for this page
-  const forms = await fetchLeadForms(pageId, pageAccessToken);
-  const allLeads = [];
+const fetchAllLeadsForPage = async (pageId, pageAccessToken) => {
+  try {
+    const forms = await fetchLeadForms(pageId, pageAccessToken);
+    const allLeads = [];
 
-  // 2. For each ACTIVE form, fetch leads
-  for (const form of forms) {
-    if (form.status === 'ACTIVE') {
-      console.log(`[DEBUG] Fetching leads for form: ${form.name} (id=${form.id})`);
-      const leads = await fetchLeadsForForm(form.id, pageAccessToken);
-      allLeads.push(...leads);
+    for (const form of forms) {
+      if (form.status === 'ACTIVE') {
+        console.log(`[DEBUG] Fetching leads for form: ${form.name} (ID: ${form.id})`);
+        const leads = await fetchLeadsForForm(form.id, pageAccessToken);
+        allLeads.push(...leads);
+      }
     }
-  }
 
-  return allLeads;
-}
+    return allLeads;
+  } catch (error) {
+    console.error('[ERROR] Failed to fetch leads for page:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * Optional: Validate the page access token using Facebook's debug_token endpoint
+ * @param {string} pageAccessToken - Page access token to validate
+ * @returns {boolean} Whether the token is valid
+ */
+const validatePageToken = async (pageAccessToken) => {
+  try {
+    const appId = process.env.FACEBOOK_APP_ID;
+    const appSecret = process.env.FACEBOOK_APP_SECRET;
+
+    if (!appId || !appSecret) {
+      console.warn('[WARN] Missing FACEBOOK_APP_ID or FACEBOOK_APP_SECRET for token validation.');
+      return true; // Skip validation if missing
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/debug_token?input_token=${pageAccessToken}&access_token=${appId}|${appSecret}`
+    );
+    const data = await response.json();
+    console.log('[DEBUG] Page Token Validation Response:', data);
+
+    if (data.data && data.data.is_valid) {
+      return true;
+    } else {
+      console.error('[ERROR] Page token is invalid or expired:', data);
+      return false;
+    }
+  } catch (error) {
+    console.error('[ERROR] Failed to validate page token:', error.message);
+    return false;
+  }
+};
 
 /**
  * GET /retrieve-leads
- * Headers must include { userId, businessId } 
+ * Fetches leads from Facebook using stored page access tokens
+ * Requires userId and businessId from cookies
  */
 router.get('/', async (req, res) => {
   try {
-    const { userId, businessId } = req.headers;
-    console.log('[DEBUG] Headers:', { userId, businessId });
+    const { userId, businessId } = req.cookies;
+
+    console.log('[DEBUG] Parsed Cookies:', { userId, businessId });
 
     if (!userId || !businessId) {
-      return res.status(400).json({ error: 'Missing userId or businessId in headers' });
+      return res.status(400).json({ error: 'Missing userId or businessId in cookies.' });
     }
 
-    // 1. Fetch the page token & page ID from 'businesses' (assuming page_access_token is stored as 'access_token')
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('page_id, access_token')
-      .eq('id', businessId)
+    // 1. Retrieve the page access token and page ID from 'page_access_tokens' table
+    const { data: pageRow, error: pageRowError } = await supabase
+      .from('page_access_tokens')
+      .select('page_id, page_access_token')
+      .eq('user_id', userId)
+      .eq('business_id', businessId)
       .single();
 
-    if (businessError || !business) {
-      console.error('[ERROR] Failed to fetch business:', businessError?.message);
-      return res.status(404).json({ error: 'Business not found' });
+    if (pageRowError || !pageRow) {
+      console.error('[ERROR] Page access token not found:', pageRowError?.message);
+      return res.status(404).json({ error: 'Page access token not found.' });
     }
 
-    const { page_id: pageId, access_token: pageAccessToken } = business;
-    if (!pageId || !pageAccessToken) {
-      return res.status(400).json({ error: 'Page ID or access token missing for the business' });
+    const { page_id: pageId, page_access_token: pageAccessToken } = pageRow;
+    console.log('[DEBUG] Retrieved Page Token:', { pageId, pageAccessToken });
+
+    // 2. (Optional) Validate the page access token
+    const isValid = await validatePageToken(pageAccessToken);
+    if (!isValid) {
+      return res.status(403).json({ error: 'Invalid or expired page access token.' });
     }
 
-    console.log('[DEBUG] Retrieved Page Info:', { pageId, pageAccessToken });
-
-    // 2. Fetch leads (all forms) 
+    // 3. Fetch all leads for the page
     const leads = await fetchAllLeadsForPage(pageId, pageAccessToken);
     console.log('[DEBUG] Retrieved Leads:', leads);
 
-    // Return the combined leads
-    res.status(200).json({ leads });
+    return res.status(200).json({ leads });
   } catch (error) {
     console.error('[ERROR] Failed to retrieve leads:', error.message);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
