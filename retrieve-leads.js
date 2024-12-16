@@ -33,25 +33,64 @@ const leadSchema = Joi.object({
  * Ensure this mapping includes all possible variations used in your Facebook Leadgen forms
  */
 const FIELD_NAME_MAPPING = {
-  name: ['name', 'full name', 'fullname', 'contact name', 'contactfullname', 'contactfullname'],
-  phone: ['phone', 'phone number', 'telephone', 'contact number', 'contactphone'],
-  email: ['email', 'email address', 'contact email'],
-  city: ['city', 'town', 'location'],
-  status: ['status', 'lead status', 'lead_status'],
+  name: [
+    'name',
+    'full name',
+    'fullname',
+    'contact name',
+    'contactfullname',
+    'contact_fullname',
+    'fullName',
+    'FullName',
+    'Full Name',
+  ],
+  phone: [
+    'phone',
+    'phone number',
+    'telephone',
+    'contact number',
+    'contactphone',
+    'PhoneNumber',
+    'Phone Number',
+  ],
+  email: [
+    'email',
+    'email address',
+    'contact email',
+    'EmailAddress',
+    'Email Address',
+  ],
+  city: [
+    'city',
+    'town',
+    'location',
+    'City',
+    'Town',
+    'Location',
+  ],
+  status: [
+    'status',
+    'lead status',
+    'lead_status',
+    'Status',
+    'Lead Status',
+    'Lead_Status',
+  ],
 };
 
 /**
  * Helper function to sanitize field_data
  * Ensures that each field has a 'name' and 'values' as an array
+ * Normalizes field names by trimming and converting to lowercase
  * @param {Array} fieldData - Array of field data objects
  * @returns {Array} Sanitized field data
  */
 const sanitizeFieldData = (fieldData) => {
   return fieldData.map((field) => ({
-    name: field.name ? field.name.trim().toLowerCase() : 'unnamed field',
+    name: field.name ? field.name.trim().toLowerCase() : 'unnamed_field',
     values: Array.isArray(field.values)
       ? field.values.map(value => value.trim())
-      : [field.values ? field.values.trim() : 'no value'],
+      : [field.values ? field.values.trim() : 'no_value'],
   }));
 };
 
