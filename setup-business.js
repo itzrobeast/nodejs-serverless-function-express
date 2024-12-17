@@ -22,6 +22,8 @@ router.post('/', async (req, res) => {
       pageId = null,
     } = req.body;
 
+    const pageId = page_id;
+
     console.log('[DEBUG] Incoming Payload:', req.body);
 
     // Step 1: Input validation
