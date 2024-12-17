@@ -182,24 +182,79 @@ async function processLeadgenEvent(change) {
     console.log("[DEBUG] Lead Data fetched:", JSON.stringify(leadData, null, 2));
 
     // 2. Fetch business_id using form_id from the 'forms' table
-    const { data: form, error: formError } = await supabase
+    let { data: form, error: formError } = await supabase
       .from('forms')
       .select('business_id')
       .eq('form_id', formId)
       .maybeSingle();
 
+    let businessId;
+
     if (formError) {
       console.error("[ERROR] Fetching business_id from forms table failed:", formError.message);
-      return; // Exit the function as business_id is essential
+      // Depending on your application's requirements, you might choose to throw here or attempt to resolve dynamically
+      // For this solution, we'll attempt to resolve dynamically
     }
 
     if (!form || !form.business_id) {
-      console.error("[ERROR] No business_id found for the given form_id:", formId);
-      return; // Exit the function as business_id is essential
-    }
+      console.log(`[INFO] Form ID ${formId} not found. Attempting to resolve business_id dynamically.`);
 
-    const businessId = form.business_id;
-    console.log(`[DEBUG] Retrieved business_id: ${businessId} for form_id: ${formId}`);
+      // Attempt to resolve business_id dynamically
+      // This requires that you have a way to associate the leadgen event with a business
+      // For example, if the leadgen form is associated with a specific page or user
+
+      // Step 1: Extract page_id or another identifier from leadData
+      // Note: Adjust the path based on the actual structure of leadData
+      const pageId = leadData?.page_id || leadData?.pageID || null;
+
+      if (!pageId) {
+        console.error("[ERROR] Unable to extract page_id from lead data. Cannot resolve business_id.");
+        return; // Exit the function as business_id is essential
+      }
+
+      // Step 2: Fetch business_id from 'businesses' table using page_id
+      const { data: businessData, error: businessError } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('page_id', pageId) // Assuming 'page_id' is a column in your 'businesses' table
+        .single();
+
+      if (businessError || !businessData) {
+        console.error('[ERROR] Failed to fetch business for page_id:', businessError?.message || 'No business found');
+        return; // Exit the function as business_id is essential
+      }
+
+      businessId = businessData.id;
+      console.log(`[DEBUG] Resolved business_id: ${businessId} for page_id: ${pageId}`);
+
+      // Step 3: Upsert the form into the 'forms' table with the resolved business_id
+      const { data: formData, error: upsertError } = await supabase
+        .from('forms')
+        .upsert([
+          {
+            form_id: formId,
+            business_id: businessId,
+            name: 'Auto-added Form', // You can customize this as needed
+            platform: 'Facebook',     // Assuming platform info is relevant
+          },
+        ])
+        .select()
+        .single();
+
+      if (upsertError) {
+        console.error('[ERROR] Failed to upsert form:', upsertError.message);
+        return; // Exit the function as form insertion failed
+      }
+
+      console.log('[DEBUG] Auto-inserted or updated form:', formData);
+
+      // Now, set businessId for saving the lead
+      businessId = formData.business_id;
+    } else {
+      // Form exists and has a business_id
+      businessId = form.business_id;
+      console.log(`[DEBUG] Retrieved business_id: ${businessId} for form_id: ${formId}`);
+    }
 
     // 3. Save lead data to the database with business_id
     const { data, error } = await supabase.from("leads").insert([
