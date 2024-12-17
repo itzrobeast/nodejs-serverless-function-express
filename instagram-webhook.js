@@ -52,6 +52,37 @@ async function sendInstagramMessage(recipientId, message) {
 }
 
 /**
+ * Resolve business_id using page_id from the 'businesses' table.
+ * @param {String} pageId - The page ID to use for resolving business_id.
+ * @returns {String|null} - The resolved business_id or null if not found.
+ */
+async function resolveBusinessIdByPageId(pageId) {
+  try {
+    const { data: businessData, error: businessError } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('page_id', pageId) // Assuming 'page_id' is a column in your 'businesses' table
+      .single();
+
+    if (businessError) {
+      console.error("[ERROR] Failed to fetch business for page_id:", businessError.message);
+      return null;
+    }
+
+    if (!businessData || !businessData.id) {
+      console.error("[ERROR] No business_id found for the given page_id:", pageId);
+      return null;
+    }
+
+    console.log(`[DEBUG] Resolved business_id: ${businessData.id} for page_id: ${pageId}`);
+    return businessData.id;
+  } catch (error) {
+    console.error("[ERROR] Error while resolving business_id by page_id:", error.message);
+    return null;
+  }
+}
+
+/**
  * Process individual messaging events from the Instagram webhook callback.
  * This version includes checks for non-text events (reactions, read receipts, unsend, etc.).
  */
@@ -165,8 +196,10 @@ async function processMessagingEvent(message) {
 
 /**
  * Process individual leadgen events from the Facebook webhook callback.
+ * @param {Object} change - The change object from the webhook payload.
+ * @param {String} pageId - The page ID extracted from the entry.
  */
-async function processLeadgenEvent(change) {
+async function processLeadgenEvent(change, pageId) {
   const leadgenId = change.value.leadgen_id;
   const formId = change.value.form_id;
 
@@ -192,40 +225,21 @@ async function processLeadgenEvent(change) {
 
     if (formError) {
       console.error("[ERROR] Fetching business_id from forms table failed:", formError.message);
-      // Depending on your application's requirements, you might choose to throw here or attempt to resolve dynamically
-      // For this solution, we'll attempt to resolve dynamically
+      // Decide whether to throw an error or attempt dynamic resolution
+      // For this solution, we'll attempt dynamic resolution
     }
 
     if (!form || !form.business_id) {
-      console.log(`[INFO] Form ID ${formId} not found. Attempting to resolve business_id dynamically.`);
+      console.log(`[INFO] Form ID ${formId} not found. Attempting to resolve business_id dynamically using page_id: ${pageId}`);
 
-      // Attempt to resolve business_id dynamically
-      // This requires that you have a way to associate the leadgen event with a business
-      // For example, if the leadgen form is associated with a specific page or user
+      // **Dynamic Resolution Using page_id**
+      businessId = await resolveBusinessIdByPageId(pageId);
 
-      // Step 1: Extract page_id or another identifier from leadData
-      // Note: Adjust the path based on the actual structure of leadData
-      const pageId = leadData?.page_id || leadData?.pageID || null;
-
-      if (!pageId) {
-        console.error("[ERROR] Unable to extract page_id from lead data. Cannot resolve business_id.");
+      if (!businessId) {
+        console.error("[ERROR] Unable to resolve business_id dynamically using page_id.");
+        // Optionally notify support or log for further analysis
         return; // Exit the function as business_id is essential
       }
-
-      // Step 2: Fetch business_id from 'businesses' table using page_id
-      const { data: businessData, error: businessError } = await supabase
-        .from('businesses')
-        .select('id')
-        .eq('page_id', pageId) // Assuming 'page_id' is a column in your 'businesses' table
-        .single();
-
-      if (businessError || !businessData) {
-        console.error('[ERROR] Failed to fetch business for page_id:', businessError?.message || 'No business found');
-        return; // Exit the function as business_id is essential
-      }
-
-      businessId = businessData.id;
-      console.log(`[DEBUG] Resolved business_id: ${businessId} for page_id: ${pageId}`);
 
       // Step 3: Upsert the form into the 'forms' table with the resolved business_id
       const { data: formData, error: upsertError } = await supabase
@@ -234,8 +248,8 @@ async function processLeadgenEvent(change) {
           {
             form_id: formId,
             business_id: businessId,
-            name: 'Auto-added Form', // You can customize this as needed
-            platform: 'Facebook',     // Assuming platform info is relevant
+            name: 'Auto-added Form', // Customize as needed
+            platform: 'Facebook',     // Customize as needed
           },
         ])
         .select()
@@ -279,7 +293,9 @@ async function processLeadgenEvent(change) {
   }
 }
 
-// Webhook verification endpoint (GET)
+/**
+ * Webhook verification endpoint (GET)
+ */
 router.get("/", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -294,7 +310,9 @@ router.get("/", (req, res) => {
   }
 });
 
-// Webhook event handler (POST)
+/**
+ * Webhook event handler (POST)
+ */
 router.post("/", async (req, res) => {
   const body = req.body;
 
@@ -309,10 +327,13 @@ router.post("/", async (req, res) => {
       for (const entry of body.entry) {
         console.log('[DEBUG] Processing page entry:', entry);
 
+        const pageId = entry.id; // Extract page_id from entry.id
+        console.log(`[DEBUG] Extracted page_id: ${pageId}`);
+
         if (entry.changes && Array.isArray(entry.changes)) {
           for (const change of entry.changes) {
             if (change.field === "leadgen") {
-              await processLeadgenEvent(change);
+              await processLeadgenEvent(change, pageId); // Pass pageId as a parameter
             }
           }
         } else {
