@@ -1,23 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Use correct key
+// Debugging: Log environment variables temporarily
+console.log('Supabase URL:', process.env.SUPABASE_URL);
+console.log(
+  'Supabase Service Role Key Provided:',
+  process.env.SUPABASE_SERVICE_ROLE_KEY ? 'YES' : 'NO'
+);
 
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Check for missing environment variables
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('[ERROR] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
+  console.error('[ERROR] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.');
   throw new Error('Supabase configuration is invalid.');
 }
 
 // Ensure the client runs server-side only
 if (typeof window !== 'undefined') {
-  throw new Error('[SECURITY] Supabase Service Role Key should only be used server-side.');
+  throw new Error('[SECURITY] Service Role Key should only be used server-side.');
 }
 
-// Debugging logs (for development only, remove in production)
-console.log('[DEBUG] Supabase URL:', supabaseUrl);
-console.log('[DEBUG] Supabase Service Role Key is', supabaseServiceKey ? 'provided' : 'missing');
-
-// Create Supabase client
+console.log('[DEBUG] Creating Supabase client...');
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export default supabase;
