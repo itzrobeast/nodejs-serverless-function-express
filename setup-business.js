@@ -19,12 +19,13 @@ router.post('/', async (req, res) => {
       insurancePolicies = [],
       objections = [],
       aiKnowledgeBase = '',
-      pageId = null,
+      page_id: pageId = null, // Destructure 'page_id' as 'pageId'
     } = req.body;
 
-    const pageId = page_id;
-
+    // Enhanced Logging
+    console.log('[DEBUG] /setup-business route hit');
     console.log('[DEBUG] Incoming Payload:', req.body);
+    console.log('[DEBUG] Extracted Fields:', { appId, user, accessToken, businessName, contactEmail, pageId });
 
     // Step 1: Input validation
     if (appId !== 'milaVerse') {
@@ -49,7 +50,7 @@ router.post('/', async (req, res) => {
       .eq('fb_id', user.id)
       .single();
 
-    if (userError && userError.code !== 'PGRST116') {
+    if (userError && userError.code !== 'PGRST116') { // 'PGRST116' typically means "No rows found"
       console.error('[ERROR] Failed to fetch user:', userError.message);
       throw new Error('Failed to fetch user');
     }
@@ -88,13 +89,13 @@ router.post('/', async (req, res) => {
           insurance_policies: insurancePolicies,
           objections,
           ai_knowledge_base: aiKnowledgeBase,
-          page_id: pageId,
+          page_id: pageId, // Use 'pageId' directly
         },
       ])
       .select();
 
     if (businessError) {
-      console.error('[ERROR] Business Insert Failed:', businessError.message);
+      console.error('[ERROR] Business Insert Failed:', businessError);
       throw new Error('Failed to create business');
     }
 
@@ -106,7 +107,7 @@ router.post('/', async (req, res) => {
       business: businessData,
     });
   } catch (error) {
-    console.error('[ERROR] /setup-business:', error.message);
+    console.error('[ERROR] /setup-business:', error);
     res.status(500).json({ error: error.message });
   }
 });
