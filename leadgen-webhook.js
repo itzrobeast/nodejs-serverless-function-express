@@ -1,5 +1,6 @@
 import express from "express";
 import axios from "axios";
+import supabase from "./supabaseClient.js"; // Adjust path to your Supabase client
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.post("/", async (req, res) => {
           const leadgenId = change.value.leadgen_id;
           const formId = change.value.form_id;
 
-          console.log(`New lead received! Lead ID: ${leadgenId}, Form ID: ${formId}`);
+          console.log(`[DEBUG] New lead received! Lead ID: ${leadgenId}, Form ID: ${formId}`);
 
           try {
             // Fetch lead data from Graph API
@@ -45,12 +46,25 @@ router.post("/", async (req, res) => {
             );
 
             const leadData = response.data;
-            console.log("Lead Data:", leadData);
+            console.log("[DEBUG] Lead Data fetched:", JSON.stringify(leadData, null, 2));
 
-            // TODO: Store or process lead data here
+            // Save lead data to database
+            const { data, error } = await supabase.from("leads").insert([
+              {
+                leadgen_id: leadgenId,
+                form_id: formId,
+                lead_data: leadData,
+              },
+            ]);
+
+            if (error) {
+              console.error("[ERROR] Saving lead to database failed:", error.message);
+            } else {
+              console.log("[DEBUG] Lead saved successfully to database:", data);
+            }
           } catch (error) {
             console.error(
-              "Error fetching lead:",
+              "[ERROR] Fetching lead data failed:",
               error.response ? error.response.data : error.message
             );
           }
