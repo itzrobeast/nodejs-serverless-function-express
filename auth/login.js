@@ -4,38 +4,28 @@ import fetch from 'node-fetch';
 
 const router = express.Router();
 
-// Ensure required environment variables are set
-if (!process.env.MILA_SECRET) {
-  throw new Error('MILA_SECRET environment variable is missing.');
-}
-
-/**
- * POST /auth/login
- * Flow:
- * 1. Verify the user's Facebook token (user token).
- * 2. Upsert user & business rows in DB.
- * 3. Fetch the pages the user manages (via /me/accounts).
- * 4. Store each page token in the 'page_access_tokens' table, linking user_id & business_id.
- * 5. Set cookies (authToken, userId, businessId).
- * 6. Return user & business info in response.
- */
 router.post('/', async (req, res) => {
   try {
     const { accessToken } = req.body;
 
     // Validate input
     if (!accessToken) {
+      console.log('[DEBUG] Missing access token in request body.');
       return res.status(400).json({ error: 'Missing access token' });
     }
+
+    console.log('[DEBUG] Access token received.');
 
     // 1. Verify the Facebook user token
     const fbResponse = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
     );
+
     if (!fbResponse.ok) {
-      console.error('[ERROR] Invalid Facebook token.');
+      console.error('[ERROR] Invalid Facebook token:', fbResponse.statusText);
       return res.status(401).json({ error: 'Invalid Facebook token' });
     }
+
     const fbData = await fbResponse.json();
     console.log('[DEBUG] Facebook user data fetched:', fbData);
 
@@ -46,26 +36,31 @@ router.post('/', async (req, res) => {
       .eq('fb_id', fbData.id)
       .single();
 
-    if (userError && userError.code === 'PGRST116') {
-      console.log('[DEBUG] User not found. Creating new user.');
-      const { data: newUser, error: createUserError } = await supabase
-        .from('users')
-        .insert({
-          fb_id: fbData.id,
-          name: fbData.name,
-          email: fbData.email,
-        })
-        .select('*')
-        .single();
+    if (userError) {
+      if (userError.code === 'PGRST116') { // Not Found
+        console.log('[DEBUG] User not found. Creating new user.');
+        const { data: newUser, error: createUserError } = await supabase
+          .from('users')
+          .insert({
+            fb_id: fbData.id,
+            name: fbData.name,
+            email: fbData.email,
+          })
+          .select('*')
+          .single();
 
-      if (createUserError) {
-        console.error('[ERROR] Failed to create user:', createUserError.message);
-        return res.status(500).json({ error: 'Failed to create user.' });
+        if (createUserError) {
+          console.error('[ERROR] Failed to create user:', createUserError);
+          return res.status(500).json({ error: 'Failed to create user.' });
+        }
+        user = newUser;
+        console.log('[DEBUG] New user created:', user);
+      } else {
+        console.error('[ERROR] Error fetching user:', userError);
+        return res.status(500).json({ error: 'Error fetching user.' });
       }
-      user = newUser;
-    } else if (userError) {
-      console.error('[ERROR] Error fetching user:', userError.message);
-      return res.status(500).json({ error: 'Error fetching user.' });
+    } else {
+      console.log('[DEBUG] User found:', user);
     }
 
     const ownerId = parseInt(user.id, 10);
@@ -81,32 +76,36 @@ router.post('/', async (req, res) => {
       .eq('user_id', ownerId)
       .single();
 
-    if (businessError && businessError.code === 'PGRST116') {
-      console.log('[DEBUG] Business not found. Creating new business.');
-      const { data: newBusiness, error: createBusinessError } = await supabase
-        .from('businesses')
-        .insert({
-          user_id: ownerId,
-          name: `${fbData.name}'s Business`,
-        })
-        .select('*')
-        .single();
+    if (businessError) {
+      if (businessError.code === 'PGRST116') { // Not Found
+        console.log('[DEBUG] Business not found. Creating new business.');
+        const { data: newBusiness, error: createBusinessError } = await supabase
+          .from('businesses')
+          .insert({
+            user_id: ownerId,
+            name: `${fbData.name}'s Business`,
+          })
+          .select('*')
+          .single();
 
-      if (createBusinessError) {
-        console.error('[ERROR] Failed to create business:', createBusinessError.message);
-        return res.status(500).json({ error: 'Failed to create business.' });
+        if (createBusinessError) {
+          console.error('[ERROR] Failed to create business:', createBusinessError);
+          return res.status(500).json({ error: 'Failed to create business.' });
+        }
+        business = newBusiness;
+        console.log('[DEBUG] New business created:', business);
+      } else {
+        console.error('[ERROR] Error fetching business:', businessError);
+        return res.status(500).json({ error: 'Error fetching business.' });
       }
-      business = newBusiness;
-    } else if (businessError) {
-      console.error('[ERROR] Error fetching business:', businessError.message);
-      return res.status(500).json({ error: 'Error fetching business.' });
+    } else {
+      console.log('[DEBUG] Business found:', business);
     }
 
     // 4. Fetch user’s pages & upsert page tokens
-    //    Calls /me/accounts to get a list of pages where the user is an admin, plus page tokens
     const pagesResponse = await fetch(`https://graph.facebook.com/me/accounts?access_token=${accessToken}`);
     if (!pagesResponse.ok) {
-      console.error('[ERROR] Failed to fetch pages for user.');
+      console.error('[ERROR] Failed to fetch pages for user:', pagesResponse.statusText);
       // Not fatal for login, but means no pages were fetched
     } else {
       const pagesData = await pagesResponse.json();
@@ -114,13 +113,10 @@ router.post('/', async (req, res) => {
 
       if (Array.isArray(pagesData?.data)) {
         for (const pageInfo of pagesData.data) {
-          // pageInfo has { access_token, id (page_id), name, category, etc. }
           const pageId = pageInfo.id;
           const pageAccessToken = pageInfo.access_token;
 
           // Upsert into page_access_tokens table
-          // Table schema might be: (id PK, user_id, business_id, page_id, page_access_token)
-          // Using user_id + business_id + page_id as unique
           let { data: existingPageRow, error: fetchPageError } = await supabase
             .from('page_access_tokens')
             .select('*')
@@ -130,8 +126,7 @@ router.post('/', async (req, res) => {
             .single();
 
           if (fetchPageError && fetchPageError.code !== 'PGRST116') {
-            console.error('[ERROR] Fetching existing page token row:', fetchPageError.message);
-            // Not a showstopper for login
+            console.error('[ERROR] Fetching existing page token row:', fetchPageError);
             continue;
           }
 
@@ -148,7 +143,7 @@ router.post('/', async (req, res) => {
                 },
               ]);
             if (insertError) {
-              console.error('[ERROR] Failed to insert page token:', insertError.message);
+              console.error('[ERROR] Failed to insert page token:', insertError);
             }
           } else {
             console.log(`[DEBUG] Updating existing page token for page_id=${pageId}.`);
@@ -159,7 +154,7 @@ router.post('/', async (req, res) => {
               })
               .eq('id', existingPageRow.id);
             if (updateError) {
-              console.error('[ERROR] Failed to update page token:', updateError.message);
+              console.error('[ERROR] Failed to update page token:', updateError);
             }
           }
         }
@@ -211,9 +206,7 @@ router.post('/', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[ERROR] Login failed:', err.message);
+    console.error('[ERROR] Login failed:', err); // Logs the entire error object
     return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
-
-export default router;
