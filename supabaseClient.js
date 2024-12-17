@@ -1,12 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Debugging: Log environment variables temporarily
-console.log('Supabase URL:', process.env.SUPABASE_URL);
-console.log(
-  'Supabase Service Role Key Provided:',
-  process.env.SUPABASE_SERVICE_ROLE_KEY ? 'YES' : 'NO'
-);
-
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
