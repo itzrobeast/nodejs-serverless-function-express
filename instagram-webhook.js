@@ -117,7 +117,8 @@ async function processMessagingEvent(message) {
       console.log('[INFO] User not found by ig_id. Creating new user.');
       const { data: newUser, error: insertError } = await supabase
         .from('users')
-        .insert([{ ig_id: igId, fb_id: null, name: null, email: null }]);
+        .insert([{ ig_id: igId, fb_id: null, name: null, email: null }])
+        .single();
 
       if (insertError) {
         console.error('[ERROR] Failed to insert new user:', insertError.message);
@@ -128,7 +129,7 @@ async function processMessagingEvent(message) {
         return;
       }
 
-      user = newUser[0];
+      user = newUser;
     } else if (userError) {
       console.error('[ERROR] Failed to query users table:', userError.message);
       await sendInstagramMessage(
@@ -172,7 +173,7 @@ async function processLeadgenEvent(change) {
   console.log(`[DEBUG] New lead received! Lead ID: ${leadgenId}, Form ID: ${formId}`);
 
   try {
-    // Fetch lead data from Graph API
+    // 1. Fetch lead data from Graph API
     const response = await axios.get(
       `https://graph.facebook.com/v17.0/${leadgenId}?access_token=${PAGE_ACCESS_TOKEN}`
     );
@@ -180,11 +181,32 @@ async function processLeadgenEvent(change) {
     const leadData = response.data;
     console.log("[DEBUG] Lead Data fetched:", JSON.stringify(leadData, null, 2));
 
-    // Save lead data to database
+    // 2. Fetch business_id using form_id from the 'forms' table
+    const { data: form, error: formError } = await supabase
+      .from('forms')
+      .select('business_id')
+      .eq('form_id', formId)
+      .maybeSingle();
+
+    if (formError) {
+      console.error("[ERROR] Fetching business_id from forms table failed:", formError.message);
+      return; // Exit the function as business_id is essential
+    }
+
+    if (!form || !form.business_id) {
+      console.error("[ERROR] No business_id found for the given form_id:", formId);
+      return; // Exit the function as business_id is essential
+    }
+
+    const businessId = form.business_id;
+    console.log(`[DEBUG] Retrieved business_id: ${businessId} for form_id: ${formId}`);
+
+    // 3. Save lead data to the database with business_id
     const { data, error } = await supabase.from("leads").insert([
       {
         leadgen_id: leadgenId,
         form_id: formId,
+        business_id: businessId, // Include business_id here
         lead_data: leadData,
       },
     ]);
