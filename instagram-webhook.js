@@ -1,9 +1,14 @@
-import assistantHandler from './assistant.js'; // Centralized logic
+import express from 'express';
 import fetch from 'node-fetch'; // For Instagram API
-import supabase from './supabaseClient.js';
+import axios from 'axios'; // For Leadgen API
+import supabase from './supabaseClient.js'; // Your Supabase client
+import assistantHandler from './assistant.js'; // Centralized assistant logic
 
-// Use your Page Access Token for Instagram Business Messaging
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+const router = express.Router();
+
+// Load environment variables
+const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN; // Webhook verify token
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // Facebook Page Access Token
 
 /**
  * Send a direct reply to an Instagram user using your Page Access Token.
@@ -158,53 +163,113 @@ async function processMessagingEvent(message) {
 }
 
 /**
- * Primary webhook handler (route).
- * - Verify webhook setup on GET
- * - Process incoming Instagram webhook events on POST
+ * Process individual leadgen events from the Facebook webhook callback.
  */
-export default async function handler(req, res) {
-  console.log('Received request:', req.method);
+async function processLeadgenEvent(change) {
+  const leadgenId = change.value.leadgen_id;
+  const formId = change.value.form_id;
 
-  // Instagram webhook verification
-  if (req.method === 'GET') {
-    const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
+  console.log(`[DEBUG] New lead received! Lead ID: ${leadgenId}, Form ID: ${formId}`);
 
-    if (mode === 'subscribe' && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
-      console.log('Verification successful. Returning challenge.');
-      return res.status(200).send(challenge);
+  try {
+    // Fetch lead data from Graph API
+    const response = await axios.get(
+      `https://graph.facebook.com/v17.0/${leadgenId}?access_token=${PAGE_ACCESS_TOKEN}`
+    );
+
+    const leadData = response.data;
+    console.log("[DEBUG] Lead Data fetched:", JSON.stringify(leadData, null, 2));
+
+    // Save lead data to database
+    const { data, error } = await supabase.from("leads").insert([
+      {
+        leadgen_id: leadgenId,
+        form_id: formId,
+        lead_data: leadData,
+      },
+    ]);
+
+    if (error) {
+      console.error("[ERROR] Saving lead to database failed:", error.message);
     } else {
-      console.error('Verification failed.');
-      return res.status(403).send('Verification failed.');
+      console.log("[DEBUG] Lead saved successfully to database:", data);
     }
-  } 
-  // Handle incoming messages/events
-  else if (req.method === 'POST') {
-    const body = req.body;
+  } catch (error) {
+    console.error(
+      "[ERROR] Fetching lead data failed:",
+      error.response ? error.response.data : error.message
+    );
+  }
+}
 
-    if (!body || !body.object) {
-      console.error('[ERROR] Invalid payload:', body);
-      return res.status(400).json({ error: 'Invalid payload structure.' });
-    }
+// Webhook verification endpoint (GET)
+router.get("/", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
 
-    try {
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("Instagram Webhook verified successfully!");
+    res.status(200).send(challenge);
+  } else {
+    console.log("Instagram Webhook verification failed.");
+    res.sendStatus(403);
+  }
+});
+
+// Webhook event handler (POST)
+router.post("/", async (req, res) => {
+  const body = req.body;
+
+  if (!body) {
+    console.error('[ERROR] Received empty body.');
+    return res.status(400).send('Invalid request body.');
+  }
+
+  try {
+    // Handle Leadgen Events (object === 'page')
+    if (body.object === "page") {
       for (const entry of body.entry) {
-        console.log('[DEBUG] Processing entry:', entry);
+        console.log('[DEBUG] Processing page entry:', entry);
+
+        if (entry.changes && Array.isArray(entry.changes)) {
+          for (const change of entry.changes) {
+            if (change.field === "leadgen") {
+              await processLeadgenEvent(change);
+            }
+          }
+        } else {
+          console.warn('[WARN] No changes found in page entry.');
+        }
+      }
+    }
+
+    // Handle Messaging Events (object === 'instagram')
+    else if (body.object === "instagram") {
+      for (const entry of body.entry) {
+        console.log('[DEBUG] Processing instagram entry:', entry);
 
         if (entry.messaging && Array.isArray(entry.messaging)) {
           for (const message of entry.messaging) {
             await processMessagingEvent(message);
           }
         } else {
-          console.warn('[DEBUG] No messaging events found in entry.');
+          console.warn('[WARN] No messaging events found in instagram entry.');
         }
       }
-
-      res.status(200).send('EVENT_RECEIVED');
-    } catch (error) {
-      console.error('[ERROR] Failed to process webhook entries:', error.message);
-      res.status(500).json({ error: 'Internal Server Error' });
     }
-  } else {
-    res.status(405).json({ error: 'Method not allowed.' });
+
+    // Handle other objects if necessary
+    else {
+      console.log("Unhandled webhook event type:", body.object);
+    }
+
+    // Respond with 200 OK to acknowledge receipt of the event
+    res.status(200).send('EVENT_RECEIVED');
+  } catch (error) {
+    console.error('[ERROR] Failed to process webhook events:', error.message);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
-}
+});
+
+export default router;
