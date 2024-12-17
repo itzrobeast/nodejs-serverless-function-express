@@ -16,7 +16,7 @@ if (
 }
 
 // Import route handlers
-import setupBusinessRouter from './setup-business.js';
+//import setupBusinessRouter from './setup-business.js';
 import assistantRouter from './assistant.js';
 import instagramWebhookRouter from './instagram-webhook.js';
 import leadgenWebhookRouter from './leadgen-webhook.js';
@@ -85,7 +85,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // Route Handlers
 const routes = [
-  { path: '/setup-business', router: setupBusinessRouter },
+  //{ path: '/setup-business', router: setupBusinessRouter },
   { path: '/assistant', router: assistantRouter },
   { path: '/instagram-webhook', router: instagramWebhookRouter },
   { path: '/leadgen-webhook', router: leadgenWebhookRouter },
