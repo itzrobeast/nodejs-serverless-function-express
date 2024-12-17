@@ -10,6 +10,7 @@
     "cors": "^2.8.5",
     "node-fetch": "^3.3.0",
     "joi": "^17.9.2",
+    "express-rate-limit": "^6.7.0",
     "@sentry/nextjs": "^7.0.0",
     "axios": "^1.4.0",
     "@supabase/supabase-js": "^2.x.x",
