@@ -210,3 +210,5 @@ router.post('/', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
+
+export default router;
