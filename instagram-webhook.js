@@ -126,6 +126,20 @@ async function processMessagingEvent(message) {
       return;
     }
 
+    // Prepare the message content for database insertion
+    let messageContent = userMessage || '';
+    let messageAttachments = [];
+
+    if (message?.message?.attachments && Array.isArray(message.message.attachments)) {
+      messageAttachments = message.message.attachments.map((attachment) => ({
+        type: attachment.type,
+        payload: attachment.payload,
+      }));
+      // Optionally, you can serialize attachments as JSON string
+      messageContent += ` Attachments: ${JSON.stringify(messageAttachments)}`;
+      console.log('[DEBUG] Message contains attachments:', messageAttachments);
+    }
+
     // Insert the conversation into the database
     const { error: conversationError } = await supabase
       .from('instagram_conversations')
@@ -134,7 +148,7 @@ async function processMessagingEvent(message) {
           business_id: businessId,
           sender_id: customerId, // Always the customer
           recipient_id: businessId, // Always the business
-          message: userMessage || '', // Handle cases where message might be undefined
+          message: messageContent, // Include attachments if any
           message_type: messageType,
           created_at: new Date(),
           updated_at: new Date(),
@@ -148,10 +162,11 @@ async function processMessagingEvent(message) {
 
     console.log('[DEBUG] Instagram conversation upserted successfully.');
 
-    // If the message is received, respond using the assistant
+    // If the message is received and contains text, respond using the assistant
     if (messageType === 'received') {
       if (!userMessage) {
         console.warn('[WARN] Received message has no text content.');
+        // Optionally, handle messages with attachments here
         return;
       }
 
