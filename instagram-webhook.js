@@ -97,18 +97,19 @@ async function processMessagingEvent(message) {
       messageType,
     });
 
-    // Identify the business based on the context
-    const businessInstagramId = messageType === 'received' ? recipientId : senderId; // Business ID is the sender for 'sent' messages
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('ig_id', businessInstagramId) // Match the correct business IG ID
-      .single();
+    // Identify the business Instagram ID based on the context
+const businessInstagramId = messageType === 'received' ? recipientId : senderId; // Business ID is always associated with the business's Instagram account (recipient for received, sender for sent)
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .select('id')
+  .eq('ig_id', businessInstagramId) // Match the correct business IG ID
+  .single();
 
-    if (businessError || !business) {
-      console.error('[ERROR] Business not found for recipient:', businessInstagramId);
-      return;
-    }
+if (businessError || !business) {
+  console.error('[ERROR] Business not found for Instagram ID:', businessInstagramId);
+  return;
+}
+
 
     const businessId = business.id;
     console.log('[DEBUG] Resolved business_id:', businessId);
