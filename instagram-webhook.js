@@ -1,54 +1,21 @@
 import express from 'express';
+import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
-import fetch from 'node-fetch'; // For sending replies
-import assistantHandler from './assistant.js'; // Centralized assistant logic
+import assistantHandler from './assistant.js';
 
 const router = express.Router();
 
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 
-// Utility: Extract Dynamic Fields (email, phone, location)
-function extractDynamicFields(text) {
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-  const phoneRegex = /(\+?\d{1,4}[\s-]?)?(\(?\d{3}\)?[\s-]?)?\d{3}[\s-]?\d{4}/;
-  const locationRegex = /(city|address|location)[:\s]+([\w\s,]+)/i;
-
-  const email = text.match(emailRegex)?.[0] || null;
-  const phoneNumber = text.match(phoneRegex)?.[0] || null;
-  const location = text.match(locationRegex)?.[2]?.trim() || null;
-
-  return { email, phoneNumber, location };
-}
-
-// Helper: Resolve Business ID by Page ID
-async function resolveBusinessIdByPageId(pageId) {
-  try {
-    const { data: businessData, error: businessError } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('page_id', pageId)
-      .single();
-
-    if (businessError || !businessData) {
-      console.error('[ERROR] Business not found for page_id:', pageId);
-      return null;
-    }
-
-    return businessData.id;
-  } catch (err) {
-    console.error('[ERROR] Failed to resolve business_id by page_id:', err.message);
-    return null;
-  }
-}
-
-// Helper: Send Reply to Instagram User
+/**
+ * Helper: Send a direct message to an Instagram user
+ */
 async function sendInstagramMessage(recipientId, message) {
   try {
-    if (!PAGE_ACCESS_TOKEN) throw new Error('PAGE_ACCESS_TOKEN not set.');
+    console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
 
     const response = await fetch(
-      `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      `https://graph.facebook.com/v14.0/me/messages?access_token=${process.env.PAGE_ACCESS_TOKEN}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,114 +29,176 @@ async function sendInstagramMessage(recipientId, message) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[ERROR] Failed to send Instagram message:', errorText);
-      return;
+      throw new Error(`Failed to send Instagram message: ${response.statusText}`);
     }
 
-    console.log('[DEBUG] Message sent successfully.');
+    console.log('[DEBUG] Message sent to Instagram user successfully.');
+    return await response.json();
   } catch (error) {
-    console.error('[ERROR] Failed to send Instagram message:', error.message);
+    console.error('[ERROR] Failed to send Instagram message:', error);
+    throw error;
   }
 }
 
-// Process Messaging Event
-async function processMessagingEvent(message) {
+/**
+ * Helper: Resolve business_id using recipient_id (Instagram Business Account ID or Page ID)
+ */
+async function resolveBusinessIdByRecipient(recipientId) {
   try {
-    const text = message?.message?.text;
-    const senderId = message?.sender?.id;
-    const recipientId = message?.recipient?.id;
+    const { data: businessData, error: businessError } = await supabase
+      .from('businesses')
+      .select('id')
+      .or(`ig_id.eq.${recipientId},page_id.eq.${recipientId}`)
+      .single();
 
-    if (!text || !senderId || !recipientId) {
-      console.warn('[WARN] Missing text, senderId, or recipientId.');
-      return;
-    }
-
-    console.log('[DEBUG] Received message:', text);
-
-    // Resolve business_id
-    const businessId = await resolveBusinessIdByPageId(recipientId);
-    if (!businessId) {
+    if (businessError || !businessData) {
       console.warn('[WARN] Business ID not found for recipient:', recipientId);
-      return;
+      return null;
     }
 
-    // Extract dynamic fields
-    const { email, phoneNumber, location } = extractDynamicFields(text);
+    console.log(`[DEBUG] Resolved business_id: ${businessData.id} for recipient: ${recipientId}`);
+    return businessData.id;
+  } catch (error) {
+    console.error('[ERROR] Error while resolving business_id by recipient:', error.message);
+    return null;
+  }
+}
 
-    // Insert or update the conversation
-    const { error: insertError } = await supabase.from('instagram_conversations').insert([
-      {
-        business_id: businessId,
-        sender_id: senderId,
-        recipient_id: recipientId,
-        message: text,
-        message_type: 'received',
-        email,
-        phone_number: phoneNumber,
-        location,
-      },
-    ]);
-
-    if (insertError) {
-      console.error('[ERROR] Failed to upsert conversation:', insertError.message);
-      return;
-    }
-
-    console.log('[DEBUG] Conversation saved successfully.');
-
-    // Pass to assistant for response
-    const assistantResponse = await assistantHandler({
-      userMessage: text,
-      recipientId: senderId,
-      platform: 'instagram',
-      businessId,
+/**
+ * Helper: Insert Instagram conversation into the database
+ */
+async function upsertInstagramConversation({ businessId, senderId, recipientId, message, messageType, attachments }) {
+  try {
+    const { data, error } = await supabase.from('instagram_conversations').insert({
+      business_id: businessId,
+      sender_id: senderId,
+      recipient_id: recipientId,
+      message,
+      message_type: messageType,
+      attachments,
     });
 
-    if (assistantResponse?.message) {
-      await sendInstagramMessage(senderId, assistantResponse.message);
-    } else {
-      console.warn('[WARN] No response from assistant.');
+    if (error) {
+      console.error('[ERROR] Failed to insert Instagram conversation:', error.message);
+      throw new Error(`Failed to insert Instagram conversation: ${error.message}`);
     }
-  } catch (err) {
-    console.error('[ERROR] Failed to process messaging event:', err.message);
+
+    console.log('[DEBUG] Instagram conversation saved successfully:', data);
+  } catch (error) {
+    console.error('[ERROR] Failed to upsert Instagram conversation:', error.message);
+    throw error;
   }
 }
 
-// Webhook Verification
+/**
+ * Process individual messaging events
+ */
+async function processMessagingEvent(message) {
+  try {
+    console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
+
+    const userMessage = message?.message?.text;
+    const recipientId = message?.recipient?.id; // Our Instagram business account ID
+    const senderId = message?.sender?.id;      // The user interacting with the bot
+    const messageType = message?.message ? 'received' : 'sent';
+    const attachments = message?.message?.attachments || null;
+
+    console.log('[DEBUG] Extracted message details:', { userMessage, recipientId, senderId, messageType });
+
+    if (!recipientId || !senderId) {
+      console.error('[ERROR] Missing recipient_id or sender_id. Skipping event processing.');
+      return;
+    }
+
+    // Resolve business_id
+    const businessId = await resolveBusinessIdByRecipient(recipientId);
+
+    if (!businessId) {
+      console.warn('[WARN] Could not resolve business ID for recipient:', recipientId);
+      await sendInstagramMessage(senderId, 'We could not process your message. Please try again later.');
+      return;
+    }
+
+    // Save the conversation to the database
+    await upsertInstagramConversation({
+      businessId,
+      senderId,
+      recipientId,
+      message: userMessage,
+      messageType,
+      attachments,
+    });
+
+    // Forward message to assistant for response
+    if (userMessage) {
+      const assistantResponse = await assistantHandler({
+        userMessage,
+        recipientId: senderId,
+        platform: 'instagram',
+        businessId,
+      });
+
+      if (assistantResponse && assistantResponse.message) {
+        console.log('[DEBUG] Assistant response:', assistantResponse.message);
+        await sendInstagramMessage(senderId, assistantResponse.message);
+      } else {
+        console.warn('[WARN] No valid response from assistant.');
+      }
+    }
+  } catch (error) {
+    console.error('[ERROR] Failed to process messaging event:', error.message);
+  }
+}
+
+/**
+ * Webhook verification endpoint (GET)
+ */
 router.get('/', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('[DEBUG] Webhook verified successfully.');
+    console.log('[INFO] Instagram Webhook verified successfully.');
     res.status(200).send(challenge);
   } else {
-    console.error('[ERROR] Webhook verification failed.');
+    console.error('[ERROR] Instagram Webhook verification failed.');
     res.sendStatus(403);
   }
 });
 
-// Webhook Event Handler
+/**
+ * Webhook event handler (POST)
+ */
 router.post('/', async (req, res) => {
-  try {
-    const body = req.body;
+  const body = req.body;
 
+  if (!body) {
+    console.error('[ERROR] Received empty body.');
+    return res.status(400).send('Invalid request body.');
+  }
+
+  try {
+    // Handle Messaging Events
     if (body.object === 'instagram') {
       for (const entry of body.entry) {
-        if (entry.messaging) {
+        console.log('[DEBUG] Processing instagram entry:', entry);
+
+        if (entry.messaging && Array.isArray(entry.messaging)) {
           for (const message of entry.messaging) {
             await processMessagingEvent(message);
           }
+        } else {
+          console.warn('[WARN] No messaging events found in instagram entry.');
         }
       }
-    } else {
-      console.log('[DEBUG] Unhandled object type:', body.object);
     }
 
+    // Acknowledge receipt of the event
     res.status(200).send('EVENT_RECEIVED');
-  } catch (err) {
-    console.error('[ERROR] Failed to process webhook events:', err.message);
-    res.status(500).send('Internal Server Error');
+  } catch (error) {
+    console.error('[ERROR] Failed to process webhook events:', error.message);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
