@@ -29,6 +29,9 @@ import loginRouter from './auth/login.js';
 
 const app = express();
 
+// Trust the first proxy (Vercel's proxy)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(
   helmet({
