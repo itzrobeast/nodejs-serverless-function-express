@@ -127,23 +127,26 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Pages Upserted Successfully');
 
     // 7. Link Business to Facebook Page
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(
-        [
-          {
-            user_id: user.id,
-            name: `${name}'s Business`,
-            page_id: firstPage.id,
-          },
-        ],
-        { onConflict: 'user_id' }
-      )
-      .select('*')
-      .single();
+    // 7. Link Business to Facebook Page
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .upsert(
+    [
+      {
+        user_id: user.id,
+        name: `${name}'s Business`,
+        page_id: firstPage.id, // Facebook Page ID
+        ig_id: igId, // Instagram Business Account ID
+      },
+    ],
+    { onConflict: 'user_id' }
+  )
+  .select('*')
+  .single();
 
-    if (businessError) throw new Error(`Business upsert failed: ${businessError.message}`);
-    console.log('[DEBUG] Business Upserted:', business);
+if (businessError) throw new Error(`Business upsert failed: ${businessError.message}`);
+console.log('[DEBUG] Business Upserted:', business);
+
 
     // 8. Insert Page Access Tokens into `page_access_tokens`
     for (const page of pagesData) {
