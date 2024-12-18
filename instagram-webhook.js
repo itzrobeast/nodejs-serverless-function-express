@@ -1,6 +1,7 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
+import assistantHandler from './assistant.js';
 
 const router = express.Router();
 
@@ -8,70 +9,78 @@ const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 
 /**
- * Resolve `business_id` using recipient (Instagram Business Account ID).
+ * Fetch Instagram User Name
+ * @param {String} senderId - Instagram User ID
  */
-async function resolveBusinessIdByInstagramId(recipientId) {
+async function fetchInstagramUserName(senderId) {
   try {
-    const { data: business, error } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('ig_id', recipientId)
-      .single();
-
-    if (error || !business) {
-      console.error(`[ERROR] No business found for ig_id: ${recipientId}`);
+    const response = await fetch(
+      `https://graph.facebook.com/v14.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
+    );
+    if (!response.ok) {
+      console.warn('[WARN] Failed to fetch user name:', await response.text());
       return null;
     }
-
-    console.log(`[DEBUG] Resolved business_id: ${business.id} for recipient: ${recipientId}`);
-    return business.id;
-  } catch (err) {
-    console.error('[ERROR] Error resolving business_id:', err.message);
+    const data = await response.json();
+    return data.name || null;
+  } catch (error) {
+    console.error('[ERROR] Failed to fetch Instagram user name:', error.message);
     return null;
   }
 }
 
 /**
- * Insert conversation into `instagram_conversations` table.
+ * Send a direct reply to an Instagram user using your Page Access Token.
  */
-async function upsertConversation(businessId, senderId, recipientId, userMessage) {
+async function sendInstagramMessage(recipientId, message) {
   try {
-    const { error } = await supabase
-      .from('instagram_conversations')
-      .insert([
-        {
-          business_id: businessId,
-          sender_id: senderId,
-          recipient_id: recipientId,
-          message: userMessage,
-          message_type: 'received',
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-      ]);
-
-    if (error) {
-      console.error('[ERROR] Failed to insert Instagram conversation:', error.message);
-      throw new Error('Failed to insert Instagram conversation');
+    if (!message || typeof message !== 'string') {
+      throw new Error('Invalid message content. Cannot send empty or undefined message.');
     }
 
-    console.log('[DEBUG] Instagram conversation upserted successfully.');
-  } catch (err) {
-    console.error('[ERROR] Failed to upsert conversation:', err.message);
-    throw err;
+    console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
+
+    if (!PAGE_ACCESS_TOKEN) {
+      throw new Error('Missing PAGE_ACCESS_TOKEN environment variable.');
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/v14.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: { id: recipientId },
+          message: { text: message },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ERROR] Failed to send Instagram message:', errorText);
+      throw new Error(`Failed to send Instagram message: ${response.statusText}`);
+    }
+
+    console.log('[DEBUG] Message sent successfully to Instagram user.');
+    return await response.json();
+  } catch (error) {
+    console.error('[ERROR] Failed to send Instagram message:', error);
+    throw error;
   }
 }
 
 /**
  * Process individual messaging events from the Instagram webhook callback.
  */
-async function processMessagingEvent(message) {
+const processMessagingEvent = async (message) => {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    const userMessage = message?.message?.text; // Message text
+    const userMessage = message?.message?.text;
     const senderId = message?.sender?.id; // Instagram User ID (customer)
     const recipientId = message?.recipient?.id; // Instagram Business Account ID
+    const messageType = 'received';
 
     if (!userMessage || !recipientId || !senderId) {
       console.error('[ERROR] Missing message, recipientId, or senderId.');
@@ -82,21 +91,70 @@ async function processMessagingEvent(message) {
       userMessage,
       recipientId,
       senderId,
+      messageType,
     });
 
+    // Fetch sender's name
+    const senderName = await fetchInstagramUserName(senderId);
+
     // Resolve `business_id` using recipientId
-    const businessId = await resolveBusinessIdByInstagramId(recipientId);
-    if (!businessId) {
-      console.error(`[ERROR] No business found for recipient: ${recipientId}`);
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('ig_id', recipientId)
+      .single();
+
+    if (businessError || !business) {
+      console.error('[ERROR] Business not found for recipient:', recipientId);
       return;
     }
 
-    // Upsert conversation
-    await upsertConversation(businessId, senderId, recipientId, userMessage);
-  } catch (err) {
-    console.error('[ERROR] Failed to process messaging event:', err.message);
+    const businessId = business.id;
+    console.log('[DEBUG] Resolved business_id:', businessId);
+
+    // Upsert conversation into the `instagram_conversations` table
+    const { error: conversationError } = await supabase
+      .from('instagram_conversations')
+      .insert([
+        {
+          business_id: businessId,
+          sender_id: senderId,
+          sender_name: senderName, // Include sender's name
+          recipient_id: recipientId,
+          message: userMessage,
+          message_type: messageType,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
+
+    if (conversationError) {
+      console.error('[ERROR] Failed to insert Instagram conversation:', conversationError.message);
+      throw new Error('Failed to insert Instagram conversation');
+    }
+
+    console.log('[DEBUG] Instagram conversation upserted successfully.');
+
+    // Generate AI response using assistant.js
+    console.log('[DEBUG] Generating AI response.');
+    const assistantResponse = await assistantHandler({
+      userMessage,
+      recipientId,
+      platform: 'instagram',
+      businessId,
+    });
+
+    // Send AI response back to sender
+    if (assistantResponse && assistantResponse.message) {
+      console.log('[DEBUG] Assistant response:', assistantResponse.message);
+      await sendInstagramMessage(senderId, assistantResponse.message);
+    } else {
+      console.warn('[WARN] Assistant response is missing or invalid.');
+    }
+  } catch (error) {
+    console.error('[ERROR] Failed to process messaging event:', error.message);
   }
-}
+};
 
 /**
  * Webhook verification endpoint (GET)
