@@ -18,6 +18,46 @@ const loginSchema = Joi.object({
   accessToken: Joi.string().required(),
 });
 
+// Helper: Fetch Instagram Business ID
+const fetchInstagramId = async (accessToken) => {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/me?fields=instagram_business_account&access_token=${accessToken}`
+    );
+
+    if (!response.ok) {
+      console.warn('[WARN] Failed to fetch Instagram Business ID:', response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.instagram_business_account?.id || null;
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch Instagram Business ID:', err.message);
+    return null;
+  }
+};
+
+// Helper: Validate Instagram Business Account
+const validateInstagramAccount = async (igId, accessToken) => {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${igId}?fields=id,username&access_token=${accessToken}`
+    );
+
+    if (!response.ok) {
+      console.warn('[WARN] Failed to validate Instagram Business Account:', response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data; // Contains `id` and `username`
+  } catch (err) {
+    console.error('[ERROR] Failed to validate Instagram Business Account:', err.message);
+    return null;
+  }
+};
+
 // Helper: Fetch Facebook Pages
 const fetchPages = async (accessToken) => {
   let pages = [];
@@ -33,26 +73,6 @@ const fetchPages = async (accessToken) => {
   }
 
   return pages;
-};
-
-// Helper: Fetch Instagram Business ID
-const fetchInstagramId = async (accessToken) => {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/me?fields=instagram_business_account&access_token=${accessToken}`
-    );
-
-    if (!response.ok) {
-      console.warn('[WARN] Failed to fetch Instagram Business ID:', response.statusText);
-      return null; // Return null to prevent breaking the flow
-    }
-
-    const data = await response.json();
-    return data.instagram_business_account?.id || null;
-  } catch (err) {
-    console.error('[ERROR] Failed to fetch Instagram Business ID:', err.message);
-    return null;
-  }
 };
 
 // POST /auth/login
@@ -73,13 +93,23 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Facebook User Data:', fbUser);
 
     // 3. Fetch Instagram Business ID
-    const ig_id = await fetchInstagramId(accessToken);
-    console.log('[DEBUG] Instagram Business ID:', ig_id);
+    const igId = await fetchInstagramId(accessToken);
+    let instagramAccount = null;
+
+    if (igId) {
+      instagramAccount = await validateInstagramAccount(igId, accessToken);
+
+      if (!instagramAccount) {
+        console.warn('[WARN] Instagram Business Account exists but is invalid or inaccessible.');
+      }
+    }
+
+    console.log('[DEBUG] Instagram Account Details:', instagramAccount);
 
     // 4. Upsert User
     const { data: user, error: userError } = await supabase
       .from('users')
-      .upsert([{ fb_id, name, email, ig_id }], { onConflict: 'fb_id' })
+      .upsert([{ fb_id, name, email, ig_id: igId, ig_username: instagramAccount?.username }], { onConflict: 'fb_id' })
       .select('*')
       .single();
 
