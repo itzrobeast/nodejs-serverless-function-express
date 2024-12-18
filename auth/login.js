@@ -82,7 +82,7 @@ const ensurePageExists = async (pageId, pageName, accessToken) => {
  */
 router.post('/', loginLimiter, async (req, res) => {
   try {
-    // Validate incoming request
+    // 1. Validate incoming request
     const { error, value } = loginSchema.validate(req.body);
     if (error) {
       console.error('[ERROR] Validation Failed:', error.details);
@@ -93,7 +93,7 @@ router.post('/', loginLimiter, async (req, res) => {
 
     console.log('[DEBUG] Access token received for authentication.');
 
-    // 1. Verify the Facebook user token
+    // 2. Verify the Facebook user token
     const fbResponse = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
     );
@@ -106,7 +106,7 @@ router.post('/', loginLimiter, async (req, res) => {
     const fbData = await fbResponse.json();
     console.log('[DEBUG] Facebook user data fetched:', { id: fbData.id, name: fbData.name, email: fbData.email });
 
-    // 2. Upsert user in Supabase 'users' table
+    // 3. Upsert user in Supabase 'users' table
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -140,18 +140,37 @@ router.post('/', loginLimiter, async (req, res) => {
       console.log('[DEBUG] User found:', { id: user.id, fb_id: user.fb_id, name: user.name, email: user.email });
     }
 
-    // 3. Validate and Extract `userId`
+    // 4. Validate and Extract `userId`
     const userId = user.id;
     if (typeof userId !== 'number') {
       console.error('[ERROR] user.id is not a valid integer:', userId);
       return res.status(500).json({ error: 'Invalid user ID from Supabase.' });
     }
 
-    // 4. Fetch all Facebook pages
+    // 5. Fetch all Facebook pages
     const pagesData = await fetchAllPages(accessToken);
     console.log('[DEBUG] /me/accounts returned:', pagesData);
 
-    // Determine which page to assign as `page_id`
+    if (!Array.isArray(pagesData) || pagesData.length === 0) {
+      console.warn('[WARN] No Facebook pages found for this user.');
+      // Depending on your application's logic, decide whether to allow login without pages
+      // For this example, we'll proceed without assigning a page_id
+    }
+
+    // 6. Upsert pages into 'pages' table before creating/updating business
+    const pageUpsertPromises = pagesData.map(async (pageInfo) => {
+      try {
+        await ensurePageExists(pageInfo.id, pageInfo.name || 'Unnamed Page', pageInfo.access_token);
+      } catch (err) {
+        console.error(`[ERROR] Failed to ensure page exists for page_id=${pageInfo.id}:`, err);
+        // Depending on your requirements, you might choose to halt the process or continue
+      }
+    });
+
+    await Promise.all(pageUpsertPromises);
+    console.log('[DEBUG] All fetched pages ensured in the database.');
+
+    // 7. Determine which page to assign as `page_id`
     let pageIdToAssign = null;
     if (selectedPageId) {
       // Client has specified a page
@@ -166,7 +185,12 @@ router.post('/', loginLimiter, async (req, res) => {
       pageIdToAssign = pagesData[0].id;
     }
 
-    // 5. Upsert business for the user in Supabase 'businesses' table
+    if (pageIdToAssign) {
+      // Since we've upserted all pages, the page should exist now
+      console.log(`[DEBUG] Page ID to assign: ${pageIdToAssign}`);
+    }
+
+    // 8. Upsert business for the user in Supabase 'businesses' table
     let { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
@@ -176,13 +200,20 @@ router.post('/', loginLimiter, async (req, res) => {
     if (businessError) {
       if (businessError.code === 'PGRST116') { // Not Found
         console.log('[DEBUG] Business not found. Creating new business.');
+
+        // Only assign page_id if available
+        const businessData = {
+          user_id: userId,
+          name: `${fbData.name}'s Business`,
+        };
+
+        if (pageIdToAssign) {
+          businessData.page_id = pageIdToAssign;
+        }
+
         const { data: newBusiness, error: createBusinessError } = await supabase
           .from('businesses')
-          .insert({
-            user_id: userId,
-            name: `${fbData.name}'s Business`,
-            page_id: pageIdToAssign, // Assigning page_id during insertion
-          })
+          .insert(businessData)
           .select('*')
           .single();
 
@@ -217,91 +248,68 @@ router.post('/', loginLimiter, async (req, res) => {
       }
     }
 
-    // 6. Upsert Page Access Tokens
-    if (Array.isArray(pagesData)) {
+    // 9. Upsert Page Access Tokens
+    if (Array.isArray(pagesData) && pagesData.length > 0) {
       const pagePromises = pagesData.map(async (pageInfo) => {
         const pageId = pageInfo.id;
         const pageAccessToken = pageInfo.access_token;
 
-        // Ensure the page exists in 'pages' table
-        let { data: page, error: pageError } = await supabase
-          .from('pages')
-          .select('*')
-          .eq('id', pageId)
-          .single();
+        // At this point, all pages have been ensured to exist in 'pages' table
+        try {
+          const { data: existingPageRow, error: fetchPageError } = await supabase
+            .from('page_access_tokens')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('business_id', business.id)
+            .eq('page_id', pageId)
+            .single();
 
-        if (pageError) {
-          if (pageError.code === 'PGRST116') { // Not Found
-            console.log(`[DEBUG] Page not found in 'pages' table. Inserting page_id=${pageId}.`);
-            const { data: newPage, error: createPageError } = await supabase
-              .from('pages')
-              .insert({
-                id: pageId,
-                name: pageInfo.name || 'Unnamed Page',
-                access_token: pageAccessToken, // Store if needed
-              })
-              .select('*')
-              .single();
+          if (fetchPageError) {
+            if (fetchPageError.code === 'PGRST116') { // Not Found
+              console.log(`[DEBUG] Inserting new page token for page_id=${pageId}.`);
+              const { error: insertError } = await supabase
+                .from('page_access_tokens')
+                .insert([
+                  {
+                    user_id: userId,
+                    business_id: business.id,
+                    page_id: pageId,
+                    page_access_token: pageAccessToken,
+                  },
+                ]);
 
-            if (createPageError) {
-              console.error(`[ERROR] Failed to create page for page_id=${pageId}:`, createPageError);
-              return; // Skip to the next page
+              if (insertError) {
+                console.error(`[ERROR] Failed to insert page token for page_id=${pageId}:`, insertError);
+              } else {
+                console.log(`[DEBUG] Page token inserted for page_id=${pageId}.`);
+              }
+            } else {
+              console.error(`[ERROR] Fetching existing page token for page_id=${pageId}:`, fetchPageError);
             }
-            page = newPage;
-            console.log(`[DEBUG] New page inserted:`, page);
           } else {
-            console.error(`[ERROR] Error fetching page_id=${pageId}:`, pageError);
-            return; // Skip to the next page
-          }
-        }
-
-        // Now upsert into 'page_access_tokens'
-        let { data: existingPageRow, error: fetchPageError } = await supabase
-          .from('page_access_tokens')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('business_id', business.id)
-          .eq('page_id', pageId)
-          .single();
-
-        if (fetchPageError && fetchPageError.code !== 'PGRST116') {
-          console.error(`[ERROR] Fetching existing page token row for page_id=${pageId}:`, fetchPageError);
-          return;
-        }
-
-        if (!existingPageRow) {
-          console.log(`[DEBUG] Inserting new page token for page_id=${pageId}.`);
-          const { error: insertError } = await supabase
-            .from('page_access_tokens')
-            .insert([
-              {
-                user_id: userId,
-                business_id: business.id,
-                page_id: pageId,
+            console.log(`[DEBUG] Updating existing page token for page_id=${pageId}.`);
+            const { error: updateError } = await supabase
+              .from('page_access_tokens')
+              .update({
                 page_access_token: pageAccessToken,
-              },
-            ]);
-          if (insertError) {
-            console.error(`[ERROR] Failed to insert page token for page_id=${pageId}:`, insertError);
+              })
+              .eq('id', existingPageRow.id);
+            if (updateError) {
+              console.error(`[ERROR] Failed to update page token for page_id=${pageId}:`, updateError);
+            } else {
+              console.log(`[DEBUG] Page token updated for page_id=${pageId}.`);
+            }
           }
-        } else {
-          console.log(`[DEBUG] Updating existing page token for page_id=${pageId}.`);
-          const { error: updateError } = await supabase
-            .from('page_access_tokens')
-            .update({
-              page_access_token: pageAccessToken,
-            })
-            .eq('id', existingPageRow.id);
-          if (updateError) {
-            console.error(`[ERROR] Failed to update page token for page_id=${pageId}:`, updateError);
-          }
+        } catch (err) {
+          console.error(`[ERROR] Processing page_access_tokens for page_id=${pageId}:`, err);
         }
       });
 
       await Promise.all(pagePromises);
+      console.log('[DEBUG] All page access tokens upserted.');
     }
 
-    // 7. Set cookies for authentication
+    // 10. Set cookies for authentication
     res.cookie('authToken', accessToken, {
       httpOnly: true,
       secure: true,
@@ -329,7 +337,7 @@ router.post('/', loginLimiter, async (req, res) => {
       businessId: business.id,
     });
 
-    // 8. Send JSON response
+    // 11. Send JSON response
     return res.status(200).json({
       message: 'Login successful',
       userId: user.id,
