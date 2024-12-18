@@ -248,8 +248,6 @@ async function processMessagingEvent(message) {
 
         const assistantResponse = await assistantHandler({
           userMessage,
-          recipientId: targetId, // Send the response to the customer
-          platform: 'instagram',
           businessId,
         });
 
