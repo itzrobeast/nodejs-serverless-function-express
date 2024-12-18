@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import supabase from './supabaseClient.js';
+import rateLimit from 'express-rate-limit';
 
 // Validate Critical Environment Variables
 if (
@@ -29,6 +30,16 @@ import loginRouter from './auth/login.js';
 
 const app = express();
 
+// Trust proxy settings for Vercel and other platforms
+app.set('trust proxy', 1); // Trust first proxy (necessary for X-Forwarded-For)
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // limit each IP
+  message: 'Too many login attempts, try again later.',
+});
+
+app.use('/auth/login', loginLimiter); // Apply rate limiter
 
 // Middleware
 app.use(
