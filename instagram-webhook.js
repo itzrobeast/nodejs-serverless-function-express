@@ -80,10 +80,11 @@ async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
+    // Extract sender and recipient details correctly
     const userMessage = message?.message?.text; // Message text
-    const senderId = message?.sender?.id; // Instagram User ID (customer)
+    const senderId = message?.sender?.id; // Customer's Instagram User ID
     const recipientId = message?.recipient?.id; // Your Instagram Business Account ID
-    const messageType = 'received';
+    const messageType = message?.message?.is_echo ? 'sent' : 'received';
 
     if (!userMessage || !recipientId || !senderId) {
       console.error('[ERROR] Missing message, recipientId, or senderId.');
@@ -92,17 +93,25 @@ async function processMessagingEvent(message) {
 
     console.log('[DEBUG] Extracted message details:', {
       userMessage,
-      recipientId,
       senderId,
+      recipientId,
       messageType,
     });
 
     // Resolve `business_id` using recipientId (Instagram Business Account ID)
-    const businessId = await resolveBusinessIdByInstagramId(recipientId);
-    if (!businessId) {
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('ig_id', recipientId) // Correctly use `recipientId` to fetch the business
+      .single();
+
+    if (businessError || !business) {
       console.error('[ERROR] Business not found for recipient:', recipientId);
       return;
     }
+
+    const businessId = business.id;
+    console.log('[DEBUG] Resolved business_id:', businessId);
 
     // Upsert conversation into the `instagram_conversations` table
     const { error: conversationError } = await supabase
@@ -126,24 +135,27 @@ async function processMessagingEvent(message) {
 
     console.log('[DEBUG] Instagram conversation upserted successfully.');
 
-    // Generate response from assistant
-    const assistantResponse = await assistantHandler({
-      userMessage,
-      recipientId,
-      platform: 'instagram',
-      businessId,
-    });
+    // Respond using assistant logic (if the message is not an echo)
+    if (messageType === 'received') {
+      const assistantResponse = await assistantHandler({
+        userMessage,
+        recipientId: senderId, // Respond back to the customer
+        platform: 'instagram',
+        businessId,
+      });
 
-    // Send AI-generated response to sender
-    if (assistantResponse?.message) {
-      await sendInstagramMessage(senderId, assistantResponse.message);
-    } else {
-      console.warn('[WARN] Assistant response is missing or invalid.');
+      if (assistantResponse && assistantResponse.message) {
+        await sendInstagramMessage(senderId, assistantResponse.message);
+        console.log('[DEBUG] Assistant response sent to customer.');
+      } else {
+        console.warn('[WARN] Assistant generated no response.');
+      }
     }
   } catch (error) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
 }
+
 
 /**
  * Webhook verification endpoint (GET)
