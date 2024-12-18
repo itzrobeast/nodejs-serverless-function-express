@@ -297,9 +297,8 @@ router.get('/', (req, res) => {
   }
 });
 
-/**
- * Fetch Instagram conversations with names
- */
+
+// * Fetch Instagram conversations with names
 router.get('/fetch-conversations', async (req, res) => {
   console.log('[DEBUG] /fetch-conversations endpoint hit with query:', req.query);
 
@@ -325,37 +324,48 @@ router.get('/fetch-conversations', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch conversations.' });
     }
 
-    // Function to fetch names via Graph API
-    const fetchNameFromGraphAPI = async (userId) => {
+    // Function to fetch names with caching
+    const fetchNameWithCache = async (userId) => {
       try {
+        const cachedUser = await supabase
+          .from('instagram_users')
+          .select('name')
+          .eq('user_id', userId)
+          .single();
+
+        if (cachedUser?.data?.name) return cachedUser.data.name;
+
         const response = await fetch(
           `https://graph.facebook.com/v14.0/${userId}?fields=name&access_token=${process.env.PAGE_ACCESS_TOKEN}`
         );
         const data = await response.json();
-        return data.name || `User ${userId}`;
-      } catch {
-        return `User ${userId}`; // Fallback
+        console.log(`[DEBUG] Graph API response for userId ${userId}:`, data);
+
+        const name = data.name || `User ${userId}`;
+        await supabase.from('instagram_users').upsert([{ user_id: userId, name }]);
+        return name;
+      } catch (err) {
+        console.error(`[ERROR] Fetching name for userId ${userId}:`, err.message);
+        return `User ${userId}`;
       }
     };
 
     // Enrich conversations with names
     const enrichedConversations = await Promise.all(
       conversations.map(async (conv) => {
-        const senderName = await fetchNameFromGraphAPI(conv.sender_id);
-        const recipientName = await fetchNameFromGraphAPI(conv.recipient_id);
+        const senderName = await fetchNameWithCache(conv.sender_id);
+        const recipientName = await fetchNameWithCache(conv.recipient_id);
         return { ...conv, senderName, recipientName };
       })
     );
 
     console.log('[DEBUG] Conversations enriched with names:', enrichedConversations);
-
     res.status(200).json({ conversations: enrichedConversations });
   } catch (err) {
     console.error('[ERROR] Unexpected error in /fetch-conversations:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
 
 
 
