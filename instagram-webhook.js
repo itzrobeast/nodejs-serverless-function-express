@@ -76,113 +76,129 @@ async function resolveBusinessIdByInstagramId(instagramId) {
 /**
  * Process individual messaging events from the Instagram webhook callback.
  */
+/**
+ * Process individual messaging events from the Instagram webhook callback.
+ */
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    const userMessage = message?.message?.text; // Message text
-    const senderId = message?.sender?.id; // Sender ID
-    const recipientId = message?.recipient?.id; // Recipient ID
-    const isEcho = message?.message?.is_echo || false; // Check if the message is an echo
+    // Identify the type of event
+    if (message.message) {
+      // It's a message event
+      const userMessage = message.message.text;
+      const senderId = message.sender.id;
+      const recipientId = message.recipient.id;
+      const isEcho = message.message.is_echo || false;
 
-    // Determine message type based on is_echo flag
-    const messageType = isEcho ? 'sent' : 'received';
+      // Determine message type based on is_echo flag
+      const messageType = isEcho ? 'sent' : 'received';
 
-    if (!senderId || !recipientId) {
-      console.error('[ERROR] Missing senderId or recipientId.');
-      return;
-    }
-
-    // In Instagram messaging, the business account is always the recipient for received messages
-    // and the sender for sent messages.
-    let businessInstagramId;
-    let customerId;
-    let targetId; // The ID to send responses to
-
-    if (messageType === 'received') {
-      // Message received from customer to business
-      businessInstagramId = recipientId;
-      customerId = senderId;
-      targetId = customerId;
-    } else if (messageType === 'sent') {
-      // Message sent from business to customer
-      businessInstagramId = senderId;
-      customerId = recipientId;
-      targetId = customerId;
-    } else {
-      console.warn('[WARN] Unknown message type:', messageType);
-      return;
-    }
-
-    console.log('[DEBUG] Determined messageType:', messageType);
-    console.log('[DEBUG] businessInstagramId:', businessInstagramId);
-    console.log('[DEBUG] customerId:', customerId);
-    console.log('[DEBUG] targetId:', targetId);
-
-    // Resolve business ID
-    const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
-    if (!businessId) {
-      console.error('[ERROR] Could not resolve business ID.');
-      return;
-    }
-
-    // Prepare the message content for database insertion
-    let messageContent = userMessage || '';
-    let messageAttachments = [];
-
-    if (message?.message?.attachments && Array.isArray(message.message.attachments)) {
-      messageAttachments = message.message.attachments.map((attachment) => ({
-        type: attachment.type,
-        payload: attachment.payload,
-      }));
-      // Optionally, you can serialize attachments as JSON string
-      messageContent += ` Attachments: ${JSON.stringify(messageAttachments)}`;
-      console.log('[DEBUG] Message contains attachments:', messageAttachments);
-    }
-
-    // Insert the conversation into the database
-    const { error: conversationError } = await supabase
-      .from('instagram_conversations')
-      .insert([
-        {
-          business_id: businessId,
-          sender_id: customerId, // Always the customer
-          recipient_id: businessId, // Always the business
-          message: messageContent, // Include attachments if any
-          message_type: messageType,
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-      ]);
-
-    if (conversationError) {
-      console.error('[ERROR] Failed to insert Instagram conversation:', conversationError.message);
-      throw new Error('Failed to insert Instagram conversation');
-    }
-
-    console.log('[DEBUG] Instagram conversation upserted successfully.');
-
-    // If the message is received and contains text, respond using the assistant
-    if (messageType === 'received') {
-      if (!userMessage) {
-        console.warn('[WARN] Received message has no text content.');
-        // Optionally, handle messages with attachments here
+      if (!senderId || !recipientId) {
+        console.error('[ERROR] Missing senderId or recipientId.');
         return;
       }
 
-      const assistantResponse = await assistantHandler({
-        userMessage,
-        recipientId: targetId, // Send the response to the customer
-        platform: 'instagram',
-        businessId,
-      });
+      // Map IDs based on message type
+      let businessInstagramId;
+      let customerId;
+      let targetId; // The ID to send responses to
 
-      if (assistantResponse && assistantResponse.message) {
-        await sendInstagramMessage(targetId, assistantResponse.message);
-        console.log('[DEBUG] Assistant response sent to customer.');
+      if (messageType === 'received') {
+        // Message received from customer to business
+        businessInstagramId = recipientId;
+        customerId = senderId;
+        targetId = customerId;
+      } else if (messageType === 'sent') {
+        // Message sent from business to customer
+        businessInstagramId = senderId;
+        customerId = recipientId;
+        targetId = customerId;
       } else {
-        console.warn('[WARN] Assistant generated no response.');
+        console.warn('[WARN] Unknown message type:', messageType);
+        return;
       }
+
+      console.log('[DEBUG] Determined messageType:', messageType);
+      console.log('[DEBUG] businessInstagramId:', businessInstagramId);
+      console.log('[DEBUG] customerId:', customerId);
+      console.log('[DEBUG] targetId:', targetId);
+
+      // Resolve business ID
+      const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
+      if (!businessId) {
+        console.error('[ERROR] Could not resolve business ID.');
+        return;
+      }
+
+      // Prepare the message content for database insertion
+      let messageContent = userMessage || '';
+      let messageAttachments = [];
+
+      if (message.message.attachments && Array.isArray(message.message.attachments)) {
+        messageAttachments = message.message.attachments.map((attachment) => ({
+          type: attachment.type,
+          payload: attachment.payload,
+        }));
+        // Optionally, you can serialize attachments as JSON string
+        messageContent += ` Attachments: ${JSON.stringify(messageAttachments)}`;
+        console.log('[DEBUG] Message contains attachments:', messageAttachments);
+      }
+
+      // Insert the conversation into the database
+      const { error: conversationError } = await supabase
+        .from('instagram_conversations')
+        .insert([
+          {
+            business_id: businessId,
+            sender_id: customerId, // Always the customer
+            recipient_id: businessId, // Always the business
+            message: messageContent, // Include attachments if any
+            message_type: messageType,
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        ]);
+
+      if (conversationError) {
+        console.error('[ERROR] Failed to insert Instagram conversation:', conversationError.message);
+        throw new Error('Failed to insert Instagram conversation');
+      }
+
+      console.log('[DEBUG] Instagram conversation upserted successfully.');
+
+      // If the message is received and contains text, respond using the assistant
+      if (messageType === 'received') {
+        if (!userMessage) {
+          console.warn('[WARN] Received message has no text content.');
+          // Optionally, handle messages with attachments here
+          return;
+        }
+
+        const assistantResponse = await assistantHandler({
+          userMessage,
+          recipientId: targetId, // Send the response to the customer
+          platform: 'instagram',
+          businessId,
+        });
+
+        if (assistantResponse && assistantResponse.message) {
+          await sendInstagramMessage(targetId, assistantResponse.message);
+          console.log('[DEBUG] Assistant response sent to customer.');
+        } else {
+          console.warn('[WARN] Assistant generated no response.');
+        }
+      }
+    } else if (message.read) {
+      // It's a read receipt
+      console.log('[INFO] Read receipt received:', message.read);
+      // Optionally, handle read receipts here
+    } else if (message.delivery) {
+      // It's a delivery receipt
+      console.log('[INFO] Delivery receipt received:', message.delivery);
+      // Optionally, handle delivery receipts here
+    } else {
+      console.warn('[WARN] Unknown messaging event type:', message);
     }
   } catch (error) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
