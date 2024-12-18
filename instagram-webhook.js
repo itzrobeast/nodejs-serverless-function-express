@@ -9,27 +9,6 @@ const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 
 /**
- * Fetch Instagram User Name
- * @param {String} senderId - Instagram User ID
- */
-async function fetchInstagramUserName(senderId) {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v14.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
-    );
-    if (!response.ok) {
-      console.warn('[WARN] Failed to fetch user name:', await response.text());
-      return null;
-    }
-    const data = await response.json();
-    return data.name || null;
-  } catch (error) {
-    console.error('[ERROR] Failed to fetch Instagram user name:', error.message);
-    return null;
-  }
-}
-
-/**
  * Send a direct reply to an Instagram user using your Page Access Token.
  */
 async function sendInstagramMessage(recipientId, message) {
@@ -58,7 +37,7 @@ async function sendInstagramMessage(recipientId, message) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[ERROR] Failed to send Instagram message:', errorText);
+      console.error('Error sending message to Instagram:', errorText);
       throw new Error(`Failed to send Instagram message: ${response.statusText}`);
     }
 
@@ -71,15 +50,39 @@ async function sendInstagramMessage(recipientId, message) {
 }
 
 /**
+ * Resolve business_id using recipientId (your Instagram Business Account ID).
+ */
+async function resolveBusinessIdByInstagramId(recipientId) {
+  try {
+    const { data: business, error } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('ig_id', recipientId)
+      .single();
+
+    if (error || !business) {
+      console.warn('[WARN] Business not found for recipient:', recipientId);
+      return null;
+    }
+
+    console.log(`[DEBUG] Resolved business_id: ${business.id} for recipient: ${recipientId}`);
+    return business.id;
+  } catch (err) {
+    console.error('[ERROR] Error while resolving business_id by Instagram ID:', err.message);
+    return null;
+  }
+}
+
+/**
  * Process individual messaging events from the Instagram webhook callback.
  */
-const processMessagingEvent = async (message) => {
+async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    const userMessage = message?.message?.text;
+    const userMessage = message?.message?.text; // Message text
     const senderId = message?.sender?.id; // Instagram User ID (customer)
-    const recipientId = message?.recipient?.id; // Instagram Business Account ID
+    const recipientId = message?.recipient?.id; // Your Instagram Business Account ID
     const messageType = 'received';
 
     if (!userMessage || !recipientId || !senderId) {
@@ -94,23 +97,12 @@ const processMessagingEvent = async (message) => {
       messageType,
     });
 
-    // Fetch sender's name
-    const senderName = await fetchInstagramUserName(senderId);
-
-    // Resolve `business_id` using recipientId
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('ig_id', recipientId)
-      .single();
-
-    if (businessError || !business) {
+    // Resolve `business_id` using recipientId (Instagram Business Account ID)
+    const businessId = await resolveBusinessIdByInstagramId(recipientId);
+    if (!businessId) {
       console.error('[ERROR] Business not found for recipient:', recipientId);
       return;
     }
-
-    const businessId = business.id;
-    console.log('[DEBUG] Resolved business_id:', businessId);
 
     // Upsert conversation into the `instagram_conversations` table
     const { error: conversationError } = await supabase
@@ -119,7 +111,6 @@ const processMessagingEvent = async (message) => {
         {
           business_id: businessId,
           sender_id: senderId,
-          sender_name: senderName, // Include sender's name
           recipient_id: recipientId,
           message: userMessage,
           message_type: messageType,
@@ -135,8 +126,7 @@ const processMessagingEvent = async (message) => {
 
     console.log('[DEBUG] Instagram conversation upserted successfully.');
 
-    // Generate AI response using assistant.js
-    console.log('[DEBUG] Generating AI response.');
+    // Generate response from assistant
     const assistantResponse = await assistantHandler({
       userMessage,
       recipientId,
@@ -144,9 +134,8 @@ const processMessagingEvent = async (message) => {
       businessId,
     });
 
-    // Send AI response back to sender
-    if (assistantResponse && assistantResponse.message) {
-      console.log('[DEBUG] Assistant response:', assistantResponse.message);
+    // Send AI-generated response to sender
+    if (assistantResponse?.message) {
       await sendInstagramMessage(senderId, assistantResponse.message);
     } else {
       console.warn('[WARN] Assistant response is missing or invalid.');
@@ -154,7 +143,7 @@ const processMessagingEvent = async (message) => {
   } catch (error) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
-};
+}
 
 /**
  * Webhook verification endpoint (GET)
