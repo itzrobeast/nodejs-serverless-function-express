@@ -141,9 +141,6 @@ async function resolveBusinessIdByInstagramId(instagramId) {
 /**
  * Process individual messaging events from the Instagram webhook callback.
  */
-/**
- * Process individual messaging events from the Instagram webhook callback.
- */
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
@@ -259,7 +256,6 @@ async function processMessagingEvent(message) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
 }
-
 
 /**
  * Webhook verification endpoint (GET)
