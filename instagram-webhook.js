@@ -142,7 +142,6 @@ async function resolveBusinessIdByInstagramId(instagramId) {
     return null;
   }
 }
-
 /**
  * Process individual messaging events from the Instagram webhook callback.
  * @param {object} message - The messaging event object.
@@ -151,9 +150,29 @@ async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    // Identify the type of event
+    // Check for unsent message
+    if (message.message && message.message.is_unsent) {
+      const messageId = message.message.mid;
+
+      console.log(`[DEBUG] Message with ID ${messageId} was unsent.`);
+
+      // Update the database to mark the message as unsent
+      const { error: updateError } = await supabase
+        .from('instagram_conversations')
+        .update({ message: '[Message unsent]', updated_at: new Date() }) // Update message content
+        .eq('id', messageId); // Match the message by ID
+
+      if (updateError) {
+        console.error('[ERROR] Failed to mark message as unsent:', updateError.message);
+        return;
+      }
+
+      console.log('[DEBUG] Message marked as unsent in the database.');
+      return; // Exit early since it's an unsent message
+    }
+
+    // Continue with existing logic for normal messages
     if (message.message) {
-      // It's a message event
       const userMessage = message.message.text;
       const senderId = message.sender.id;
       const recipientId = message.recipient.id;
@@ -170,18 +189,16 @@ async function processMessagingEvent(message) {
       // Map IDs based on message type
       let businessInstagramId;
       let customerId;
-      let targetId; // The ID to send responses to
+      let targetId;
 
       if (messageType === 'received') {
-        // Message received from customer to business
-        businessInstagramId = recipientId; // Instagram business account ID
-        customerId = senderId; // Instagram user ID
-        targetId = customerId; // Respond to customer
+        businessInstagramId = recipientId;
+        customerId = senderId;
+        targetId = customerId;
       } else if (messageType === 'sent') {
-        // Message sent from business to customer
-        businessInstagramId = senderId; // Instagram business account ID
-        customerId = recipientId; // Instagram user ID
-        targetId = customerId; // Respond to customer
+        businessInstagramId = senderId;
+        customerId = recipientId;
+        targetId = customerId;
       } else {
         console.warn('[WARN] Unknown message type:', messageType);
         return;
@@ -199,7 +216,6 @@ async function processMessagingEvent(message) {
         return;
       }
 
-      // Prepare the message content for database insertion
       let messageContent = userMessage || '';
       let messageAttachments = [];
 
@@ -208,7 +224,6 @@ async function processMessagingEvent(message) {
           type: attachment.type,
           payload: attachment.payload,
         }));
-        // Optionally, serialize attachments as a JSON string
         messageContent += ` Attachments: ${JSON.stringify(messageAttachments)}`;
         console.log('[DEBUG] Message contains attachments:', messageAttachments);
       }
@@ -219,9 +234,9 @@ async function processMessagingEvent(message) {
         .insert([
           {
             business_id: businessId,
-            sender_id: customerId, // Always the customer
-            recipient_id: businessInstagramId, // Correctly set to Instagram recipient ID
-            message: messageContent, // Include attachments if any
+            sender_id: customerId,
+            recipient_id: businessInstagramId,
+            message: messageContent,
             message_type: messageType,
             created_at: new Date(),
             updated_at: new Date(),
@@ -235,14 +250,7 @@ async function processMessagingEvent(message) {
 
       console.log('[DEBUG] Instagram conversation upserted successfully.');
 
-      // If the message is received and contains text, respond using the assistant
-      if (messageType === 'received') {
-        if (!userMessage) {
-          console.warn('[WARN] Received message has no text content.');
-          // Optionally, handle messages with attachments here
-          return;
-        }
-
+      if (messageType === 'received' && userMessage) {
         console.log('[DEBUG] Processing message from platform: instagram');
         console.log(`[DEBUG] User message: "${userMessage}"`);
 
@@ -259,13 +267,9 @@ async function processMessagingEvent(message) {
         }
       }
     } else if (message.read) {
-      // It's a read receipt
       console.log('[INFO] Read receipt received:', message.read);
-      // Optionally, handle read receipts here
     } else if (message.delivery) {
-      // It's a delivery receipt
       console.log('[INFO] Delivery receipt received:', message.delivery);
-      // Optionally, handle delivery receipts here
     } else {
       console.warn('[WARN] Unknown messaging event type:', message);
     }
@@ -273,6 +277,8 @@ async function processMessagingEvent(message) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
 }
+
+
 
 /**
  * Webhook verification endpoint (GET)
