@@ -1,8 +1,8 @@
 // assistant.js
 
 import OpenAI from 'openai';
-import supabase from './supabaseClient.js'; // Supabase client for secure backend operations
-import { sendInstagramMessage } from './instagramWebhook.js'; // Ensure the correct path
+import supabase from './supabaseClient.js'; // Ensure this path is correct
+import { sendInstagramMessage } from './instagramWebhook.js'; // Correct relative path
 
 // Initialize OpenAI with your API key
 const openai = new OpenAI({
