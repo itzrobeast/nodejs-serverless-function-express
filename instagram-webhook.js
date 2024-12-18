@@ -292,6 +292,52 @@ router.get('/', (req, res) => {
 });
 
 /**
+ * Fetch Instagram conversations
+ */
+router.get('/fetch-conversations', async (req, res) => {
+  try {
+    // Ensure the user is authenticated (optional)
+    const { business_id } = req.query; // Get business_id from query parameters or auth middleware
+
+    if (!business_id) {
+      return res.status(400).json({ error: 'business_id is required.' });
+    }
+
+    // Fetch conversations from the database
+    const { data: conversations, error } = await supabase
+      .from('instagram_conversations')
+      .select(`
+        id,
+        sender_id,
+        recipient_id,
+        message,
+        created_at,
+        customers (
+          name,
+          phone,
+          email,
+          location
+        )
+      `)
+      .eq('business_id', business_id)
+      .order('created_at', { ascending: false }); // Most recent messages first
+
+    if (error) {
+      console.error('[ERROR] Failed to fetch conversations:', error.message);
+      return res.status(500).json({ error: 'Failed to fetch conversations.' });
+    }
+
+    res.status(200).json({ conversations });
+  } catch (err) {
+    console.error('[ERROR] Unexpected error fetching conversations:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+
+
+/**
  * Webhook event handler (POST)
  */
 router.post(
