@@ -133,6 +133,8 @@ router.post('/', loginLimiter, async (req, res) => {
     // 8. Send Success Response
     return res.status(200).json({
       message: 'Login successful',
+      userId: user.id, // Explicitly include userId
+      businessId: business.id, // Explicitly include businessId
       user,
       business,
     });
