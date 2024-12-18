@@ -38,42 +38,31 @@ const fetchAllPages = async (accessToken) => {
   return pages;
 };
 
-// Function to ensure the page exists in the 'pages' table
+// Function to ensure the page exists in the 'pages' table using upsert
 const ensurePageExists = async (pageId, pageName, accessToken) => {
-  const { data: page, error } = await supabase
-    .from('pages')
-    .select('*')
-    .eq('id', pageId)
-    .single();
-  
-  if (error) {
-    if (error.code === 'PGRST116') { // Not Found
-      // Insert the page into 'pages' table
-      const { data: newPage, error: insertError } = await supabase
-        .from('pages')
-        .insert([
-          {
-            id: pageId,
-            name: pageName,
-            access_token: accessToken,
-          },
-        ])
-        .select('*')
-        .single();
-      
-      if (insertError) {
-        console.error(`[ERROR] Failed to insert page_id=${pageId}:`, insertError);
-        throw insertError;
-      }
-      
-      return newPage;
-    } else {
-      console.error(`[ERROR] Error fetching page_id=${pageId}:`, error);
+  try {
+    const { data, error } = await supabase
+      .from('pages')
+      .upsert([
+        {
+          id: pageId,
+          name: pageName,
+          access_token: accessToken,
+        },
+      ], { onConflict: 'id' })
+      .select('*');
+
+    if (error) {
+      console.error(`[ERROR] Upsert failed for page_id=${pageId}:`, error);
       throw error;
     }
+
+    console.log(`[DEBUG] Page upserted successfully:`, data);
+    return data;
+  } catch (err) {
+    console.error(`[ERROR] Exception during upsert for page_id=${pageId}:`, err);
+    throw err;
   }
-  
-  return page;
 };
 
 /**
@@ -162,13 +151,13 @@ router.post('/', loginLimiter, async (req, res) => {
       try {
         await ensurePageExists(pageInfo.id, pageInfo.name || 'Unnamed Page', pageInfo.access_token);
       } catch (err) {
-        console.error(`[ERROR] Failed to ensure page exists for page_id=${pageInfo.id}:`, err);
-        // Depending on your requirements, you might choose to halt the process or continue
+        console.error(`[ERROR] Failed to upsert page_id=${pageInfo.id}:`, err);
+        // Decide whether to halt the process or continue based on your requirements
       }
     });
 
     await Promise.all(pageUpsertPromises);
-    console.log('[DEBUG] All fetched pages ensured in the database.');
+    console.log('[DEBUG] All pages upserted successfully.');
 
     // 7. Determine which page to assign as `page_id`
     let pageIdToAssign = null;
@@ -186,8 +175,19 @@ router.post('/', loginLimiter, async (req, res) => {
     }
 
     if (pageIdToAssign) {
-      // Since we've upserted all pages, the page should exist now
-      console.log(`[DEBUG] Page ID to assign: ${pageIdToAssign}`);
+      // Validate that the page exists in 'pages' table
+      const { data: existingPage, error: pageCheckError } = await supabase
+        .from('pages')
+        .select('*')
+        .eq('id', pageIdToAssign)
+        .single();
+
+      if (pageCheckError) {
+        console.error(`[ERROR] Assigned page_id=${pageIdToAssign} does not exist in 'pages' table:`, pageCheckError);
+        return res.status(500).json({ error: 'Assigned page does not exist.' });
+      }
+
+      console.log(`[DEBUG] Assigned page_id=${pageIdToAssign} confirmed in 'pages' table.`);
     }
 
     // 8. Upsert business for the user in Supabase 'businesses' table
@@ -222,14 +222,14 @@ router.post('/', loginLimiter, async (req, res) => {
           return res.status(500).json({ error: 'Failed to create business.' });
         }
         business = newBusiness;
-        console.log('[DEBUG] New business created:', { id: business.id, user_id: business.user_id, name: business.name, page_id: business.page_id });
+        console.log('[DEBUG] New business created:', business);
       } else {
         console.error('[ERROR] Error fetching business:', businessError);
         return res.status(500).json({ error: 'Error fetching business.' });
       }
     } else {
-      console.log('[DEBUG] Business found:', { id: business.id, user_id: business.user_id, name: business.name, page_id: business.page_id });
-      
+      console.log('[DEBUG] Business found:', business);
+
       // Optionally, update page_id if it's null and a page is available
       if (!business.page_id && pageIdToAssign) {
         const { data: updatedBusiness, error: updateBusinessError } = await supabase
@@ -238,7 +238,7 @@ router.post('/', loginLimiter, async (req, res) => {
           .eq('id', business.id)
           .select('*')
           .single();
-        
+
         if (updateBusinessError) {
           console.error('[ERROR] Failed to update business with page_id:', updateBusinessError);
         } else {
@@ -254,7 +254,7 @@ router.post('/', loginLimiter, async (req, res) => {
         const pageId = pageInfo.id;
         const pageAccessToken = pageInfo.access_token;
 
-        // At this point, all pages have been ensured to exist in 'pages' table
+        // At this point, all pages have been upserted into 'pages' table
         try {
           const { data: existingPageRow, error: fetchPageError } = await supabase
             .from('page_access_tokens')
@@ -294,6 +294,7 @@ router.post('/', loginLimiter, async (req, res) => {
                 page_access_token: pageAccessToken,
               })
               .eq('id', existingPageRow.id);
+
             if (updateError) {
               console.error(`[ERROR] Failed to update page token for page_id=${pageId}:`, updateError);
             } else {
