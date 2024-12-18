@@ -43,7 +43,7 @@ const ensurePageExists = async (pageId, pageName, accessToken) => {
   const { data: page, error } = await supabase
     .from('pages')
     .select('*')
-    .eq('id', pageId)
+    .eq('page_id', pageId)
     .single();
   
   if (error) {
@@ -53,7 +53,7 @@ const ensurePageExists = async (pageId, pageName, accessToken) => {
         .from('pages')
         .insert([
           {
-            id: pageId,
+            page_id: pageId,
             name: pageName,
             access_token: accessToken,
           },
