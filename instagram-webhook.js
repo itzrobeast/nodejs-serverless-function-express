@@ -295,41 +295,35 @@ router.get('/', (req, res) => {
  * Fetch Instagram conversations
  */
 router.get('/fetch-conversations', async (req, res) => {
+  console.log('[DEBUG] /fetch-conversations endpoint hit with query:', req.query);
+
   try {
-    // Ensure the user is authenticated (optional)
-    const { business_id } = req.query; // Get business_id from query parameters or auth middleware
+    const { business_id } = req.query;
 
     if (!business_id) {
+      console.error('[ERROR] Missing business_id');
       return res.status(400).json({ error: 'business_id is required.' });
     }
 
-    // Fetch conversations from the database
+    console.log('[DEBUG] Fetching conversations for business_id:', business_id);
+
+    // Fetch conversations from the instagram_conversations table
     const { data: conversations, error } = await supabase
       .from('instagram_conversations')
-      .select(`
-        id,
-        sender_id,
-        recipient_id,
-        message,
-        created_at,
-        customers (
-          name,
-          phone,
-          email,
-          location
-        )
-      `)
+      .select('id, sender_id, recipient_id, message, created_at')
       .eq('business_id', business_id)
-      .order('created_at', { ascending: false }); // Most recent messages first
+      .order('created_at', { ascending: false }); // Order by most recent
 
     if (error) {
-      console.error('[ERROR] Failed to fetch conversations:', error.message);
+      console.error('[ERROR] Supabase fetch failed:', error.message);
       return res.status(500).json({ error: 'Failed to fetch conversations.' });
     }
 
+    console.log('[DEBUG] Conversations fetched successfully:', conversations);
+
     res.status(200).json({ conversations });
   } catch (err) {
-    console.error('[ERROR] Unexpected error fetching conversations:', err.message);
+    console.error('[ERROR] Unexpected error in /fetch-conversations:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
