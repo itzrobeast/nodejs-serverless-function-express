@@ -81,14 +81,19 @@ async function resolveBusinessIdByInstagramId(recipientId) {
 /**
  * Process individual messaging events from the Instagram webhook callback.
  */
-async function processMessagingEvent(message) {
+const processMessagingEvent = async (message) => {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    const userMessage = message?.message?.text;
-    const recipientId = message?.recipient?.id;
-    const senderId = message?.sender?.id;
+    const userMessage = message?.message?.text; // Message text
+    const senderId = message?.sender?.id; // Instagram User ID (customer)
+    const recipientId = message?.recipient?.id; // Instagram Business Account ID
     const messageType = 'received';
+
+    if (!userMessage || !recipientId || !senderId) {
+      console.error('[ERROR] Missing message, recipientId, or senderId.');
+      return;
+    }
 
     console.log('[DEBUG] Extracted message details:', {
       userMessage,
@@ -97,22 +102,23 @@ async function processMessagingEvent(message) {
       messageType,
     });
 
-    if (!userMessage || !recipientId || !senderId) {
-      console.error('[ERROR] Missing message, recipientId, or senderId.');
+    // Resolve `business_id` using recipientId (Instagram Business Account ID)
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('ig_id', recipientId)
+      .single();
+
+    if (businessError || !business) {
+      console.error('[ERROR] Business not found for recipient:', recipientId);
       return;
     }
 
-    // Resolve business_id using the recipientId (ig_id)
-    const businessId = await resolveBusinessIdByInstagramId(recipientId);
-    if (!businessId) {
-      console.error(`[ERROR] Business not found for recipient: ${recipientId}`);
-      return;
-    }
+    const businessId = business.id;
+    console.log('[DEBUG] Resolved business_id:', businessId);
 
-    console.log(`[DEBUG] Resolved business_id: ${businessId}`);
-
-    // Insert the conversation into the Instagram Conversations table
-    const { error: insertError } = await supabase
+    // Upsert conversation into the `instagram_conversations` table
+    const { error: conversationError } = await supabase
       .from('instagram_conversations')
       .insert([
         {
@@ -121,16 +127,21 @@ async function processMessagingEvent(message) {
           recipient_id: recipientId,
           message: userMessage,
           message_type: messageType,
-          created_at: new Date().toISOString(),
+          created_at: new Date(),
+          updated_at: new Date(),
         },
       ]);
 
-    if (insertError) {
-      console.error('[ERROR] Failed to insert Instagram conversation:', insertError.message);
-      return;
+    if (conversationError) {
+      console.error('[ERROR] Failed to insert Instagram conversation:', conversationError.message);
+      throw new Error('Failed to insert Instagram conversation');
     }
 
-    console.log('[DEBUG] Instagram conversation inserted successfully.');
+    console.log('[DEBUG] Instagram conversation upserted successfully.');
+  } catch (error) {
+    console.error('[ERROR] Failed to process messaging event:', error.message);
+  }
+};
 
     // Optional: Respond to the sender (if applicable)
     await sendInstagramMessage(senderId, 'Thank you for your message! We will get back to you shortly.');
@@ -161,37 +172,33 @@ router.get('/', (req, res) => {
  * Webhook event handler (POST)
  */
 router.post('/', async (req, res) => {
-  const body = req.body;
-
-  if (!body) {
-    console.error('[ERROR] Received empty body.');
-    return res.status(400).send('Invalid request body.');
-  }
-
   try {
-    // Handle Messaging Events (object === 'instagram')
-    if (body.object === 'instagram') {
-      for (const entry of body.entry) {
-        console.log('[DEBUG] Processing Instagram entry:', entry);
+    const body = req.body;
 
-        if (entry.messaging && Array.isArray(entry.messaging)) {
-          for (const message of entry.messaging) {
-            await processMessagingEvent(message);
-          }
-        } else {
-          console.warn('[WARN] No messaging events found in Instagram entry.');
-        }
-      }
-    } else {
-      console.log('Unhandled webhook event type:', body.object);
+    if (!body || body.object !== 'instagram') {
+      console.error('[ERROR] Invalid webhook object or empty body.');
+      return res.status(400).send('Invalid webhook payload.');
     }
 
-    // Respond with 200 OK to acknowledge receipt of the event
+    for (const entry of body.entry) {
+      console.log('[DEBUG] Processing Instagram entry:', entry);
+
+      if (entry.messaging && Array.isArray(entry.messaging)) {
+        for (const message of entry.messaging) {
+          await processMessagingEvent(message);
+        }
+      } else {
+        console.warn('[WARN] No messaging events found in Instagram entry.');
+      }
+    }
+
     res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
     console.error('[ERROR] Failed to process webhook events:', error.message);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
 
 export default router;
