@@ -4,19 +4,9 @@ import express from 'express';
 import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch'; // Use native fetch if available
 import Joi from 'joi'; // For data validation
-import rateLimit from 'express-rate-limit'; // For rate limiting
 import cookieParser from 'cookie-parser'; // To parse cookies
 
 const router = express.Router();
-
-// Trust proxy settings
-// IMPORTANT: If this router is used in a larger Express app, ensure that `app.set('trust proxy', 1)` is set in the main app.
-// If this is a standalone server or serverless function, set it here.
-router.use((req, res, next) => {
-  // Trust the first proxy (e.g., Vercel's proxy)
-  req.app.set('trust proxy', 1);
-  next();
-});
 
 // Middleware to parse cookies
 router.use(cookieParser());
@@ -26,18 +16,6 @@ const loginSchema = Joi.object({
   accessToken: Joi.string().required(),
   selectedPageId: Joi.string().optional(), // Optional: If allowing client to specify
 });
-
-// Rate limiter to prevent abuse
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many login attempts from this IP, please try again later.',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-});
-
-// Apply rate limiter to the login route
-router.use('/auth/login', loginLimiter);
 
 /**
  * Helper function to fetch all Facebook pages with pagination
