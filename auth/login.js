@@ -83,7 +83,6 @@ router.post('/', loginLimiter, async (req, res) => {
 
     // 4. Fetch Instagram Business ID for the Page
     const igId = await fetchInstagramIdFromPage(firstPage.id, firstPage.access_token);
-
     if (!igId) {
       console.warn('[WARN] Instagram Business ID not found. Continuing without Instagram data.');
     }
@@ -97,7 +96,7 @@ router.post('/', loginLimiter, async (req, res) => {
             fb_id,
             name,
             email,
-            ig_id: igId, // Will be null if no Instagram account is found
+            ig_id: igId || null, // Accept null if IG ID is not found
           },
         ],
         { onConflict: 'fb_id' }
@@ -127,41 +126,16 @@ router.post('/', loginLimiter, async (req, res) => {
 
     console.log('[DEBUG] Pages Upserted Successfully');
 
-// 5.5 Insert Page Access Tokens into `page_access_tokens`
-for (const page of pagesData) {
-  if (!page.id || !page.access_token) {
-    console.warn('[WARN] Skipping page with missing ID or Access Token.');
-    continue;
-  }
-
-  const { error: accessTokenError } = await supabase
-    .from('page_access_tokens')
-    .upsert(
-      {
-        user_id: user.id,
-        business_id: business.id,
-        page_id: page.id,
-        page_access_token: page.access_token,
-      },
-      { onConflict: 'page_id' } // Ensure uniqueness on `page_id`
-    );
-
-  if (accessTokenError) {
-    console.error('[ERROR] Failed to upsert page access token:', accessTokenError.message);
-    throw new Error(`Failed to insert page access token for page: ${page.id}`);
-  }
-}
-
-console.log('[DEBUG] Page Access Tokens Upserted Successfully');
-
-    
-
     // 7. Link Business to Facebook Page
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .upsert(
         [
-          { user_id: user.id, name: `${name}'s Business`, page_id: firstPage.id },
+          {
+            user_id: user.id,
+            name: `${name}'s Business`,
+            page_id: firstPage.id,
+          },
         ],
         { onConflict: 'user_id' }
       )
@@ -171,12 +145,39 @@ console.log('[DEBUG] Page Access Tokens Upserted Successfully');
     if (businessError) throw new Error(`Business upsert failed: ${businessError.message}`);
     console.log('[DEBUG] Business Upserted:', business);
 
-    // 8. Set Secure Cookies
+    // 8. Insert Page Access Tokens into `page_access_tokens`
+    for (const page of pagesData) {
+      if (!page.id || !page.access_token) {
+        console.warn('[WARN] Skipping page with missing ID or Access Token.');
+        continue;
+      }
+
+      const { error: accessTokenError } = await supabase
+        .from('page_access_tokens')
+        .upsert(
+          {
+            user_id: user.id,
+            business_id: business.id,
+            page_id: page.id,
+            page_access_token: page.access_token,
+          },
+          { onConflict: 'page_id' }
+        );
+
+      if (accessTokenError) {
+        console.error('[ERROR] Failed to upsert page access token:', accessTokenError.message);
+        throw new Error(`Failed to insert page access token for page: ${page.id}`);
+      }
+    }
+
+    console.log('[DEBUG] Page Access Tokens Upserted Successfully');
+
+    // 9. Set Secure Cookies
     res.cookie('authToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
     res.cookie('userId', user.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
     res.cookie('businessId', business.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
 
-    // 9. Send Success Response
+    // 10. Send Success Response
     return res.status(200).json({
       message: 'Login successful',
       userId: user.id,
