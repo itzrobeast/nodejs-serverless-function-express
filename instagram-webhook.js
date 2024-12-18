@@ -80,14 +80,13 @@ async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Full message object:', JSON.stringify(message, null, 2));
 
-    // Extract sender and recipient details correctly
     const userMessage = message?.message?.text; // Message text
-    const senderId = message?.sender?.id; // Customer's Instagram User ID
-    const recipientId = message?.recipient?.id; // Your Instagram Business Account ID
-    const messageType = message?.message?.is_echo ? 'sent' : 'received';
+    const senderId = message?.sender?.id; // Sender ID
+    const recipientId = message?.recipient?.id; // Recipient ID
+    const messageType = message?.message?.is_echo ? 'sent' : 'received'; // Determine message type
 
-    if (!userMessage || !recipientId || !senderId) {
-      console.error('[ERROR] Missing message, recipientId, or senderId.');
+    if (!userMessage || !senderId || !recipientId) {
+      console.error('[ERROR] Missing message, senderId, or recipientId.');
       return;
     }
 
@@ -98,29 +97,30 @@ async function processMessagingEvent(message) {
       messageType,
     });
 
-    // Resolve `business_id` using recipientId (Instagram Business Account ID)
+    // Identify the business based on the context
+    const businessInstagramId = messageType === 'received' ? recipientId : senderId; // Business ID is the sender for 'sent' messages
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('id')
-      .eq('ig_id', recipientId) // Correctly use `recipientId` to fetch the business
+      .eq('ig_id', businessInstagramId) // Match the correct business IG ID
       .single();
 
     if (businessError || !business) {
-      console.error('[ERROR] Business not found for recipient:', recipientId);
+      console.error('[ERROR] Business not found for recipient:', businessInstagramId);
       return;
     }
 
     const businessId = business.id;
     console.log('[DEBUG] Resolved business_id:', businessId);
 
-    // Upsert conversation into the `instagram_conversations` table
+    // Insert the conversation into the database
     const { error: conversationError } = await supabase
       .from('instagram_conversations')
       .insert([
         {
           business_id: businessId,
-          sender_id: senderId,
-          recipient_id: recipientId,
+          sender_id: messageType === 'received' ? senderId : recipientId, // Customer ID
+          recipient_id: messageType === 'received' ? recipientId : senderId, // Business ID
           message: userMessage,
           message_type: messageType,
           created_at: new Date(),
@@ -135,11 +135,11 @@ async function processMessagingEvent(message) {
 
     console.log('[DEBUG] Instagram conversation upserted successfully.');
 
-    // Respond using assistant logic (if the message is not an echo)
+    // If the message is received, respond using the assistant
     if (messageType === 'received') {
       const assistantResponse = await assistantHandler({
         userMessage,
-        recipientId: senderId, // Respond back to the customer
+        recipientId: senderId, // Send the response to the customer
         platform: 'instagram',
         businessId,
       });
@@ -155,6 +155,7 @@ async function processMessagingEvent(message) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
 }
+
 
 
 /**
