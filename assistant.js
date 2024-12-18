@@ -2,7 +2,6 @@
 
 import OpenAI from 'openai';
 import supabase from './supabaseClient.js'; // Ensure this path is correct
-import { sendInstagramMessage } from './instagramWebhook.js'; // Correct relative path
 
 // Initialize OpenAI with your API key
 const openai = new OpenAI({
@@ -35,33 +34,16 @@ const getBusinessConfig = async (businessId) => {
 };
 
 /**
- * Generates a response using OpenAI's GPT-4 based on the user's message and business configuration.
- * @param {string} userMessage - The message sent by the user.
- * @param {object} businessConfig - The business configuration object.
- * @returns {string} - The generated response message.
- */
-const generateAssistantResponse = (userMessage, businessConfig) => {
-  // Customize the system prompt as needed
-  const systemPrompt = `You are an AI receptionist for ${businessConfig.name}. Your role is to assist users with appointments, provide accurate responses, and ensure professionalism. Business-specific knowledge: ${businessConfig.ai_knowledge}.`;
-
-  return `${systemPrompt}\nUser: ${userMessage}\nAI:`;
-};
-
-/**
  * Handles the assistant's response to a user message.
  * @param {object} params - Parameters for the assistant.
  * @param {string} params.userMessage - The user's message.
- * @param {string} params.recipientId - The Instagram user's ID to send the response to.
- * @param {string} params.platform - The platform (e.g., 'instagram').
  * @param {number} params.businessId - The internal business ID.
  * @returns {object} - An object containing the message to send.
  */
-export const assistantHandler = async ({ userMessage, recipientId, platform, businessId }) => {
+export const assistantHandler = async ({ userMessage, businessId }) => {
   try {
-    console.log(`[DEBUG] Processing message from platform: ${platform}`);
+    console.log(`[DEBUG] Processing message for business ID: ${businessId}`);
     console.log(`[DEBUG] User message: "${userMessage}"`);
-    console.log(`[DEBUG] Recipient ID: ${recipientId}`);
-    console.log(`[DEBUG] Business ID: ${businessId}`);
 
     // Validate user message
     if (!userMessage || typeof userMessage !== 'string') {
@@ -78,14 +60,12 @@ export const assistantHandler = async ({ userMessage, recipientId, platform, bus
     }
 
     // Generate the assistant's response using OpenAI
-    const prompt = generateAssistantResponse(userMessage, businessConfig);
-
     const openaiResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
         {
           role: 'system',
-          content: `You are an AI receptionist for ${businessConfig.name}. Your role is to assist users with appointments, provide accurate responses, and ensure professionalism.`,
+          content: `You are an AI receptionist for ${businessConfig.name}. Your role is to assist users with appointments, provide accurate responses, and ensure professionalism. Business-specific knowledge: ${businessConfig.ai_knowledge}.`,
         },
         { role: 'user', content: userMessage },
       ],
