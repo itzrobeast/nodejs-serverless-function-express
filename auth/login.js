@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 
-// Rate Limiter
+// Rate Limiter to prevent abuse
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 50,
@@ -18,7 +18,7 @@ const loginSchema = Joi.object({
   accessToken: Joi.string().required(),
 });
 
-// Helper: Fetch Facebook Pages
+// Helper Function: Fetch Facebook Pages
 const fetchPages = async (accessToken) => {
   let pages = [];
   let nextUrl = `https://graph.facebook.com/me/accounts?access_token=${accessToken}`;
@@ -26,6 +26,7 @@ const fetchPages = async (accessToken) => {
   while (nextUrl) {
     const response = await fetch(nextUrl);
     if (!response.ok) throw new Error('Failed to fetch pages');
+
     const data = await response.json();
     pages = pages.concat(data.data);
     nextUrl = data.paging?.next || null;
@@ -34,14 +35,14 @@ const fetchPages = async (accessToken) => {
   return pages;
 };
 
-// Helper: Fetch Instagram ID
+// Helper Function: Fetch Instagram Business ID
 const fetchInstagramId = async (accessToken) => {
   const response = await fetch(
     `https://graph.facebook.com/me?fields=instagram_business_account&access_token=${accessToken}`
   );
 
   if (!response.ok) {
-    console.warn('[WARN] Failed to fetch Instagram ID:', response.statusText);
+    console.warn('[WARN] Failed to fetch Instagram Business ID:', response.statusText);
     return null;
   }
 
@@ -65,48 +66,85 @@ router.post('/', loginLimiter, async (req, res) => {
     const fbUser = await fbResponse.json();
     const { id: fb_id, name, email } = fbUser;
 
-    // 3. Fetch Instagram ID
-    const ig_id = await fetchInstagramId(accessToken);
+    console.log('[DEBUG] Facebook User Data:', fbUser);
 
-    // 4. Upsert User
-    const { data: user } = await supabase
+    // 3. Fetch Instagram Business ID
+    const ig_id = await fetchInstagramId(accessToken);
+    console.log('[DEBUG] Instagram Business ID:', ig_id);
+
+    // 4. Upsert User into Database
+    const { data: user, error: userError } = await supabase
       .from('users')
       .upsert([{ fb_id, name, email, ig_id }], { onConflict: 'fb_id' })
       .select('*')
       .single();
 
+    if (userError) throw new Error(`User upsert failed: ${userError.message}`);
     console.log('[DEBUG] User Upserted:', user);
 
-    // 5. Fetch and Upsert Pages
+    // 5. Fetch and Upsert Facebook Pages
     const pagesData = await fetchPages(accessToken);
+    if (!pagesData.length) throw new Error('No Facebook Pages Found');
+
+    // Insert/Update Pages, Skip Invalid Page IDs
     await Promise.all(
-      pagesData.map((page) =>
-        supabase.from('pages').upsert(
-          { page_id: page.id, name: page.name, access_token: page.access_token },
-          { onConflict: 'page_id' }
-        )
-      )
+      pagesData.map(async (page) => {
+        if (!page.id) {
+          console.warn('[WARN] Skipping page with missing page_id');
+          return;
+        }
+
+        const { error: pageError } = await supabase
+          .from('pages')
+          .upsert(
+            { page_id: page.id, name: page.name, access_token: page.access_token },
+            { onConflict: 'page_id' }
+          );
+
+        if (pageError) {
+          console.error('[ERROR] Page Upsert Failed:', pageError);
+          throw new Error(`Failed to upsert page: ${page.name}`);
+        }
+      })
     );
 
-    // 6. Retrieve Correct Page ID
-    const fbPageId = pagesData[0].id;
-    const { data: page } = await supabase.from('pages').select('id').eq('page_id', fbPageId).single();
+    console.log('[DEBUG] Pages Upserted Successfully');
 
-    // 7. Upsert Business
-    const { data: business } = await supabase
+    // 6. Retrieve the Correct Page ID
+    const fbPageId = pagesData[0]?.id; // Use the first page's ID
+    const { data: page, error: pageError } = await supabase
+      .from('pages')
+      .select('id') // Get auto-incremented ID
+      .eq('page_id', fbPageId) // Match by Facebook page_id
+      .single();
+
+    if (pageError || !page) throw new Error('Page ID not found in database');
+    console.log('[DEBUG] Retrieved Page ID:', page.id);
+
+    // 7. Upsert Business Linked to the Page
+    const { data: business, error: businessError } = await supabase
       .from('businesses')
-      .upsert([{ user_id: user.id, name: `${name}'s Business`, page_id: page.id }], { onConflict: 'user_id' })
+      .upsert(
+        [{ user_id: user.id, name: `${name}'s Business`, page_id: page.id }],
+        { onConflict: 'user_id' }
+      )
       .select('*')
       .single();
 
+    if (businessError) throw new Error(`Business upsert failed: ${businessError.message}`);
     console.log('[DEBUG] Business Upserted:', business);
 
-    // 8. Set Cookies
+    // 8. Set Secure Cookies
     res.cookie('authToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
     res.cookie('userId', user.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
     res.cookie('businessId', business.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
 
-    return res.status(200).json({ message: 'Login successful', user, business });
+    // 9. Send Success Response
+    return res.status(200).json({
+      message: 'Login successful',
+      user,
+      business,
+    });
   } catch (err) {
     console.error('[ERROR]', err.message);
     return res.status(500).json({ error: 'Login failed', details: err.message });
