@@ -127,6 +127,35 @@ router.post('/', loginLimiter, async (req, res) => {
 
     console.log('[DEBUG] Pages Upserted Successfully');
 
+// 5.5 Insert Page Access Tokens into `page_access_tokens`
+for (const page of pagesData) {
+  if (!page.id || !page.access_token) {
+    console.warn('[WARN] Skipping page with missing ID or Access Token.');
+    continue;
+  }
+
+  const { error: accessTokenError } = await supabase
+    .from('page_access_tokens')
+    .upsert(
+      {
+        user_id: user.id,
+        business_id: business.id,
+        page_id: page.id,
+        page_access_token: page.access_token,
+      },
+      { onConflict: 'page_id' } // Ensure uniqueness on `page_id`
+    );
+
+  if (accessTokenError) {
+    console.error('[ERROR] Failed to upsert page access token:', accessTokenError.message);
+    throw new Error(`Failed to insert page access token for page: ${page.id}`);
+  }
+}
+
+console.log('[DEBUG] Page Access Tokens Upserted Successfully');
+
+    
+
     // 7. Link Business to Facebook Page
     const { data: business, error: businessError } = await supabase
       .from('businesses')
