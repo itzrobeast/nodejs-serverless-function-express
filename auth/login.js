@@ -144,11 +144,7 @@ router.post('/', loginLimiter, async (req, res) => {
       .single();
 
     if (businessError) {
-      if (businessError.message.includes('instagram_conversations')) {
-        console.error('[ERROR] Business upsert failed due to Instagram permissions:', businessError.message);
-      } else {
-        console.error('[ERROR] Business upsert failed:', businessError.message);
-      }
+      console.error('[ERROR] Business upsert failed:', businessError.message);
       throw new Error(`Business upsert failed: ${businessError.message}`);
     }
     console.log('[DEBUG] Business Upserted:', business);
@@ -180,12 +176,38 @@ router.post('/', loginLimiter, async (req, res) => {
 
     console.log('[DEBUG] Page Access Tokens Upserted Successfully');
 
-    // 9. Set Secure Cookies
+    // 9. (Optional) Handle Instagram Conversations Only If ig_id Exists
+    if (igId) {
+      // Example: Insert a new record into instagram_conversations
+      const { data: convo, error: convoError } = await supabase
+        .from('instagram_conversations')
+        .insert([
+          {
+            business_id: business.id,
+            sender_id: 'system', // Example sender_id
+            recipient_id: user.fb_id.toString(),
+            message: 'Welcome to your Instagram Conversations!',
+            message_type: 'system',
+            // Add other fields as necessary
+          },
+        ])
+        .select('*')
+        .single();
+
+      if (convoError) {
+        console.error('[ERROR] Failed to create Instagram Conversation:', convoError.message);
+        throw new Error(`Failed to create Instagram Conversation: ${convoError.message}`);
+      }
+
+      console.log('[DEBUG] Instagram Conversation Created:', convo);
+    }
+
+    // 10. Set Secure Cookies
     res.cookie('authToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
     res.cookie('userId', user.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
     res.cookie('businessId', business.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
 
-    // 10. Send Success Response
+    // 11. Send Success Response
     return res.status(200).json({
       message: 'Login successful',
       userId: user.id,
