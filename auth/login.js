@@ -176,7 +176,7 @@ router.post('/', loginLimiter, async (req, res) => {
 
     console.log('[DEBUG] Page Access Tokens Upserted Successfully');
 
-    // 9. (Optional) Handle Instagram Conversations Only If ig_id Exists
+    // 9. Conditionally Handle Instagram Conversations Only If ig_id Exists
     if (igId) {
       // Example: Insert a new record into instagram_conversations
       const { data: convo, error: convoError } = await supabase
@@ -200,6 +200,8 @@ router.post('/', loginLimiter, async (req, res) => {
       }
 
       console.log('[DEBUG] Instagram Conversation Created:', convo);
+    } else {
+      console.log('[DEBUG] No ig_id present. Skipping Instagram Conversations operations.');
     }
 
     // 10. Set Secure Cookies
