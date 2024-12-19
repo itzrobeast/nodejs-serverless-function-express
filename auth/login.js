@@ -127,26 +127,31 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Pages Upserted Successfully');
 
     // 7. Link Business to Facebook Page
-    // 7. Link Business to Facebook Page
-const { data: business, error: businessError } = await supabase
-  .from('businesses')
-  .upsert(
-    [
-      {
-        user_id: user.id,
-        name: `${name}'s Business`,
-        page_id: firstPage.id, // Facebook Page ID
-        ig_id: igId, // Instagram Business Account ID
-      },
-    ],
-    { onConflict: 'user_id' }
-  )
-  .select('*')
-  .single();
+    const businessData = {
+      user_id: user.id,
+      name: `${name}'s Business`,
+      page_id: firstPage.id, // Facebook Page ID
+    };
 
-if (businessError) throw new Error(`Business upsert failed: ${businessError.message}`);
-console.log('[DEBUG] Business Upserted:', business);
+    if (igId) {
+      businessData.ig_id = igId;
+    }
 
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .upsert(businessData, { onConflict: 'user_id' })
+      .select('*')
+      .single();
+
+    if (businessError) {
+      if (businessError.message.includes('instagram_conversations')) {
+        console.error('[ERROR] Business upsert failed due to Instagram permissions:', businessError.message);
+      } else {
+        console.error('[ERROR] Business upsert failed:', businessError.message);
+      }
+      throw new Error(`Business upsert failed: ${businessError.message}`);
+    }
+    console.log('[DEBUG] Business Upserted:', business);
 
     // 8. Insert Page Access Tokens into `page_access_tokens`
     for (const page of pagesData) {
