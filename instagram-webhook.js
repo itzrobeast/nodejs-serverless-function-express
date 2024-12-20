@@ -60,7 +60,6 @@ const messageSchema = Joi.object({
 // Helper Function to Ensure Partition Exists
 async function ensurePartitionExists(businessId) {
   try {
-    // Check if the business exists in the 'businesses' table
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('id')
@@ -72,7 +71,6 @@ async function ensurePartitionExists(businessId) {
       return;
     }
 
-    // Check if the partition already exists
     const partitionName = `instagram_users_${businessId}`;
     const { data: partitionCheck, error: partitionCheckError } = await supabase.rpc('check_partition_exists', {
       partition_name: partitionName,
@@ -167,6 +165,7 @@ async function updateInstagramUserInfo(senderId, businessId, field, value) {
         updated_at: new Date(),
       }]);
 
+
     if (error) {
       console.error(`[ERROR] Failed to update ${field}:`, error.message);
       throw new Error(`Failed to update ${field}`);
@@ -243,6 +242,7 @@ async function processMessagingEvent(message) {
         updated_at: new Date(),
       }]);
 
+
     if (conversationError) {
       console.error('[ERROR] Failed to insert conversation:', conversationError.message);
       throw new Error(`Failed to insert conversation: ${conversationError.message}`);
@@ -276,6 +276,7 @@ async function processMessagingEvent(message) {
           created_at: new Date(),
           updated_at: new Date(),
         }]);
+
 
       if (botMessageError) {
         console.error('[ERROR] Failed to log bot response:', botMessageError.message);
@@ -326,9 +327,6 @@ router.get('/fetch-conversations', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
-
-
 
 // Webhook Event Handler (POST)
 router.post(
