@@ -57,6 +57,25 @@ const messageSchema = Joi.object({
   }),
 });
 
+// Helper Function to Check Partition Existence
+async function doesPartitionExist(partitionName) {
+  try {
+    const { data, error } = await supabase.rpc('check_partition_exists', {
+      partition_name: partitionName,
+    });
+
+    if (error) {
+      console.error(`[ERROR] Supabase RPC call failed: ${error.message}`);
+      return false;
+    }
+
+    return data[0]?.partition_exists || false;
+  } catch (err) {
+    console.error('[ERROR] Failed to check partition existence:', err.message);
+    return false;
+  }
+}
+
 // Helper Function to Send Instagram Messages
 async function sendInstagramMessage(recipientId, message) {
   try {
@@ -112,16 +131,6 @@ async function resolveBusinessIdByInstagramId(instagramId) {
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Processing message:', JSON.stringify(message, null, 2));
-    if (message.message?.is_unsent) {
-      const { mid: messageId } = message.message;
-      console.log(`[DEBUG] Message with ID ${messageId} was unsent.`);
-      const { error } = await supabase
-        .from('instagram_conversations')
-        .update({ message: '[Message unsent]', updated_at: new Date() })
-        .eq('id', messageId);
-      if (error) throw new Error(error.message);
-      return;
-    }
 
     const senderId = message.sender.id;
     const recipientId = message.recipient.id;
@@ -135,6 +144,15 @@ async function processMessagingEvent(message) {
     const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
     if (!businessId) {
       console.error('[WARN] Could not resolve business_id for Instagram ID:', businessInstagramId);
+      return;
+    }
+
+    // Check if the partition for this business_id exists
+    const partitionName = `instagram_conversations_p${businessId}`;
+    const partitionExists = await doesPartitionExist(partitionName);
+
+    if (!partitionExists) {
+      console.error(`[ERROR] Partition does not exist for business_id ${businessId}. Please create it manually.`);
       return;
     }
 
@@ -152,7 +170,9 @@ async function processMessagingEvent(message) {
           updated_at: new Date(),
         },
       ]);
+
     if (conversationError) throw new Error(`Failed to insert conversation: ${conversationError.message}`);
+    console.log('[DEBUG] Conversation inserted successfully.');
   } catch (error) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
