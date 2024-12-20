@@ -1,5 +1,3 @@
-// instagramWebhook.js
-
 import express from 'express';
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
@@ -14,6 +12,12 @@ const router = express.Router();
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+
+// Check for required environment variables
+if (!VERIFY_TOKEN || !PAGE_ACCESS_TOKEN || !FACEBOOK_APP_SECRET) {
+  console.error('[ERROR] Missing required environment variables.');
+  process.exit(1);
+}
 
 // Rate Limiting Middleware
 const webhookLimiter = rateLimit({
@@ -129,7 +133,10 @@ async function processMessagingEvent(message) {
     const customerId = isEcho ? recipientId : senderId;
 
     const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
-    if (!businessId) throw new Error('Business ID could not be resolved.');
+    if (!businessId) {
+      console.error('[WARN] Could not resolve business_id for Instagram ID:', businessInstagramId);
+      return;
+    }
 
     const messageContent = userMessage;
     const { error: conversationError } = await supabase
@@ -160,6 +167,33 @@ router.get('/', (req, res) => {
     res.status(200).send(challenge);
   } else {
     res.sendStatus(403);
+  }
+});
+
+// Fetch Conversations (GET)
+router.get('/fetch-conversations', async (req, res) => {
+  try {
+    const { business_id } = req.query;
+
+    if (!business_id) {
+      return res.status(400).json({ error: 'business_id is required.' });
+    }
+
+    const { data: conversations, error } = await supabase
+      .from('instagram_conversations')
+      .select('id, sender_id, recipient_id, message, message_type, created_at')
+      .eq('business_id', business_id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[ERROR] Failed to fetch conversations:', error.message);
+      return res.status(500).json({ error: 'Failed to fetch conversations.' });
+    }
+
+    res.status(200).json({ conversations });
+  } catch (err) {
+    console.error('[ERROR] Unexpected error in /fetch-conversations:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
