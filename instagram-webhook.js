@@ -47,13 +47,14 @@ const messageSchema = Joi.object({
     mid: Joi.string().required(),
     text: Joi.string(),
     is_echo: Joi.boolean(),
+    read: Joi.object(), 
     attachments: Joi.array().items(
       Joi.object({
         type: Joi.string().required(),
         payload: Joi.object().required(),
       })
     ),
-  }),
+  }),unknown(true),
 });
 
 // Helper Function to Ensure Partition Exists
