@@ -177,33 +177,22 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Page Access Tokens Upserted Successfully');
 
     // 9. Conditionally Handle Instagram Conversations Only If ig_id Exists
-    if (igId) {
-      // Example: Insert a new record into instagram_conversations
-      const { data: convo, error: convoError } = await supabase
-        .from('instagram_conversations')
-        .insert([
-          {
-            business_id: business.id,
-            sender_id: 'system', // Example sender_id
-            recipient_id: user.fb_id.toString(),
-            message: 'Welcome to your Instagram Conversations!',
-            message_type: 'system',
-            // Add other fields as necessary
-          },
-        ])
-        .select('*')
-        .single();
-
-      if (convoError) {
-        console.error('[ERROR] Failed to create Instagram Conversation:', convoError.message);
-        throw new Error(`Failed to create Instagram Conversation: ${convoError.message}`);
-      }
-
-      console.log('[DEBUG] Instagram Conversation Created:', convo);
-    } else {
-      console.log('[DEBUG] No ig_id present. Skipping Instagram Conversations operations.');
-    }
-
+    if (user.ig_id) {
+  try {
+    await supabase
+      .from('instagram_conversations')
+      .upsert({
+        fb_id: user.fb_id,
+        ig_id: user.ig_id,
+        page_id: user.page_id || null, // Use page_id if available
+      });
+    console.log('[DEBUG] Instagram conversations upserted successfully.');
+  } catch (error) {
+    console.error('Error upserting Instagram conversations:', error.message);
+  }
+} else {
+  console.warn('No Instagram data found. Skipping Instagram conversations upsert.');
+}
     // 10. Set Secure Cookies
     res.cookie('authToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
     res.cookie('userId', user.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
