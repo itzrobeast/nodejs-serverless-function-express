@@ -133,6 +133,63 @@ async function resolveBusinessIdByInstagramId(instagramId) {
   }
 }
 
+// Helper Function to Update Instagram User Info
+async function updateInstagramUserInfo(senderId, businessId, field, value) {
+  try {
+    const validFields = ['name', 'phone', 'location', 'email'];
+    if (!validFields.includes(field)) {
+      throw new Error('Invalid field name');
+    }
+
+    const { error } = await supabase
+      .from(`instagram_users_${businessId}`)
+      .upsert([
+        {
+          id: senderId,
+          business_id: businessId,
+          [field]: value,
+          updated_at: new Date(),
+        },
+      ]);
+
+    if (error) {
+      console.error(`[ERROR] Failed to update ${field}:`, error.message);
+      throw new Error(`Failed to update ${field}`);
+    }
+
+    console.log(`[INFO] Successfully updated ${field} for user ${senderId}`);
+  } catch (err) {
+    console.error('[ERROR] Failed to update user info:', err.message);
+  }
+}
+
+// Parse User Messages to Extract Info
+const parseUserMessage = (message) => {
+  const namePattern = /my name is (\w+ \w+)/i;
+  const phonePattern = /(?:phone|contact) (?:number|is) (\+?\d{1,2}\s?)?\(?(\d{3})\)?\s?(\d{3})[\s.-]?(\d{4})/i;
+  const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i;
+  const locationPattern = /I am from (\w+),? (\w+)/i;
+
+  let field = '';
+  let value = '';
+
+  if (namePattern.test(message)) {
+    field = 'name';
+    value = message.match(namePattern)[1];
+  } else if (phonePattern.test(message)) {
+    field = 'phone';
+    value = message.match(phonePattern).slice(1).join('');
+  } else if (emailPattern.test(message)) {
+    field = 'email';
+    value = message.match(emailPattern)[0];
+  } else if (locationPattern.test(message)) {
+    field = 'location';
+    value = message.match(locationPattern).slice(1).join(', ');
+  }
+
+  return { field, value };
+};
+
 // Process Individual Messaging Events
 async function processMessagingEvent(message) {
   try {
@@ -179,6 +236,11 @@ async function processMessagingEvent(message) {
     }
     console.log('[DEBUG] Conversation inserted successfully.');
 
+    const { field, value } = parseUserMessage(userMessage);
+    if (field && value) {
+      await updateInstagramUserInfo(senderId, businessId, field, value);
+    }
+
     console.log('[INFO] Sending message to assistant for processing...');
     const assistantResponse = await assistantHandler({
       userMessage,
@@ -224,33 +286,6 @@ router.get('/', (req, res) => {
     res.status(200).send(challenge);
   } else {
     res.sendStatus(403);
-  }
-});
-
-// Fetch Conversations (GET)
-router.get('/fetch-conversations', async (req, res) => {
-  try {
-    const { business_id } = req.query;
-
-    if (!business_id) {
-      return res.status(400).json({ error: 'business_id is required.' });
-    }
-
-    const { data: conversations, error } = await supabase
-      .from('instagram_conversations')
-      .select('id, sender_id, recipient_id, message, message_type, created_at')
-      .eq('business_id', business_id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('[ERROR] Failed to fetch conversations:', error.message);
-      return res.status(500).json({ error: 'Failed to fetch conversations.' });
-    }
-
-    res.status(200).json({ conversations });
-  } catch (err) {
-    console.error('[ERROR] Unexpected error in /fetch-conversations:', err.message);
-    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
