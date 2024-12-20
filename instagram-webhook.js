@@ -60,7 +60,6 @@ const messageSchema = Joi.object({
 async function ensurePartitionExists(businessId) {
   const partitionName = `instagram_conversations_${businessId}`;
 
-  // Check if the partition exists
   const { data: partitionCheck, error: checkError } = await supabase.rpc('check_partition_exists', {
     partition_name: partitionName,
   });
@@ -135,7 +134,6 @@ async function resolveBusinessIdByInstagramId(instagramId) {
 }
 
 // Process Individual Messaging Events
-// Process Individual Messaging Events
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Processing message:', JSON.stringify(message, null, 2));
@@ -145,26 +143,22 @@ async function processMessagingEvent(message) {
     const userMessage = message.message?.text || '';
     const isEcho = message.message?.is_echo || false;
 
-    // Ignore messages sent by the bot itself
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
       return;
     }
 
-    const businessInstagramId = recipientId; // The bot's Instagram ID
-    const customerId = senderId; // The sender's Instagram ID
+    const businessInstagramId = recipientId;
+    const customerId = senderId;
 
-    // Resolve the business ID using the Instagram ID of the bot
     const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
     if (!businessId) {
       console.error('[WARN] Could not resolve business_id for Instagram ID:', businessInstagramId);
       return;
     }
 
-    // Ensure the partition for this business_id exists
     await ensurePartitionExists(businessId);
 
-    // Insert the conversation into the database
     const { error: conversationError } = await supabase
       .from('instagram_conversations')
       .insert([
@@ -185,7 +179,6 @@ async function processMessagingEvent(message) {
     }
     console.log('[DEBUG] Conversation inserted successfully.');
 
-    // Process the message with the assistant
     console.log('[INFO] Sending message to assistant for processing...');
     const assistantResponse = await assistantHandler({
       userMessage,
@@ -193,12 +186,10 @@ async function processMessagingEvent(message) {
     });
 
     if (assistantResponse && assistantResponse.message) {
-      // Send the assistant's response back to the user
       await sendInstagramMessage(customerId, assistantResponse.message);
 
       console.log(`[DEBUG] Assistant response sent to user: "${assistantResponse.message}"`);
 
-      // Optionally log the bot's response in the database
       const { error: botMessageError } = await supabase
         .from('instagram_conversations')
         .insert([
@@ -219,30 +210,6 @@ async function processMessagingEvent(message) {
     } else {
       console.warn('[WARN] Assistant did not generate a response.');
     }
-  } catch (error) {
-    console.error('[ERROR] Failed to process messaging event:', error.message);
-  }
-}
-
-    // Ensure the partition for this business_id exists
-    await ensurePartitionExists(businessId);
-
-    const { error: conversationError } = await supabase
-      .from('instagram_conversations')
-      .insert([
-        {
-          business_id: businessId,
-          sender_id: customerId,
-          recipient_id: businessInstagramId,
-          message: userMessage,
-          message_type: messageType,
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-      ]);
-
-    if (conversationError) throw new Error(`Failed to insert conversation: ${conversationError.message}`);
-    console.log('[DEBUG] Conversation inserted successfully.');
   } catch (error) {
     console.error('[ERROR] Failed to process messaging event:', error.message);
   }
