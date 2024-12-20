@@ -104,8 +104,12 @@ router.post('/', loginLimiter, async (req, res) => {
       .select('*')
       .single();
 
-    if (userError) throw new Error(`User upsert failed: ${userError.message}`);
-    console.log('[DEBUG] User Upserted:', user);
+if (userError) {
+  console.error('[ERROR] User upsert failed:', userError.message);
+  throw new Error(`User upsert failed: ${userError.message}`);
+}
+
+console.log('[DEBUG] User Upserted:', user);
 
     // 6. Upsert Facebook Pages
     for (const page of pagesData) {
@@ -135,9 +139,11 @@ const businessData = {
 };
 
 if (igId) {
-  businessData.ig_id = parseInt(igId.replace(/\D/g, ''), 10); // Extract numeric part of ig_id
+  businessData.ig_id = parseInt(igId.replace(/\D/g, ''), 10); null, // Extract numeric part of ig_id
 }
 
+    
+console.log('[DEBUG] Prepared businessData:', businessData);
 const { data: business, error: businessError } = await supabase
   .from('businesses')
   .upsert(businessData, { onConflict: 'user_id' })
