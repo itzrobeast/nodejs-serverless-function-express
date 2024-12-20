@@ -127,27 +127,29 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Pages Upserted Successfully');
 
     // 7. Link Business to Facebook Page
-    const businessData = {
-      user_id: user.id,
-      name: `${name}'s Business`,
-      page_id: firstPage.id, // Facebook Page ID
-    };
+    // 7. Link Business to Facebook Page
+const businessData = {
+  user_id: user.id,
+  name: `${name}'s Business`,
+  page_id: parseInt(firstPage.id.replace(/\D/g, ''), 10), // Extract numeric part of page_id
+};
 
-    if (igId) {
-      businessData.ig_id = igId;
-    }
+if (igId) {
+  businessData.ig_id = parseInt(igId.replace(/\D/g, ''), 10); // Extract numeric part of ig_id
+}
 
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(businessData, { onConflict: 'user_id' })
-      .select('*')
-      .single();
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .upsert(businessData, { onConflict: 'user_id' })
+  .select('*')
+  .single();
 
-    if (businessError) {
-      console.error('[ERROR] Business upsert failed:', businessError.message);
-      throw new Error(`Business upsert failed: ${businessError.message}`);
-    }
-    console.log('[DEBUG] Business Upserted:', business);
+if (businessError) {
+  console.error('[ERROR] Business upsert failed:', businessError.message);
+  throw new Error(`Business upsert failed: ${businessError.message}`);
+}
+console.log('[DEBUG] Business Upserted:', business);
+
 
     // 8. Insert Page Access Tokens into `page_access_tokens`
     for (const page of pagesData) {
