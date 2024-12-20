@@ -139,7 +139,7 @@ const businessData = {
 };
 
 if (igId) {
-  businessData.ig_id = parseInt(igId.replace(/\D/g, ''), 10); null, // Extract numeric part of ig_id
+  businessData.ig_id = parseInt(igId.replace(/\D/g, ''), 10);  // Extract numeric part of ig_id
 }
 
     
