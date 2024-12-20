@@ -13,7 +13,6 @@ const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 
-// Check for required environment variables
 if (!VERIFY_TOKEN || !PAGE_ACCESS_TOKEN || !FACEBOOK_APP_SECRET) {
   console.error('[ERROR] Missing required environment variables.');
   process.exit(1);
@@ -21,8 +20,8 @@ if (!VERIFY_TOKEN || !PAGE_ACCESS_TOKEN || !FACEBOOK_APP_SECRET) {
 
 // Rate Limiting Middleware
 const webhookLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later.',
 });
 
@@ -57,22 +56,30 @@ const messageSchema = Joi.object({
   }),
 });
 
-// Helper Function to Check Partition Existence
-async function doesPartitionExist(partitionName) {
-  try {
-    const { data, error } = await supabase.rpc('check_partition_exists', {
-      partition_name: partitionName,
-    });
+// Helper Function to Ensure Partition Exists
+async function ensurePartitionExists(businessId) {
+  const partitionName = `instagram_conversations_${businessId}`;
 
-    if (error) {
-      console.error(`[ERROR] Supabase RPC call failed: ${error.message}`);
-      return false;
+  // Check if the partition exists
+  const { data: partitionCheck, error: checkError } = await supabase.rpc('check_partition_exists', {
+    partition_name: partitionName,
+  });
+
+  if (checkError) {
+    console.error(`[ERROR] Failed to check partition existence: ${checkError.message}`);
+    throw new Error(checkError.message);
+  }
+
+  if (!partitionCheck || !partitionCheck[0]?.exists) {
+    console.log(`[INFO] Partition ${partitionName} does not exist. Creating it.`);
+    const { error: creationError } = await supabase.rpc('create_partition', { business_id: businessId });
+    if (creationError) {
+      console.error(`[ERROR] Failed to create partition for business_id ${businessId}:`, creationError.message);
+      throw new Error(creationError.message);
     }
-
-    return data[0]?.partition_exists || false;
-  } catch (err) {
-    console.error('[ERROR] Failed to check partition existence:', err.message);
-    return false;
+    console.log(`[INFO] Partition ${partitionName} created successfully.`);
+  } else {
+    console.log(`[INFO] Partition ${partitionName} already exists.`);
   }
 }
 
@@ -147,16 +154,9 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    // Check if the partition for this business_id exists
-    const partitionName = `instagram_conversations_p${businessId}`;
-    const partitionExists = await doesPartitionExist(partitionName);
+    // Ensure the partition for this business_id exists
+    await ensurePartitionExists(businessId);
 
-    if (!partitionExists) {
-      console.error(`[ERROR] Partition does not exist for business_id ${businessId}. Please create it manually.`);
-      return;
-    }
-
-    const messageContent = userMessage;
     const { error: conversationError } = await supabase
       .from('instagram_conversations')
       .insert([
@@ -164,7 +164,7 @@ async function processMessagingEvent(message) {
           business_id: businessId,
           sender_id: customerId,
           recipient_id: businessInstagramId,
-          message: messageContent,
+          message: userMessage,
           message_type: messageType,
           created_at: new Date(),
           updated_at: new Date(),
