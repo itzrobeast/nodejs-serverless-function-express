@@ -54,7 +54,7 @@ const messageSchema = Joi.object({
         payload: Joi.object().required(),
       })
     ),
-  }),unknown(true),
+  }).unknown(true),
 });
 
 // Helper Function to Ensure Partition Exists
