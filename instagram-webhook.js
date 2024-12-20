@@ -58,27 +58,43 @@ const messageSchema = Joi.object({
 
 // Helper Function to Ensure Partition Exists
 async function ensurePartitionExists(businessId) {
-  const partitionName = `instagram_conversations_${businessId}`;
+  try {
+    // Check if the business exists in the 'businesses' table
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('id', businessId)
+      .single();
 
-  const { data: partitionCheck, error: checkError } = await supabase.rpc('check_partition_exists', {
-    partition_name: partitionName,
-  });
-
-  if (checkError) {
-    console.error(`[ERROR] Failed to check partition existence: ${checkError.message}`);
-    throw new Error(checkError.message);
-  }
-
-  if (!partitionCheck || !partitionCheck[0]?.exists) {
-    console.log(`[INFO] Partition ${partitionName} does not exist. Creating it.`);
-    const { error: creationError } = await supabase.rpc('create_partition', { business_id: businessId });
-    if (creationError) {
-      console.error(`[ERROR] Failed to create partition for business_id ${businessId}:`, creationError.message);
-      throw new Error(creationError.message);
+    if (businessError || !business) {
+      console.log(`[INFO] No business found for business_id: ${businessId}, skipping partition creation.`);
+      return;
     }
-    console.log(`[INFO] Partition ${partitionName} created successfully.`);
-  } else {
-    console.log(`[INFO] Partition ${partitionName} already exists.`);
+
+    // Check if the partition already exists
+    const partitionName = `instagram_users_${businessId}`;
+    const { data: partitionCheck, error: partitionCheckError } = await supabase.rpc('check_partition_exists', {
+      partition_name: partitionName,
+    });
+
+    if (partitionCheckError) {
+      console.error(`[ERROR] Failed to check partition existence: ${partitionCheckError.message}`);
+      throw new Error(partitionCheckError.message);
+    }
+
+    if (!partitionCheck || !partitionCheck[0]?.exists) {
+      console.log(`[INFO] Partition ${partitionName} does not exist. Creating it.`);
+      const { error: creationError } = await supabase.rpc('create_partition', { business_id: businessId });
+      if (creationError) {
+        console.error(`[ERROR] Failed to create partition for business_id ${businessId}:`, creationError.message);
+        throw new Error(creationError.message);
+      }
+      console.log(`[INFO] Partition ${partitionName} created successfully.`);
+    } else {
+      console.log(`[INFO] Partition ${partitionName} already exists.`);
+    }
+  } catch (err) {
+    console.error('[ERROR] Failed to ensure partition exists:', err.message);
   }
 }
 
@@ -143,14 +159,12 @@ async function updateInstagramUserInfo(senderId, businessId, field, value) {
 
     const { error } = await supabase
       .from(`instagram_users_${businessId}`)
-      .upsert([
-        {
-          id: senderId,
-          business_id: businessId,
-          [field]: value,
-          updated_at: new Date(),
-        },
-      ]);
+      .upsert([{
+        id: senderId,
+        business_id: businessId,
+        [field]: value,
+        updated_at: new Date(),
+      }]);
 
     if (error) {
       console.error(`[ERROR] Failed to update ${field}:`, error.message);
@@ -218,17 +232,15 @@ async function processMessagingEvent(message) {
 
     const { error: conversationError } = await supabase
       .from('instagram_conversations')
-      .insert([
-        {
-          business_id: businessId,
-          sender_id: customerId,
-          recipient_id: businessInstagramId,
-          message: userMessage,
-          message_type: 'received',
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-      ]);
+      .insert([{
+        business_id: businessId,
+        sender_id: customerId,
+        recipient_id: businessInstagramId,
+        message: userMessage,
+        message_type: 'received',
+        created_at: new Date(),
+        updated_at: new Date(),
+      }]);
 
     if (conversationError) {
       console.error('[ERROR] Failed to insert conversation:', conversationError.message);
@@ -254,17 +266,15 @@ async function processMessagingEvent(message) {
 
       const { error: botMessageError } = await supabase
         .from('instagram_conversations')
-        .insert([
-          {
-            business_id: businessId,
-            sender_id: businessInstagramId,
-            recipient_id: customerId,
-            message: assistantResponse.message,
-            message_type: 'sent',
-            created_at: new Date(),
-            updated_at: new Date(),
-          },
-        ]);
+        .insert([{
+          business_id: businessId,
+          sender_id: businessInstagramId,
+          recipient_id: customerId,
+          message: assistantResponse.message,
+          message_type: 'sent',
+          created_at: new Date(),
+          updated_at: new Date(),
+        }]);
 
       if (botMessageError) {
         console.error('[ERROR] Failed to log bot response:', botMessageError.message);
