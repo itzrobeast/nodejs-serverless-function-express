@@ -383,6 +383,8 @@ async function processMessagingEvent(message) {
       return;
     }
 
+    const isBusinessMessage = senderId === igIdFromDB;
+
     const role = senderId === igIdFromDB ? 'business' : 'customer';
     console.log(`[INFO] Identified role: ${role}`);
 
