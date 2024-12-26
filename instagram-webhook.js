@@ -58,6 +58,29 @@ const messageSchema = Joi.object({
 });
 
 
+async function fetchBusinessInstagramId(businessId) {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('ig_id') // Use 'ig_id' as the field name from the businesses table
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch ig_id for businessId=${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    console.log(`[INFO] ig_id for businessId=${businessId}: ${data.ig_id}`);
+    return data.ig_id; // Return the Instagram ID of the business
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching ig_id:', err.message);
+    return null;
+  }
+}
+
+
+
 // Helper Function to Resolve Business ID from Instagram ID
 async function resolveBusinessIdByInstagramId(instagramId) {
   try {
@@ -77,6 +100,8 @@ async function resolveBusinessIdByInstagramId(instagramId) {
     return null;
   }
 }
+
+
 
 // Helper Function to Ensure Partition Exists
 async function ensurePartitionExists(businessId) {
@@ -314,11 +339,16 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid)
 
 
 
-// Process Individual Messaging Event
 async function processMessagingEvent(message) {
   try {
     const senderId = message.sender.id;
     const recipientId = message.recipient.id;
+
+    if (!senderId || !recipientId) {
+      console.error('[ERROR] senderId or recipientId is missing in message payload:', JSON.stringify(message));
+      return;
+    }
+
     const isEcho = message.message?.is_echo || false;
     const isUnsent = message.message?.is_unsent || false;
     const userMessage = message.message?.text || '';
@@ -337,12 +367,26 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    // Ensure the user exists in the instagram_users table, pulling info from Instagram if necessary
+    // Dynamically fetch ig_id from the businesses table
+    const igIdFromDB = await fetchBusinessInstagramId(businessId);
+
+    if (!igIdFromDB) {
+      console.error(`[ERROR] Could not fetch ig_id for businessId=${businessId}.`);
+      return;
+    }
+
+    const role = senderId === igIdFromDB ? 'business' : 'customer';
+    console.log(`[INFO] Identified role: ${role}`);
+
+    // Ensure user exists in instagram_users table
     await upsertInstagramUser(senderId, businessId);
-    await ensurePartitionExists(businessId);
 
     // Handle unsent message
     if (isUnsent) {
+      if (!messageId) {
+        console.error('[WARN] Unsent message has no valid message ID to delete.');
+        return;
+      }
       await handleUnsentMessage(messageId, businessId);
       return;
     }
