@@ -219,39 +219,47 @@ function parseUserMessage(message) {
 }
 
 
+
 // Add or Update the User in the instagram_users Table
 async function upsertInstagramUser(senderId, businessId) {
-  try {
-    // Check if the senderId is the business's Instagram ID
-    const role = senderId === BUSINESS_IG_ID ? 'business' : 'customer';
+    try {
+        // Fetch the business's Instagram ID from the database
+        const businessIgId = await fetchBusinessInstagramId(businessId);
 
-    // Fetch user info from Instagram Graph API
-    const userInfo = await fetchInstagramUserInfo(senderId);
+        if (!businessIgId) {
+            console.error(`[ERROR] Could not fetch ig_id for businessId=${businessId}. Cannot determine user role.`);
+            return; // Or throw an error if you want to halt execution
+        }
 
-    const userData = {
-      id: senderId,
-      business_id: businessId,
-      username: userInfo?.username || null,
-      role,
-      created_at: new Date(),
-      updated_at: new Date(),
-    };
+        // Check if the senderId is the business's Instagram ID
+        const role = senderId === businessIgId ? 'business' : 'customer';
 
-    const { data, error } = await supabase
-      .from('instagram_users')
-      .upsert(userData, { onConflict: ['id', 'business_id'] }); // Ensure no duplicate users for the same business
+        // Fetch user info from Instagram Graph API
+        const userInfo = await fetchInstagramUserInfo(senderId);
 
-    if (error) {
-      console.error('[ERROR] Failed to upsert Instagram user:', error.message);
-      throw new Error(error.message);
+        const userData = {
+            id: senderId,
+            business_id: businessId,
+            username: userInfo?.username || null,
+            role,
+            created_at: new Date(),
+            updated_at: new Date(),
+        };
+
+        const { data, error } = await supabase
+            .from('instagram_users')
+            .upsert(userData, { onConflict: ['id', 'business_id'] }); // Ensure no duplicate users for the same business
+
+        if (error) {
+            console.error('[ERROR] Failed to upsert Instagram user:', error.message);
+            throw new Error(error.message);
+        }
+
+        console.log(`[INFO] Instagram user ${senderId} added or updated successfully.`);
+    } catch (err) {
+        console.error('[ERROR] Failed to upsert Instagram user:', err.message);
     }
-
-    console.log(`[INFO] Instagram user ${senderId} added or updated successfully.`);
-  } catch (err) {
-    console.error('[ERROR] Failed to upsert Instagram user:', err.message);
-  }
 }
-
 
 
 
