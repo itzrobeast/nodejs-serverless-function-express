@@ -139,6 +139,28 @@ async function fetchInstagramUserInfo(senderId) {
   }
 }
 
+async function updateInstagramUserInfo(senderId, businessId, field, value) {
+  try {
+    const validFields = ['name', 'phone', 'email', 'location'];
+    if (!validFields.includes(field)) {
+      throw new Error('Invalid field for update');
+    }
+
+    const { error } = await supabase
+      .from('instagram_users')
+      .update({ [field]: value, updated_at: new Date() })
+      .eq('id', senderId)
+      .eq('business_id', businessId);
+
+    if (error) {
+      console.error(`[ERROR] Failed to update user info for senderId ${senderId}:`, error.message);
+    } else {
+      console.log(`[INFO] Successfully updated ${field} for user ${senderId}.`);
+    }
+  } catch (err) {
+    console.error('[ERROR] Failed to update Instagram user info:', err.message);
+  }
+}
 
 
 
@@ -289,11 +311,12 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid)
   }
 }
 
-if (senderId === BUSINESS_IG_ID) {
-  console.log('[INFO] Message sent by the business.');
-} else {
-  console.log('[INFO] Message sent by a customer.');
+const senderId = message.sender?.id;
+if (!senderId) {
+  console.error('[ERROR] senderId is undefined in the message payload:', message);
+  return; // Prevent further execution
 }
+
 
 
 
