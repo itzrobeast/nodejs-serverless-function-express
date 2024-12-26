@@ -52,6 +52,31 @@ const messageSchema = Joi.object({
   }).unknown(true),
 });
 
+// Helper Function to Resolve Business ID from Instagram ID
+async function resolveBusinessIdByInstagramId(instagramId) {
+  try {
+    const { data: business, error } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('ig_id', instagramId)
+      .single();
+
+    if (error || !business) {
+      console.warn('[WARN] Business not found for Instagram ID:', instagramId);
+      return null;
+    }
+    return business.id;
+  } catch (err) {
+    console.error('[ERROR] Error resolving business ID:', err.message);
+    return null;
+  }
+}
+
+
+
+
+
+
 // Helper Function to Handle Unsent Messages
 async function handleUnsentMessage(mid, businessId) {
   try {
