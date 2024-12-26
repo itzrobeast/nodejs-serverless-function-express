@@ -47,10 +47,16 @@ const messageSchema = Joi.object({
     mid: Joi.string().required(),
     text: Joi.string(),
     is_echo: Joi.boolean(),
-    attachments: Joi.array(),
-    is_unsent: Joi.boolean(), // Added this field for handling unsent messages
-  }).unknown(true),
+    read: Joi.object().optional(), // Allow "read" as an optional field
+    attachments: Joi.array().items(
+      Joi.object({
+        type: Joi.string().required(),
+        payload: Joi.object().required(),
+      })
+    ),
+  }).unknown(true), // Allow unknown keys for future-proofing
 });
+
 
 // Helper Function to Resolve Business ID from Instagram ID
 async function resolveBusinessIdByInstagramId(instagramId) {
@@ -113,6 +119,7 @@ async function ensurePartitionExists(businessId) {
 }
 
 
+
 // Helper Function to Parse User Messages
 function parseUserMessage(message) {
   const namePattern = /my name is (\w+ \w+)/i;
@@ -139,6 +146,36 @@ function parseUserMessage(message) {
 
   return { field, value };
 }
+
+// Add or update the user in the instagram_users table
+async function upsertInstagramUser(senderId, businessId) {
+  try {
+    const { data, error } = await supabase
+      .from('instagram_users')
+      .upsert({
+        id: senderId,
+        business_id: businessId,
+        is_business: false, // Set to true for business accounts if needed
+        created_at: new Date(),
+        updated_at: new Date(),
+      }, {
+        onConflict: ['id', 'business_id'] // Ensure no duplicate users for the same business
+      });
+
+    if (error) {
+      console.error('[ERROR] Failed to upsert Instagram user:', error.message);
+      throw new Error(error.message);
+    }
+
+    console.log(`[INFO] Instagram user ${senderId} added or updated successfully.`);
+  } catch (err) {
+    console.error('[ERROR] Failed to upsert Instagram user:', err.message);
+  }
+}
+
+
+
+
 
 
 
@@ -243,6 +280,9 @@ async function processMessagingEvent(message) {
       console.error('[WARN] Could not resolve business_id for Instagram ID:', businessInstagramId);
       return;
     }
+
+     // Ensure the user exists in the instagram_users table
+    await upsertInstagramUser(senderId, businessId);
 
     await ensurePartitionExists(businessId);
 
