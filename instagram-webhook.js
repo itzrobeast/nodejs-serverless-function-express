@@ -113,6 +113,32 @@ async function ensurePartitionExists(businessId) {
 }
 
 
+// Helper Function to Parse User Messages
+function parseUserMessage(message) {
+  const namePattern = /my name is (\w+ \w+)/i;
+  const phonePattern = /(?:phone|contact) (?:number|is) (\+?\d{1,2}\s?)?\(?(\d{3})\)?\s?(\d{3})[\s.-]?(\d{4})/i;
+  const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i;
+  const locationPattern = /I am from (\w+),? (\w+)/i;
+
+  let field = '';
+  let value = '';
+
+  if (namePattern.test(message)) {
+    field = 'name';
+    value = message.match(namePattern)[1];
+  } else if (phonePattern.test(message)) {
+    field = 'phone';
+    value = message.match(phonePattern).slice(1).join('');
+  } else if (emailPattern.test(message)) {
+    field = 'email';
+    value = message.match(emailPattern)[0];
+  } else if (locationPattern.test(message)) {
+    field = 'location';
+    value = message.match(locationPattern).slice(1).join(', ');
+  }
+
+  return { field, value };
+}
 
 
 
