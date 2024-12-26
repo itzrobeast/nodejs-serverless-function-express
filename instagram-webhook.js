@@ -122,7 +122,7 @@ async function ensurePartitionExists(businessId) {
 async function fetchInstagramUserInfo(senderId) {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v15.0/${senderId}?fields=id,username,profile_picture_url&access_token=${PAGE_ACCESS_TOKEN}`
+      `https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${PAGE_ACCESS_TOKEN}`
     );
 
     if (!response.ok) {
