@@ -176,7 +176,7 @@ function parseUserMessage(message) {
 async function upsertInstagramUser(senderId, businessId) {
   try {
     // Check if the senderId is the business's Instagram ID
-    const role = senderId === YOUR_BUSINESS_IG_ID ? 'business' : 'customer';
+    const role = senderId === BUSINESS_IG_ID ? 'business' : 'customer';
 
     // Fetch user info from Instagram Graph API
     const userInfo = await fetchInstagramUserInfo(senderId);
@@ -288,6 +288,13 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid)
     console.error('[ERROR] Failed to log message:', err.message);
   }
 }
+
+if (senderId === BUSINESS_IG_ID) {
+  console.log('[INFO] Message sent by the business.');
+} else {
+  console.log('[INFO] Message sent by a customer.');
+}
+
 
 
 // Process Individual Messaging Event
