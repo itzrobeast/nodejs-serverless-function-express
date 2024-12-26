@@ -424,7 +424,7 @@ router.get('/fetch-conversations', async (req, res) => {
 
     const { data: conversations, error } = await supabase
       .from('instagram_conversations')
-      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, recipient_name')
+      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name')
       .eq('business_id', business_id)
       .order('created_at', { ascending: true });
 
