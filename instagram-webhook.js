@@ -118,6 +118,30 @@ async function ensurePartitionExists(businessId) {
   }
 }
 
+// Helper Function to Fetch User Info from Instagram
+async function fetchInstagramUserInfo(senderId) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v15.0/${senderId}?fields=id,username,profile_picture_url&access_token=${PAGE_ACCESS_TOKEN}`
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch user info: ${errorText}`);
+    }
+
+    const userInfo = await response.json();
+    console.log(`[INFO] Fetched user info for senderId ${senderId}:`, userInfo);
+    return userInfo;
+  } catch (error) {
+    console.error('[ERROR] Failed to fetch Instagram user info:', error.message);
+    return null;
+  }
+}
+
+
+
+
 
 
 // Helper Function to Parse User Messages
@@ -147,20 +171,26 @@ function parseUserMessage(message) {
   return { field, value };
 }
 
-// Add or update the user in the instagram_users table
+
+// Add or Update the User in the instagram_users Table
 async function upsertInstagramUser(senderId, businessId) {
   try {
+    // Fetch user info from Instagram Graph API
+    const userInfo = await fetchInstagramUserInfo(senderId);
+
+    const userData = {
+      id: senderId,
+      business_id: businessId,
+      username: userInfo?.username || null,
+      profile_picture_url: userInfo?.profile_picture_url || null,
+      is_business: false, // Set to true for business accounts if needed
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+
     const { data, error } = await supabase
       .from('instagram_users')
-      .upsert({
-        id: senderId,
-        business_id: businessId,
-        is_business: false, // Set to true for business accounts if needed
-        created_at: new Date(),
-        updated_at: new Date(),
-      }, {
-        onConflict: ['id', 'business_id'] // Ensure no duplicate users for the same business
-      });
+      .upsert(userData, { onConflict: ['id', 'business_id'] }); // Ensure no duplicate users for the same business
 
     if (error) {
       console.error('[ERROR] Failed to upsert Instagram user:', error.message);
@@ -258,7 +288,8 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid)
   }
 }
 
-// Helper Function to Process Individual Messaging Event
+
+// Process Individual Messaging Event
 async function processMessagingEvent(message) {
   try {
     const senderId = message.sender.id;
@@ -281,9 +312,8 @@ async function processMessagingEvent(message) {
       return;
     }
 
-     // Ensure the user exists in the instagram_users table
+    // Ensure the user exists in the instagram_users table, pulling info from Instagram if necessary
     await upsertInstagramUser(senderId, businessId);
-
     await ensurePartitionExists(businessId);
 
     // Handle unsent message
@@ -311,6 +341,12 @@ async function processMessagingEvent(message) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
+
+
+
+
+
 
 // Webhook Event Handler (POST)
 router.post(
