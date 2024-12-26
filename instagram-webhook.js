@@ -175,6 +175,9 @@ function parseUserMessage(message) {
 // Add or Update the User in the instagram_users Table
 async function upsertInstagramUser(senderId, businessId) {
   try {
+    // Check if the senderId is the business's Instagram ID
+    const role = senderId === YOUR_BUSINESS_IG_ID ? 'business' : 'customer';
+
     // Fetch user info from Instagram Graph API
     const userInfo = await fetchInstagramUserInfo(senderId);
 
@@ -182,8 +185,7 @@ async function upsertInstagramUser(senderId, businessId) {
       id: senderId,
       business_id: businessId,
       username: userInfo?.username || null,
-      profile_picture_url: userInfo?.profile_picture_url || null,
-      is_business: false, // Set to true for business accounts if needed
+      role,
       created_at: new Date(),
       updated_at: new Date(),
     };
@@ -202,7 +204,6 @@ async function upsertInstagramUser(senderId, businessId) {
     console.error('[ERROR] Failed to upsert Instagram user:', err.message);
   }
 }
-
 
 
 
