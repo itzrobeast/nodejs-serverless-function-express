@@ -142,6 +142,41 @@ function parseUserMessage(message) {
 
 
 
+
+// Helper Function to Send Instagram Messages
+async function sendInstagramMessage(recipientId, message) {
+  try {
+    if (!message || typeof message !== 'string') {
+      throw new Error('Invalid message content.');
+    }
+    console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
+    const response = await fetch(
+      `https://graph.facebook.com/v14.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: { id: recipientId },
+          message: { text: message },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to send message: ${errorText}`);
+    }
+    console.log('[DEBUG] Message sent successfully to Instagram user.');
+    return await response.json();
+  } catch (error) {
+    console.error('[ERROR] Failed to send Instagram message:', error.message);
+    throw error;
+  }
+}
+
+
+
+
 // Helper Function to Handle Unsent Messages
 async function handleUnsentMessage(mid, businessId) {
   try {
