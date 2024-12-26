@@ -311,12 +311,6 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid)
   }
 }
 
-const senderId = message.sender?.id;
-if (!senderId) {
-  console.error('[ERROR] senderId is undefined in the message payload:', message);
-  return; // Prevent further execution
-}
-
 
 
 
