@@ -365,8 +365,20 @@ async function processMessagingEvent(message) {
     const isUnsent = message.message?.is_unsent || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
-    
 
+
+    if (isUnsent) {
+      console.log('[INFO] Handling unsent message event.');
+      if (!messageId) {
+        console.error('[WARN] Unsent message has no valid message ID to delete.');
+        return;
+      }
+      // Remove the message from the database
+      await handleUnsentMessage(messageId, businessId);
+      return; // Ignore this event for further processing
+    }
+
+    
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
       return;
@@ -403,15 +415,6 @@ async function processMessagingEvent(message) {
     // Ensure user exists in instagram_users table
     await upsertInstagramUser(senderId, businessId);
 
-    // Handle unsent message
-    if (isUnsent) {
-      if (!messageId) {
-        console.error('[WARN] Unsent message has no valid message ID to delete.');
-        return;
-      }
-      await handleUnsentMessage(messageId, businessId);
-      return;
-    }
 
     // Log the received message
     await logMessage(businessId, senderId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
@@ -446,7 +449,10 @@ router.get('/fetch-conversations', async (req, res) => {
     const { data: conversations, error: conversationsError } = await supabase
       .from('instagram_conversations')
       .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, role'); // Include the role
-
+      .eq('business_id', business_id) // Fetch messages only for the specified business
+      .neq('message', ''); // Exclude empty (deleted) messages
+  
+    
     if (conversationsError) {
       console.error('[ERROR] Failed to fetch conversations:', conversationsError.message);
       return res.status(500).json({ error: 'Failed to fetch conversations.' });
