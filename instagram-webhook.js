@@ -448,7 +448,7 @@ router.get('/fetch-conversations', async (req, res) => {
     // Fetch conversations filtered by business_id
     const { data: conversations, error: conversationsError } = await supabase
       .from('instagram_conversations')
-      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name')
+      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, role')
       .eq('business_id', business_id); // Filter conversations by business_id
 
     if (conversationsError) {
