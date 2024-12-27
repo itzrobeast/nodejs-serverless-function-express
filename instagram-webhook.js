@@ -439,52 +439,39 @@ router.get('/fetch-conversations', async (req, res) => {
     const { business_id } = req.query;
 
     if (!business_id) {
-      console.error('[ERROR] Missing business_id in request.');
       return res.status(400).json({ error: 'business_id is required.' });
     }
 
-    console.log('[DEBUG] Business ID:', business_id);
-
-    // Fetch conversations filtered by business_id
+    // Fetch conversations from the database
     const { data: conversations, error: conversationsError } = await supabase
       .from('instagram_conversations')
-      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, role')
-      .eq('business_id', business_id); // Filter conversations by business_id
+      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, role'); // Include the role
 
     if (conversationsError) {
       console.error('[ERROR] Failed to fetch conversations:', conversationsError.message);
-      return res.status(500).json({ error: 'Failed to fetch conversations from database.' });
+      return res.status(500).json({ error: 'Failed to fetch conversations.' });
     }
 
-    if (!conversations || conversations.length === 0) {
-      console.warn(`[INFO] No conversations found for business_id: ${business_id}`);
-      return res.status(200).json([]); // Return empty array
-    }
-
-    // Fetch business Instagram ID for comparison
+    // Fetch the business Instagram ID for comparison
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('ig_id')
       .eq('id', business_id)
       .single();
 
-    if (businessError) {
-      console.error('[ERROR] Failed to fetch business data:', businessError.message);
-      return res.status(500).json({ error: 'Failed to fetch business data from database.' });
-    }
-
-    if (!business) {
-      console.warn(`[WARN] No business found with id: ${business_id}`);
-      return res.status(404).json({ error: 'Business not found.' });
+    if (businessError || !business) {
+      console.error('[ERROR] Failed to fetch business Instagram ID:', businessError?.message || 'No data found');
+      return res.status(500).json({ error: 'Failed to fetch business data.' });
     }
 
     const businessIgId = business.ig_id;
-    console.log(`[DEBUG] Business Instagram ID for business_id ${business_id}: ${businessIgId}`);
 
-    // Enrich conversations with role information
+    console.log(`[DEBUG] Fetched business Instagram ID: ${businessIgId}`);
+
+    // Enrich conversations dynamically using businessIgId
     const enrichedConversations = conversations.map((msg) => ({
       ...msg,
-      role: msg.sender_id === businessIgId ? 'business' : 'customer', // Assign role dynamically
+      role: msg.role || (msg.sender_id === businessIgId ? 'business' : 'customer'), // Prefer database role, fallback to dynamic
     }));
 
     console.log(`[INFO] Successfully enriched ${enrichedConversations.length} conversations.`);
@@ -494,7 +481,6 @@ router.get('/fetch-conversations', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
-
 
 
 
