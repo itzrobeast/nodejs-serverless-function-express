@@ -221,10 +221,6 @@ function parseUserMessage(message) {
 
 
 
-const userInfo = await fetchInstagramUserInfo(senderId);
-
-
-
 // Add or Update the User in the instagram_users Table
 async function upsertInstagramUser(senderId, businessId) {
     try {
