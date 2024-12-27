@@ -330,6 +330,7 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid)
         message,
         message_type: type,
         message_id: mid, // Unique message ID from Instagram
+        role: isBusinessMessage ? 'business' : 'customer',
         created_at: new Date(),
         updated_at: new Date(),
       }]);
@@ -402,7 +403,7 @@ async function processMessagingEvent(message) {
     }
 
     // Log the received message
-    await logMessage(businessId, senderId, businessInstagramId, userMessage, 'received', messageId);
+    await logMessage(businessId, senderId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage);
 
     // Parse and update user info
     const { field, value } = parseUserMessage(userMessage);
