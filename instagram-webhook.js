@@ -434,8 +434,6 @@ async function processMessagingEvent(message) {
 }
 
 
-
-// Fetch Instagram Conversations
 router.get('/fetch-conversations', async (req, res) => {
   try {
     const { business_id } = req.query;
@@ -444,38 +442,43 @@ router.get('/fetch-conversations', async (req, res) => {
       return res.status(400).json({ error: 'business_id is required.' });
     }
 
+    // Fetch conversations from the database
     const { data: conversations, error } = await supabase
-  .from('instagram_conversations')
-  .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name');
+      .from('instagram_conversations')
+      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name'); // Ensure correct fields
 
-if (error) {
-  console.error('[ERROR] Failed to fetch conversations:', error.message);
-  return res.status(500).json({ error: 'Failed to fetch conversations.' });
-}
+    if (error) {
+      console.error('[ERROR] Failed to fetch conversations:', error.message);
+      return res.status(500).json({ error: 'Failed to fetch conversations.' });
+    }
 
-// Fetch the business Instagram ID for comparison
-const { data: business, error: businessError } = await supabase
-  .from('businesses')
-  .select('ig_id')
-  .eq('id', business_id)
-  .single();
+    // Fetch business Instagram ID for comparison
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select('ig_id')
+      .eq('id', business_id)
+      .single(); // Fetch a single record
 
-if (businessError || !business) {
-  console.error('[ERROR] Failed to fetch business Instagram ID:', businessError?.message);
-  return res.status(500).json({ error: 'Failed to fetch business data.' });
-}
+    if (businessError || !business) {
+      console.error('[ERROR] Failed to fetch business Instagram ID:', businessError?.message || 'No data found');
+      return res.status(500).json({ error: 'Failed to fetch business data.' });
+    }
 
-const businessIgId = business.ig_id;
+    const businessIgId = business.ig_id;
 
-// Add the role field based on sender_id
-const enrichedConversations = conversations.map((msg) => ({
-  ...msg,
-  role: msg.sender_id === businessIgId ? 'business' : 'customer', // Assign role
-}));
+    // Enrich conversations with role information
+    const enrichedConversations = conversations.map((msg) => ({
+      ...msg,
+      role: msg.sender_id === businessIgId ? 'business' : 'customer', // Assign role dynamically
+    }));
 
-return res.status(200).json(enrichedConversations);
-
-
+    console.log(`[INFO] Successfully enriched ${enrichedConversations.length} conversations.`);
+    return res.status(200).json(enrichedConversations);
+  } catch (err) {
+    console.error('[ERROR] Unexpected error in /fetch-conversations:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 
 
