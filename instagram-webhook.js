@@ -445,22 +445,36 @@ router.get('/fetch-conversations', async (req, res) => {
     }
 
     const { data: conversations, error } = await supabase
-      .from('instagram_conversations')
-      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name')
-      .eq('business_id', business_id)
-      .order('created_at', { ascending: true });
+  .from('instagram_conversations')
+  .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name');
 
-    if (error) {
-      console.error('[ERROR] Failed to fetch conversations:', error.message);
-      return res.status(500).json({ error: 'Failed to fetch conversations.' });
-    }
+if (error) {
+  console.error('[ERROR] Failed to fetch conversations:', error.message);
+  return res.status(500).json({ error: 'Failed to fetch conversations.' });
+}
 
-    res.status(200).json({ conversations });
-  } catch (err) {
-    console.error('[ERROR] Unexpected error in /fetch-conversations:', err.message);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
+// Fetch the business Instagram ID for comparison
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .select('ig_id')
+  .eq('id', business_id)
+  .single();
+
+if (businessError || !business) {
+  console.error('[ERROR] Failed to fetch business Instagram ID:', businessError?.message);
+  return res.status(500).json({ error: 'Failed to fetch business data.' });
+}
+
+const businessIgId = business.ig_id;
+
+// Add the role field based on sender_id
+const enrichedConversations = conversations.map((msg) => ({
+  ...msg,
+  role: msg.sender_id === businessIgId ? 'business' : 'customer', // Assign role
+}));
+
+return res.status(200).json(enrichedConversations);
+
 
 
 
