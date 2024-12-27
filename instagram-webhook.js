@@ -319,7 +319,7 @@ async function handleUnsentMessage(mid, businessId) {
 }
 
 // Helper Function to Log Message
-async function logMessage(businessId, senderId, recipientId, message, type, mid) {
+async function logMessage(businessId, senderId, recipientId, message, type, mid, isBusinessMessage, igIdFromDB, senderName) {
   try {
     const { error } = await supabase
       .from('instagram_conversations')
@@ -331,6 +331,8 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid)
         message_type: type,
         message_id: mid, // Unique message ID from Instagram
         role: isBusinessMessage ? 'business' : 'customer',
+        ig_id: igIdFromDB,
+        sender_name: senderName,
         created_at: new Date(),
         updated_at: new Date(),
       }]);
@@ -362,6 +364,7 @@ async function processMessagingEvent(message) {
     const isUnsent = message.message?.is_unsent || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
+    
 
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
@@ -403,7 +406,7 @@ async function processMessagingEvent(message) {
     }
 
     // Log the received message
-    await logMessage(businessId, senderId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage);
+    await logMessage(businessId, senderId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
 
     // Parse and update user info
     const { field, value } = parseUserMessage(userMessage);
@@ -415,7 +418,7 @@ async function processMessagingEvent(message) {
     const assistantResponse = await assistantHandler({ userMessage, businessId });
     if (assistantResponse && assistantResponse.message) {
       await sendInstagramMessage(senderId, assistantResponse.message);
-      await logMessage(businessId, businessInstagramId, senderId, assistantResponse.message, 'sent', null);
+      await logMessage(businessId, businessInstagramId, senderId, assistantResponse.message, 'sent', null, true, igIdFromDB, 'Business');
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
