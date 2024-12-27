@@ -365,6 +365,8 @@ async function processMessagingEvent(message) {
     const isUnsent = message.message?.is_unsent || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
+    const businessInstagramId = recipientId;
+    const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
 
 
     if (isUnsent) {
@@ -384,8 +386,7 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    const businessInstagramId = recipientId;
-    const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
+   
 
     if (!businessId) {
       console.error('[WARN] Could not resolve business_id for Instagram ID:', businessInstagramId);
