@@ -220,6 +220,11 @@ function parseUserMessage(message) {
 
 
 
+
+const userInfo = await fetchInstagramUserInfo(senderId);
+
+
+
 // Add or Update the User in the instagram_users Table
 async function upsertInstagramUser(senderId, businessId) {
     try {
@@ -392,6 +397,13 @@ async function processMessagingEvent(message) {
     const role = senderId === igIdFromDB ? 'business' : 'customer';
     console.log(`[INFO] Identified role: ${role}`);
 
+
+
+    // 4. **Fetch the user info** so you can log the username
+    const userInfo = await fetchInstagramUserInfo(senderId);
+
+
+    
     // Ensure user exists in instagram_users table
     await upsertInstagramUser(senderId, businessId);
 
