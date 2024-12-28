@@ -349,84 +349,65 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid,
 }
 
 
-
-
 async function processMessagingEvent(message) {
   try {
+    console.log('[DEBUG] Incoming message payload:', JSON.stringify(message, null, 2));
+
     const senderId = message.sender.id;
     const recipientId = message.recipient.id;
 
     if (!senderId || !recipientId) {
-      console.error('[ERROR] senderId or recipientId is missing in message payload:', JSON.stringify(message));
+      console.error('[ERROR] senderId or recipientId is missing in message payload.');
       return;
     }
 
-    const isEcho = message.message?.is_echo || false;
     const isUnsent = message.message?.is_unsent || false;
+    const isEcho = message.message?.is_echo || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
     const businessInstagramId = recipientId;
     const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
 
+    if (!businessId) {
+      console.error('[ERROR] Could not resolve businessId for Instagram ID:', businessInstagramId);
+      return;
+    }
 
     if (isUnsent) {
       console.log('[INFO] Handling unsent message event.');
       if (!messageId) {
-        console.error('[WARN] Unsent message has no valid message ID to delete.');
+        console.error('[WARN] Unsent message has no valid message ID.');
         return;
       }
-      // Remove the message from the database
       await handleUnsentMessage(messageId, businessId);
-      return; // Ignore this event for further processing
+      return; // Prevent further processing
     }
 
-    
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
       return;
     }
 
-   
-
-    if (!businessId) {
-      console.error('[WARN] Could not resolve business_id for Instagram ID:', businessInstagramId);
-      return;
-    }
-
-    // Dynamically fetch ig_id from the businesses table
     const igIdFromDB = await fetchBusinessInstagramId(businessId);
-
     if (!igIdFromDB) {
-      console.error(`[ERROR] Could not fetch ig_id for businessId=${businessId}.`);
+      console.error('[ERROR] Could not fetch ig_id for businessId:', businessId);
       return;
     }
 
     const isBusinessMessage = senderId === igIdFromDB;
-
-    const role = senderId === igIdFromDB ? 'business' : 'customer';
+    const role = isBusinessMessage ? 'business' : 'customer';
     console.log(`[INFO] Identified role: ${role}`);
 
-
-
-    // 4. **Fetch the user info** so you can log the username
     const userInfo = await fetchInstagramUserInfo(senderId);
-
-
-    
-    // Ensure user exists in instagram_users table
     await upsertInstagramUser(senderId, businessId);
 
-
-    // Log the received message
     await logMessage(businessId, senderId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
 
-    // Parse and update user info
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
-    // Generate assistant response
     const assistantResponse = await assistantHandler({ userMessage, businessId });
     if (assistantResponse && assistantResponse.message) {
       await sendInstagramMessage(senderId, assistantResponse.message);
@@ -436,6 +417,9 @@ async function processMessagingEvent(message) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
+
+
 
 
 router.get('/fetch-conversations', async (req, res) => {
