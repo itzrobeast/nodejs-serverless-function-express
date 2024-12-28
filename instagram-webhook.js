@@ -391,6 +391,11 @@ async function processMessagingEvent(message) {
       return;
     }
 
+     if (!userMessage.trim()) { // Check for empty or whitespace-only messages
+      console.log('[INFO] Skipping response for empty or missing message.');
+      return; // Prevent AI from responding
+    }
+
     const igIdFromDB = await fetchBusinessInstagramId(businessId);
     if (!igIdFromDB) {
       console.error('[ERROR] Could not fetch ig_id for businessId:', businessId);
@@ -422,9 +427,9 @@ if (!userMessage || isUnsent) {
   return; // Prevent further processing
 }
 
-    
+     console.log('[DEBUG] Generating AI response...');
     const assistantResponse = await assistantHandler({ userMessage, businessId });
-    console.log('[DEBUG] Generating AI response...');
+   
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
       await sendInstagramMessage(senderId, assistantResponse.message);
