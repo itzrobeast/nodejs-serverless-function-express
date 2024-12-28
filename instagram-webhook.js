@@ -328,6 +328,9 @@ async function handleUnsentMessage(mid, businessId) {
 // Helper Function to Log Message
 async function logMessage(businessId, senderId, recipientId, message, type, mid, isBusinessMessage, igIdFromDB, senderName) {
   try {
+
+    const validMessageId = typeof mid === 'string' ? mid : null;
+    
     const { error } = await supabase
       .from('instagram_conversations')
       .insert([{
@@ -336,7 +339,7 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid,
         recipient_id: recipientId,
         message,
         message_type: type,
-        message_id: mid, // Unique message ID from Instagram
+        message_id: validMessageId, // Unique message ID from Instagram
         role: isBusinessMessage ? 'business' : 'customer',
         ig_id: igIdFromDB,
         sender_name: senderName,
