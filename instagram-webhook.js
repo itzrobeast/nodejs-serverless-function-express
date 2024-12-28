@@ -337,7 +337,6 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid,
         business_id: businessId,
         sender_id: senderId,
         recipient_id: recipientId,
-        businessInstagramId: business.ig_id,
         message,
         message_type: type,
         message_id: validMessageId, // Unique message ID from Instagram
@@ -419,7 +418,7 @@ async function processMessagingEvent(message) {
     const userInfo = await fetchInstagramUserInfo(senderId);
     await upsertInstagramUser(senderId, businessId);
 
-    await logMessage(businessId, senderId, recipientId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
+    await logMessage(businessId, senderId, recipientId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
 
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
