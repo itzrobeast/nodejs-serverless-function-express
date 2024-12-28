@@ -48,13 +48,13 @@ const messageSchema = Joi.object({
   text: Joi.string().allow(null),
   is_unsent: Joi.boolean().optional(),
   is_echo: Joi.boolean().optional(),
-  read: Joi.object().optional(), // Allow "read" as an optional field
+  read: Joi.object().unknown(true).optional(), // Allow "read" as an optional field
   attachments: Joi.array().items(
       Joi.object({
         type: Joi.string().required(),
         payload: Joi.object().required(),
       })
-    ),
+    ).optional(),
   }).unknown(true), // Allow unknown keys for future-proofing
 });
 
