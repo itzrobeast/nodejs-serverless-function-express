@@ -426,8 +426,8 @@ async function processMessagingEvent(message) {
     }
 
 
-if (!userMessage || isUnsent) {
-  console.log('[INFO] Skipping assistant response for empty or unsent message.');
+if (!userMessage || isDeleted) {
+  console.log('[INFO] Skipping assistant response for empty or deleted message.');
   return;
 }
 
