@@ -337,6 +337,7 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid,
         business_id: businessId,
         sender_id: senderId,
         recipient_id: recipientId,
+        businessInstagramId: business.ig_id,
         message,
         message_type: type,
         message_id: validMessageId, // Unique message ID from Instagram
@@ -442,7 +443,7 @@ if (!userMessage || isUnsent) {
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
       await sendInstagramMessage(senderId, assistantResponse.message);
-      await logMessage(businessId, businessInstagramId, senderId, assistantResponse.message, 'sent', null, true, igIdFromDB, 'Business');
+      await logMessage(businessId, senderId, recipientId, assistantResponse.message, 'sent', null, true, igIdFromDB, 'Business');
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
