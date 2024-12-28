@@ -310,6 +310,7 @@ async function sendInstagramMessage(recipientId, message) {
 // Helper Function to Handle Unsent Messages
 async function handleUnsentMessage(mid, businessId) {
   try {
+    console.log(`[DEBUG] Attempting to delete message with ID: ${mid} for business ID: ${businessId}`);
     const { error } = await supabase
       .from('instagram_conversations')
       .delete()
@@ -324,6 +325,7 @@ async function handleUnsentMessage(mid, businessId) {
     console.error('[ERROR] Failed to handle unsent message:', err.message);
   }
 }
+
 
 // Helper Function to Log Message
 async function logMessage(businessId, senderId, recipientId, message, type, mid, isBusinessMessage, igIdFromDB, senderName) {
@@ -371,6 +373,7 @@ async function processMessagingEvent(message) {
     }
 
     const isDeleted = message.message?.is_deleted || false;
+    console.log(`[DEBUG] Message is_deleted: ${isDeleted}`);
     const isEcho = message.message?.is_echo || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
@@ -385,15 +388,16 @@ async function processMessagingEvent(message) {
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
     if (isDeleted) {
-      console.log('[INFO] Handling deleted message event.');
-      if (!messageId) {
-        console.error('[WARN] Deleted message has no valid message ID.');
-        return;
-      }
-      await handleUnsentMessage(messageId, businessId);
-      console.log('[INFO] Deleted message handled. Stopping further processing.');
-      return; // Prevent further processing
-    }
+  console.log('[INFO] Handling deleted message event.');
+  if (!messageId) {
+    console.error('[WARN] Deleted message has no valid message ID.');
+    return;
+  }
+  console.log(`[DEBUG] Deleting message with ID: ${messageId}`);
+  await handleUnsentMessage(messageId, businessId);
+  console.log('[INFO] Deleted message handled.');
+  return; // Prevent further processing
+}
 
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
