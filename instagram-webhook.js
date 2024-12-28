@@ -46,7 +46,7 @@ const messageSchema = Joi.object({
   message: Joi.object({
   mid: Joi.string().required(),
   text: Joi.string().allow(null),
-  is_unsent: Joi.boolean().optional(),
+  is_deleted: Joi.boolean().optional(),
   is_echo: Joi.boolean().optional(),
   read: Joi.object().unknown(true).optional(), // Allow "read" as an optional field
   attachments: Joi.array().items(
@@ -370,7 +370,7 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    const isUnsent = message.message?.is_unsent || false;
+    const isDeleted = message.message?.is_deleted || false;
     const isEcho = message.message?.is_echo || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
@@ -384,14 +384,14 @@ async function processMessagingEvent(message) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
-    if (isUnsent) {
-      console.log('[INFO] Handling unsent message event.');
+    if (isDeleted) {
+      console.log('[INFO] Handling deleted message event.');
       if (!messageId) {
-        console.error('[WARN] Unsent message has no valid message ID.');
+        console.error('[WARN] Deleted message has no valid message ID.');
         return;
       }
       await handleUnsentMessage(messageId, businessId);
-      console.log('[INFO] Unsent message handled. Stopping further processing.');
+      console.log('[INFO] Deleted message handled. Stopping further processing.');
       return; // Prevent further processing
     }
 
