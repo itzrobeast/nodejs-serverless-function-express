@@ -466,7 +466,7 @@ router.get('/fetch-conversations', async (req, res) => {
       .from('instagram_conversations')
       .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, role') // Include the role
       .eq('business_id', business_id) // Fetch messages only for the specified business
-      .neq('message', ''); // Exclude empty (deleted) messages
+      
   
     
     if (conversationsError) {
