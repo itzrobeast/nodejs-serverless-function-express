@@ -44,11 +44,12 @@ const messageSchema = Joi.object({
   recipient: Joi.object({ id: Joi.string().required() }).required(),
   timestamp: Joi.number().required(),
   message: Joi.object({
-    mid: Joi.string().required(),
-    text: Joi.string(),
-    is_echo: Joi.boolean(),
-    read: Joi.object().optional(), // Allow "read" as an optional field
-    attachments: Joi.array().items(
+  mid: Joi.string().required(),
+  text: Joi.string().allow(null),
+  is_unsent: Joi.boolean().optional(),
+  is_echo: Joi.boolean().optional(),
+  read: Joi.object().optional(), // Allow "read" as an optional field
+  attachments: Joi.array().items(
       Joi.object({
         type: Joi.string().required(),
         payload: Joi.object().required(),
@@ -372,6 +373,7 @@ async function processMessagingEvent(message) {
       console.error('[ERROR] Could not resolve businessId for Instagram ID:', businessInstagramId);
       return;
     }
+    console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
     if (isUnsent) {
       console.log('[INFO] Handling unsent message event.');
@@ -380,6 +382,7 @@ async function processMessagingEvent(message) {
         return;
       }
       await handleUnsentMessage(messageId, businessId);
+      console.log('[INFO] Unsent message handled. Stopping further processing.');
       return; // Prevent further processing
     }
 
@@ -408,8 +411,22 @@ async function processMessagingEvent(message) {
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
+
+if (!userMessage || isUnsent) {
+  console.log('[INFO] Skipping assistant response for empty or unsent message.');
+  return;
+}
+
+    if (!businessId) {
+  console.error('[ERROR] Could not resolve businessId. Skipping processing for message:', messageId);
+  return; // Prevent further processing
+}
+
+    
     const assistantResponse = await assistantHandler({ userMessage, businessId });
+    console.log('[DEBUG] Generating AI response...');
     if (assistantResponse && assistantResponse.message) {
+      console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
       await sendInstagramMessage(senderId, assistantResponse.message);
       await logMessage(businessId, businessInstagramId, senderId, assistantResponse.message, 'sent', null, true, igIdFromDB, 'Business');
     }
@@ -482,6 +499,7 @@ router.post(
   express.json({ verify: verifyFacebookSignature }),
   async (req, res) => {
     try {
+      console.log('[DEBUG] Incoming webhook payload:', JSON.stringify(req.body, null, 2));
       const body = req.body;
       if (body.object !== 'instagram') {
         throw new Error('Invalid webhook payload.');
