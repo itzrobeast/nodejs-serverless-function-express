@@ -87,7 +87,7 @@ async function resolveBusinessIdByInstagramId(instagramId) {
   try {
     const { data: business, error } = await supabase
       .from('businesses')
-      .select('id')
+      .select('id, ig_id')
       .eq('ig_id', instagramId)
       .single();
 
@@ -95,6 +95,11 @@ async function resolveBusinessIdByInstagramId(instagramId) {
       console.warn('[WARN] Business not found for Instagram ID:', instagramId);
       return null;
     }
+
+    // Assign ig_id to a more descriptive constant
+    const businessInstagramId = business.ig_id;
+    
+    console.log(`[DEBUG] Resolved business ID: ${business.id} for Instagram ID: ${businessInstagramId}`);
     return business.id;
   } catch (err) {
     console.error('[ERROR] Error resolving business ID:', err.message);
@@ -366,7 +371,8 @@ async function processMessagingEvent(message) {
     const isEcho = message.message?.is_echo || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
-    const businessInstagramId = recipientId;
+    
+    const businessInstagramId = isEcho ? senderId : recipientId;
     const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
 
     if (!businessId) {
@@ -409,7 +415,7 @@ async function processMessagingEvent(message) {
     const userInfo = await fetchInstagramUserInfo(senderId);
     await upsertInstagramUser(senderId, businessId);
 
-    await logMessage(businessId, senderId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
+    await logMessage(businessId, senderId, recipientId, businessInstagramId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
 
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
