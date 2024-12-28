@@ -27,8 +27,11 @@ import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './auth/verify-session.js';
 import refreshTokenRouter from './auth/refresh-token.js';
 import loginRouter from './auth/login.js';
+import { handleInboundCall } from './vonage.js';
+
 
 const app = express();
+
 
 // Trust proxy settings for Vercel and other platforms
 app.set('trust proxy', 1); // Trust first proxy (necessary for X-Forwarded-For)
@@ -40,6 +43,9 @@ const loginLimiter = rateLimit({
 });
 
 app.use('/auth/login', loginLimiter); // Apply rate limiter
+
+
+
 
 // Middleware
 app.use(
@@ -57,7 +63,7 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 
-
+app.post('/api/inbound-call', handleInboundCall);
 
 app.use(
   cors({
