@@ -113,6 +113,7 @@ const routes = [
   { path: '/auth/verify-session', router: verifySessionRouter },
   { path: '/auth/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
+  { path: '/api/inbound-call', router: handleInboundCallRouter },
 ];
 
 routes.forEach(({ path, router }) => {
