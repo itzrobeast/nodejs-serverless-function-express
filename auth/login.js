@@ -24,7 +24,16 @@ async function subscribePageToWebhook(pageId, pageAccessToken) {
     const response = await fetch(`https://graph.facebook.com/v15.0/${pageId}/subscribed_apps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: pageAccessToken }),
+      body: JSON.stringify({
+        access_token: pageAccessToken,
+        subscribed_fields: [
+          'messages',
+          'messaging_postbacks',
+          'message_deliveries',
+          'message_reads',
+          'message_reactions',
+        ],
+      }),
     });
 
     const data = await response.json();
@@ -42,6 +51,7 @@ async function subscribePageToWebhook(pageId, pageAccessToken) {
     return false;
   }
 }
+
 
 // POST /auth/login
 router.post('/', loginLimiter, async (req, res) => {
