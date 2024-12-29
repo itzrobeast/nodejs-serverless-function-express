@@ -16,8 +16,10 @@ async function subscribePageToWebhook(pageId, pageAccessToken) {
     });
 
     const data = await response.json();
+    console.log(`[DEBUG] Subscription Response for Page ID ${pageId}:`, data);
+
     if (data.error) {
-      console.error(`[ERROR] Failed to subscribe page ${pageId} to webhook:`, data.error.message);
+      console.error(`[ERROR] Failed to subscribe page ${pageId}:`, data.error.message);
       return false;
     }
 
@@ -28,6 +30,7 @@ async function subscribePageToWebhook(pageId, pageAccessToken) {
     return false;
   }
 }
+
 
 /**
  * POST /setup-business
