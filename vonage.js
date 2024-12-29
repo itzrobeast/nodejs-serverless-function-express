@@ -1,4 +1,7 @@
 import { Vonage } from '@vonage/server-sdk';
+import supabase from './supabaseClient.js';
+import { assistantHandler } from './assistant.js';
+
 
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
@@ -58,35 +61,48 @@ export const makeOutboundCall = async (to, from, text) => {
   }
 };
 
-export const handleInboundCall = (req, res) => {
-  const { to, from } = req.body;
-  console.log(`[INFO] Inbound call from ${from} to ${to}`);
+export const handleInboundCall = async (req, res) => {
+  try {
+    const { to, from } = req.body;
 
-  // Fetch the business associated with the number
-  supabase
-    .from('vonage_numbers')
-    .select('business_id')
-    .eq('vonage_number', to)
-    .single()
-    .then(({ data, error }) => {
-      if (error || !data) {
-        console.error('[ERROR] Business not found for inbound call:', error.message);
-        return res.json([{ action: 'talk', text: 'Sorry, we could not handle your call at this time.' }]);
-      }
+    console.log(`[INFO] Received inbound call from ${from} to ${to}`);
 
-      const businessId = data.business_id;
+    // Fetch the business associated with the called number
+    const { data: businessData, error: businessError } = await supabase
+      .from('vonage_numbers')
+      .select('business_id')
+      .eq('vonage_number', to)
+      .single();
 
-      // Pass the call to the assistant
-      assistantHandler({
-        userMessage: `Call from ${from}`,
-        recipientId: businessId,
-        platform: 'phone',
-      }).then((response) => {
-        res.json([{ action: 'talk', text: response.message || 'Thank you for calling.' }]);
-      });
+    if (businessError || !businessData) {
+      console.error('[ERROR] Failed to find business for the Vonage number:', businessError?.message || 'No business found');
+      return res.json([{ action: 'talk', text: 'Sorry, we could not handle your call at this time. Please try again later.' }]);
+    }
+
+    const businessId = businessData.business_id;
+
+    console.log(`[INFO] Matched Vonage number ${to} to business ID: ${businessId}`);
+
+    // Fetch assistant's response based on the call context
+    const assistantResponse = await assistantHandler({
+      userMessage: `Inbound call received from ${from}. How should I assist?`,
+      businessId,
+      platform: 'phone', // Specify the interaction platform for context
     });
-};
 
+    const responseMessage = assistantResponse.message || 'Thank you for calling. How can I assist you today?';
+
+    console.log(`[INFO] Assistant response for ${from}: ${responseMessage}`);
+
+    // Send NCCO response to Vonage
+    return res.json([{ action: 'talk', text: responseMessage }]);
+  } catch (error) {
+    console.error('[ERROR] Failed to handle inbound call:', error.message);
+
+    // Return fallback response in case of unexpected errors
+    return res.json([{ action: 'talk', text: 'We are currently unable to process your call. Please try again later.' }]);
+  }
+};
 
 
 
