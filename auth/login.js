@@ -18,6 +18,35 @@ const loginSchema = Joi.object({
   accessToken: Joi.string().required(),
 });
 
+
+// Helper: Subscribe a page to the webhook
+async function subscribePageToWebhook(pageId, pageAccessToken) {
+  try {
+    const response = await fetch(`https://graph.facebook.com/v15.0/${pageId}/subscribed_apps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: pageAccessToken }),
+    });
+
+    const data = await response.json();
+    console.log(`[DEBUG] Subscription Response for Page ID ${pageId}:`, data);
+
+    if (data.error) {
+      console.error(`[ERROR] Failed to subscribe page ${pageId}:`, data.error.message);
+      return false;
+    }
+
+    console.log(`[INFO] Page ${pageId} successfully subscribed to webhook.`);
+    return true;
+  } catch (error) {
+    console.error('[ERROR] Subscription to webhook failed:', error.message);
+    return false;
+  }
+}
+
+
+
+
 // Helper: Fetch Instagram Business ID
 const fetchInstagramIdFromPage = async (pageId, pageAccessToken) => {
   try {
@@ -87,6 +116,10 @@ router.post('/', loginLimiter, async (req, res) => {
       console.warn('[WARN] Instagram Business ID not found. Continuing without Instagram data.');
     }
 
+
+
+
+    
     // 5. Upsert User
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -130,7 +163,19 @@ console.log('[DEBUG] User Upserted:', user);
 
     console.log('[DEBUG] Pages Upserted Successfully');
 
-    // 7. Link Business to Facebook Page
+
+ // Subscribe the page to the webhook
+      const subscriptionSuccess = await subscribePageToWebhook(pageId, pageAccessToken);
+      if (!subscriptionSuccess) {
+        console.error(`[WARN] Failed to subscribe page ${pageId} to webhook`);
+      }
+    }
+
+    console.log('[DEBUG] Pages Processed and Subscribed Successfully');
+
+
+
+    
     // 7. Link Business to Facebook Page
 const businessData = {
   user_id: user.id,
