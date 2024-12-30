@@ -100,6 +100,8 @@ async function fetchBusinessInstagramId(businessId) {
   }
 }
 
+const businessInstagramId = business.ig_id;
+
 /**
  * Retrieve the page access token for the specified business and page.
  */
@@ -130,23 +132,31 @@ async function getPageAccessToken(businessId, pageId) {
  */
 async function resolveBusinessIdByInstagramId(instagramId) {
   try {
+    console.log('[DEBUG] Received Instagram ID for resolution:', instagramId);
+
     const { data: business, error } = await supabase
       .from('businesses')
       .select('id, ig_id')
       .eq('ig_id', instagramId)
-      .single();
+      .maybeSingle(); // Avoid throwing an error for no results
 
-    if (error || !business) {
-      console.warn('[WARN] Business not found for Instagram ID:', instagramId);
+    if (error) {
+      console.error('[ERROR] Supabase query failed:', error.message);
+      return null;
+    }
+
+  
+
+    if (!business) {
+      console.warn('[WARN] No business found for Instagram ID:', instagramId);
       return null;
     }
 
     const businessInstagramId = business.ig_id;
-
-    console.log(`[DEBUG] Resolved business ID: ${business.id} for Instagram ID: ${business.ig_id}`);
+    console.log(`[DEBUG] Resolved business ID: ${business.id} for Instagram ID: ${businessInstagramId}`);
     return business.id;
   } catch (err) {
-    console.error('[ERROR] Error resolving business ID:', err.message);
+    console.error('[ERROR] Exception in resolveBusinessIdByInstagramId:', err.message);
     return null;
   }
 }
