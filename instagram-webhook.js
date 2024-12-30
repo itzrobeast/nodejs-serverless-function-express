@@ -339,8 +339,16 @@ async function sendInstagramMessage(recipientId, message) {
     }
     console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
 
+    
+    const pageAccessToken = await getPageAccessToken(businessId, pageId);
+if (!pageAccessToken) {
+  throw new Error('Page access token is missing or invalid.');
+}
+
+
+  
     const response = await fetch(
-      `https://graph.facebook.com/v14.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      `https://graph.facebook.com/v14.0/me/messages?access_token=${pageAccessToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
