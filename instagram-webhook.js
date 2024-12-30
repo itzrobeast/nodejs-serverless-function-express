@@ -44,12 +44,12 @@ const messageSchema = Joi.object({
   recipient: Joi.object({ id: Joi.string().required() }).required(),
   timestamp: Joi.number().required(),
   message: Joi.object({
-  mid: Joi.string().required(),
-  text: Joi.string().allow(null),
-  is_deleted: Joi.boolean().optional(),
-  is_echo: Joi.boolean().optional(),
-  read: Joi.object().unknown(true).optional(), // Allow "read" as an optional field
-  attachments: Joi.array().items(
+    mid: Joi.string().required(),
+    text: Joi.string().allow(null),
+    is_deleted: Joi.boolean().optional(),
+    is_echo: Joi.boolean().optional(),
+    read: Joi.object().unknown(true).optional(), // Allow "read" as an optional field
+    attachments: Joi.array().items(
       Joi.object({
         type: Joi.string().required(),
         payload: Joi.object().required(),
@@ -58,12 +58,14 @@ const messageSchema = Joi.object({
   }).unknown(true), // Allow unknown keys for future-proofing
 });
 
-
+/**
+ * Fetch the ig_id for a given businessId from Supabase.
+ */
 async function fetchBusinessInstagramId(businessId) {
   try {
     const { data, error } = await supabase
       .from('businesses')
-      .select('ig_id') // Use 'ig_id' as the field name from the businesses table
+      .select('ig_id')
       .eq('id', businessId)
       .single();
 
@@ -73,16 +75,16 @@ async function fetchBusinessInstagramId(businessId) {
     }
 
     console.log(`[INFO] ig_id for businessId=${businessId}: ${data.ig_id}`);
-    return data.ig_id; // Return the Instagram ID of the business
+    return data.ig_id;
   } catch (err) {
     console.error('[ERROR] Exception while fetching ig_id:', err.message);
     return null;
   }
 }
 
-
-
-// Helper Function to Resolve Business ID from Instagram ID
+/**
+ * Resolve a business ID by matching an incoming Instagram ID (object ID).
+ */
 async function resolveBusinessIdByInstagramId(instagramId) {
   try {
     const { data: business, error } = await supabase
@@ -96,10 +98,7 @@ async function resolveBusinessIdByInstagramId(instagramId) {
       return null;
     }
 
-    // Assign ig_id to a more descriptive constant
-    const businessInstagramId = business.ig_id;
-    
-    console.log(`[DEBUG] Resolved business ID: ${business.id} for Instagram ID: ${businessInstagramId}`);
+    console.log(`[DEBUG] Resolved business ID: ${business.id} for Instagram ID: ${business.ig_id}`);
     return business.id;
   } catch (err) {
     console.error('[ERROR] Error resolving business ID:', err.message);
@@ -107,11 +106,13 @@ async function resolveBusinessIdByInstagramId(instagramId) {
   }
 }
 
-
-
-// Helper Function to Ensure Partition Exists
+/**
+ * Ensure the necessary partition(s) exists for the given businessId.
+ * If not, create it.
+ */
 async function ensurePartitionExists(businessId) {
   try {
+    // Ensure the business actually exists
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('id')
@@ -123,7 +124,10 @@ async function ensurePartitionExists(businessId) {
       return;
     }
 
+    // Partition naming for 'instagram_users' table
     const partitionName = `instagram_users_${businessId}`;
+
+    // 1) Check if partition exists
     const { data: partitionCheck, error: partitionCheckError } = await supabase.rpc('check_partition_exists', {
       partition_name: partitionName,
     });
@@ -133,6 +137,7 @@ async function ensurePartitionExists(businessId) {
       throw new Error(partitionCheckError.message);
     }
 
+    // 2) If not exists, create it
     if (!partitionCheck || !partitionCheck[0]?.exists) {
       console.log(`[INFO] Partition ${partitionName} does not exist. Creating it.`);
       const { error: creationError } = await supabase.rpc('create_partition', { business_id: businessId });
@@ -144,12 +149,18 @@ async function ensurePartitionExists(businessId) {
     } else {
       console.log(`[INFO] Partition ${partitionName} already exists.`);
     }
+
+    // If you also need a partition for "instagram_conversations", you can replicate
+    // the same approach here (e.g., "instagram_conversations_<businessId>").
+    // Or if your "create_partition" function already creates both, then you're good.
   } catch (err) {
     console.error('[ERROR] Failed to ensure partition exists:', err.message);
   }
 }
 
-// Helper Function to Fetch User Info from Instagram
+/**
+ * Fetch Instagram user info (username, etc.) from the Graph API.
+ */
 async function fetchInstagramUserInfo(senderId) {
   try {
     const response = await fetch(
@@ -158,7 +169,8 @@ async function fetchInstagramUserInfo(senderId) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to fetch user info: ${errorText}`);
+      console.error(`[ERROR] Failed to fetch user info for senderId ${senderId}:`, errorText);
+      return null;
     }
 
     const userInfo = await response.json();
@@ -170,6 +182,9 @@ async function fetchInstagramUserInfo(senderId) {
   }
 }
 
+/**
+ * Update known user fields in 'instagram_users' (name, phone, email, location).
+ */
 async function updateInstagramUserInfo(senderId, businessId, field, value) {
   try {
     const validFields = ['name', 'phone', 'email', 'location'];
@@ -193,11 +208,9 @@ async function updateInstagramUserInfo(senderId, businessId, field, value) {
   }
 }
 
-
-
-
-
-// Helper Function to Parse User Messages
+/**
+ * Simple text parsing to see if user includes name, phone, email, or location.
+ */
 function parseUserMessage(message) {
   const namePattern = /my name is (\w+ \w+)/i;
   const phonePattern = /(?:phone|contact) (?:number|is) (\+?\d{1,2}\s?)?\(?(\d{3})\)?\s?(\d{3})[\s.-]?(\d{4})/i;
@@ -224,62 +237,64 @@ function parseUserMessage(message) {
   return { field, value };
 }
 
-
-
-
-// Add or Update the User in the instagram_users Table
+/**
+ * Upsert the user into 'instagram_users' table.
+ */
 async function upsertInstagramUser(senderId, businessId) {
-    try {
-        // Fetch the business's Instagram ID from the database
-        const businessIgId = await fetchBusinessInstagramId(businessId);
-
-        if (!businessIgId) {
-            console.error(`[ERROR] Could not fetch ig_id for businessId=${businessId}. Cannot determine user role.`);
-            return; // Or throw an error if you want to halt execution
-        }
-
-        // Check if the senderId is the business's Instagram ID
-        const role = senderId === businessIgId ? 'business' : 'customer';
-
-        // Fetch user info from Instagram Graph API
-        const userInfo = await fetchInstagramUserInfo(senderId);
-
-        const userData = {
-            id: senderId,
-            business_id: businessId,
-            username: userInfo?.username || null,
-            role,
-            created_at: new Date(),
-            updated_at: new Date(),
-        };
-
-        const { data, error } = await supabase
-            .from('instagram_users')
-            .upsert(userData, { onConflict: ['id', 'business_id'] }); // Ensure no duplicate users for the same business
-
-        if (error) {
-            console.error('[ERROR] Failed to upsert Instagram user:', error.message);
-            throw new Error(error.message);
-        }
-
-        console.log(`[INFO] Instagram user ${senderId} added or updated successfully.`);
-    } catch (err) {
-        console.error('[ERROR] Failed to upsert Instagram user:', err.message);
+  try {
+    // 1) Fetch the business's Instagram ID
+    const businessIgId = await fetchBusinessInstagramId(businessId);
+    if (!businessIgId) {
+      console.error(`[ERROR] Could not fetch ig_id for businessId=${businessId}. Cannot determine user role.`);
+      return;
     }
+
+    // 2) Determine user role: 'business' or 'customer'
+    const role = senderId === businessIgId ? 'business' : 'customer';
+
+    // 3) Fetch user info from Instagram Graph API
+    const userInfo = await fetchInstagramUserInfo(senderId);
+    if (!userInfo) {
+      console.warn('[WARN] Skipping user upsert as userInfo could not be fetched.');
+      return;
+    }
+
+    // 4) Prepare data for upsert
+    const userData = {
+      id: senderId,
+      business_id: businessId,
+      username: userInfo.username || null,
+      role,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+
+    // 5) Upsert
+    const { error } = await supabase
+      .from('instagram_users')
+      .upsert(userData, { onConflict: ['id', 'business_id'] });
+
+    if (error) {
+      console.error('[ERROR] Failed to upsert Instagram user:', error.message);
+      throw new Error(error.message);
+    }
+
+    console.log(`[INFO] Instagram user ${senderId} added or updated successfully.`);
+  } catch (err) {
+    console.error('[ERROR] Failed to upsert Instagram user:', err.message);
+  }
 }
 
-
-
-
-
-
-// Helper Function to Send Instagram Messages
+/**
+ * Send a plain-text message to an Instagram user.
+ */
 async function sendInstagramMessage(recipientId, message) {
   try {
     if (!message || typeof message !== 'string') {
       throw new Error('Invalid message content.');
     }
     console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
+
     const response = await fetch(
       `https://graph.facebook.com/v14.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
       {
@@ -304,10 +319,9 @@ async function sendInstagramMessage(recipientId, message) {
   }
 }
 
-
-
-
-// Helper Function to Handle Unsent Messages
+/**
+ * Handle an "unsent" (deleted) message, removing it from 'instagram_conversations'.
+ */
 async function handleUnsentMessage(mid, businessId) {
   try {
     console.log(`[DEBUG] Attempting to delete message with ID: ${mid} for business ID: ${businessId}`);
@@ -326,28 +340,30 @@ async function handleUnsentMessage(mid, businessId) {
   }
 }
 
-
-// Helper Function to Log Message
+/**
+ * Log a received or sent message to the 'instagram_conversations' table.
+ */
 async function logMessage(businessId, senderId, recipientId, message, type, mid, isBusinessMessage, igIdFromDB, senderName) {
   try {
-
     const validMessageId = typeof mid === 'string' ? mid : null;
-    
+
     const { error } = await supabase
       .from('instagram_conversations')
-      .insert([{
-        business_id: businessId,
-        sender_id: senderId,
-        recipient_id: recipientId,
-        message,
-        message_type: type,
-        message_id: validMessageId, // Unique message ID from Instagram
-        role: isBusinessMessage ? 'business' : 'customer',
-        ig_id: igIdFromDB,
-        sender_name: senderName,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }]);
+      .insert([
+        {
+          business_id: businessId,
+          sender_id: senderId,
+          recipient_id: recipientId,
+          message,
+          message_type: type,
+          message_id: validMessageId,
+          role: isBusinessMessage ? 'business' : 'customer',
+          ig_id: igIdFromDB,
+          sender_name: senderName,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
 
     if (error) {
       console.error('[ERROR] Failed to log message:', error.message);
@@ -359,7 +375,9 @@ async function logMessage(businessId, senderId, recipientId, message, type, mid,
   }
 }
 
-
+/**
+ * Core function that processes each messaging event from the Instagram webhook.
+ */
 async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(message, null, 2));
@@ -377,7 +395,8 @@ async function processMessagingEvent(message) {
     const isEcho = message.message?.is_echo || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
-    
+
+    // Determine which IG ID belongs to the business:
     const businessInstagramId = isEcho ? senderId : recipientId;
     const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
 
@@ -387,98 +406,129 @@ async function processMessagingEvent(message) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
-    if (isDeleted) {
-  console.log('[INFO] Handling deleted message event.');
-  if (!messageId) {
-    console.error('[WARN] Deleted message has no valid message ID.');
-    return;
-  }
-  console.log(`[DEBUG] Deleting message with ID: ${messageId}`);
-  await handleUnsentMessage(messageId, businessId);
-  console.log('[INFO] Deleted message handled.');
-  return; // Prevent further processing
-}
+    // Ensure partitions exist before any DB operations:
+    console.log(`[DEBUG] Ensuring partitions for business ID: ${businessId}`);
+    await ensurePartitionExists(businessId);
+    console.log('[DEBUG] Partitions verified or created.');
 
+    // If the message is deleted (i.e., "unsent"), remove it from DB:
+    if (isDeleted) {
+      console.log('[INFO] Handling deleted message event.');
+      if (!messageId) {
+        console.error('[WARN] Deleted message has no valid message ID.');
+        return;
+      }
+      console.log(`[DEBUG] Deleting message with ID: ${messageId}`);
+      await handleUnsentMessage(messageId, businessId);
+      console.log('[INFO] Deleted message handled.');
+      return;
+    }
+
+    // If the message is an echo (like your own page sending a message), skip:
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
       return;
     }
 
-     if (!userMessage.trim()) { // Check for empty or whitespace-only messages
+    // If the userMessage is empty or just whitespace, skip responding:
+    if (!userMessage.trim()) {
       console.log('[INFO] Skipping response for empty or missing message.');
-      return; // Prevent AI from responding
+      return;
     }
 
+    // Fetch the IG ID from DB for logging
     const igIdFromDB = await fetchBusinessInstagramId(businessId);
     if (!igIdFromDB) {
       console.error('[ERROR] Could not fetch ig_id for businessId:', businessId);
       return;
     }
 
+    // Identify role: 'business' vs. 'customer'
     const isBusinessMessage = senderId === igIdFromDB;
     const role = isBusinessMessage ? 'business' : 'customer';
     console.log(`[INFO] Identified role: ${role}`);
 
+    // Upsert the user in the instagram_users table
     const userInfo = await fetchInstagramUserInfo(senderId);
     await upsertInstagramUser(senderId, businessId);
 
-    await logMessage(businessId, senderId, recipientId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
+    // Log the incoming message as 'received'
+    await logMessage(
+      businessId,
+      senderId,
+      recipientId,
+      userMessage,
+      'received',
+      messageId,
+      isBusinessMessage,
+      igIdFromDB,
+      userInfo?.username || ''
+    );
 
+    // Check if the message includes contact info and update if found
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
-
-if (!userMessage || isDeleted) {
-  console.log('[INFO] Skipping assistant response for empty or deleted message.');
-  return;
-}
+    // Skip AI response if message is empty or was deleted
+    if (!userMessage || isDeleted) {
+      console.log('[INFO] Skipping assistant response for empty or deleted message.');
+      return;
+    }
 
     if (!businessId) {
-  console.error('[ERROR] Could not resolve businessId. Skipping processing for message:', messageId);
-  return; // Prevent further processing
-}
+      console.error('[ERROR] Could not resolve businessId. Skipping processing for message:', messageId);
+      return;
+    }
 
-     console.log('[DEBUG] Generating AI response...');
+    // Generate AI response
+    console.log('[DEBUG] Generating AI response...');
     const assistantResponse = await assistantHandler({ userMessage, businessId });
-   
+
+    // If the AI provided a response, send it back to the user and log it
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
       await sendInstagramMessage(senderId, assistantResponse.message);
-      await logMessage(businessId, senderId, recipientId, assistantResponse.message, 'sent', null, true, igIdFromDB, 'Business');
+      await logMessage(
+        businessId,
+        senderId,
+        recipientId,
+        assistantResponse.message,
+        'sent',
+        null,
+        true,
+        igIdFromDB,
+        'Business'
+      );
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
 
-
-
-
-
+/**
+ * Route to fetch all conversations for a given business.
+ */
 router.get('/fetch-conversations', async (req, res) => {
   try {
     const { business_id } = req.query;
-
     if (!business_id) {
       return res.status(400).json({ error: 'business_id is required.' });
     }
 
-    // Fetch conversations from the database
+    // Fetch the existing conversation entries
     const { data: conversations, error: conversationsError } = await supabase
       .from('instagram_conversations')
-      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, role') // Include the role
-      .eq('business_id', business_id) // Fetch messages only for the specified business
-      
-  
-    
+      .select('id, sender_id, recipient_id, message, message_type, created_at, sender_name, role')
+      .eq('business_id', business_id);
+
     if (conversationsError) {
       console.error('[ERROR] Failed to fetch conversations:', conversationsError.message);
       return res.status(500).json({ error: 'Failed to fetch conversations.' });
     }
 
-    // Fetch the business Instagram ID for comparison
+    // Fetch the business's ig_id
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('ig_id')
@@ -491,13 +541,12 @@ router.get('/fetch-conversations', async (req, res) => {
     }
 
     const businessIgId = business.ig_id;
-
     console.log(`[DEBUG] Fetched business Instagram ID: ${businessIgId}`);
 
-    // Enrich conversations dynamically using businessIgId
+    // "Enrich" each conversation row with the correct role if missing
     const enrichedConversations = conversations.map((msg) => ({
       ...msg,
-      role: msg.role || (msg.sender_id === businessIgId ? 'business' : 'customer'), // Prefer database role, fallback to dynamic
+      role: msg.role || (msg.sender_id === businessIgId ? 'business' : 'customer'),
     }));
 
     console.log(`[INFO] Successfully enriched ${enrichedConversations.length} conversations.`);
@@ -508,15 +557,13 @@ router.get('/fetch-conversations', async (req, res) => {
   }
 });
 
-
-
-
-// Webhook Route
+/**
+ * Main webhook POST route for processing Instagram messages and other events.
+ */
 router.post('/', async (req, res) => {
   try {
     const payload = req.body;
 
-    // Log the incoming payload
     console.log('[DEBUG] Incoming webhook payload:', JSON.stringify(payload, null, 2));
 
     if (!payload || !payload.entry) {
@@ -526,26 +573,24 @@ router.post('/', async (req, res) => {
 
     const { object, entry } = payload;
 
-    // Handle permissions-related changes
+    // Handle permissions changes
     if (object === 'permissions') {
       console.log('[INFO] Handling permissions change:', entry);
       return res.status(200).send('Permissions handled');
     }
 
-    // Handle Instagram messaging-related payloads
+    // Handle Instagram messaging
     if (object === 'instagram') {
       console.log('[INFO] Handling Instagram messaging event:', entry);
-
       for (const event of entry) {
         if (event.messaging) {
           for (const messageEvent of event.messaging) {
-            await processMessagingEvent(messageEvent); // Your helper function
+            await processMessagingEvent(messageEvent);
           }
         } else {
           console.warn('[WARN] Unsupported Instagram event type:', event);
         }
       }
-
       return res.status(200).send('Instagram messaging handled');
     }
 
@@ -558,7 +603,9 @@ router.post('/', async (req, res) => {
   }
 });
 
-
+/**
+ * Webhook verification endpoint (GET).
+ */
 router.get('/', (req, res) => {
   const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 
@@ -570,9 +617,5 @@ router.get('/', (req, res) => {
     res.status(403).send('Verification failed');
   }
 });
-
-
-
-
 
 export default router;
