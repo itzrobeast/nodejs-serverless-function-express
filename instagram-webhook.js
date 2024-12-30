@@ -13,7 +13,7 @@ const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 
-if (!VERIFY_TOKEN || !PAGE_ACCESS_TOKEN || !FACEBOOK_APP_SECRET) {
+if (!VERIFY_TOKEN || !FACEBOOK_APP_SECRET) {
   console.error('[ERROR] Missing required environment variables.');
   process.exit(1);
 }
