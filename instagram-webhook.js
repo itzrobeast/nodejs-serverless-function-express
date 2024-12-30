@@ -164,19 +164,18 @@ async function ensurePartitionExists(businessId) {
 async function fetchInstagramUserInfo(senderId) {
   try {
     console.log('[DEBUG] Fetching Instagram User Info for:', senderId);
-    console.log('[DEBUG] Using PAGE_ACCESS_TOKEN:', PAGE_ACCESS_TOKEN);
-
     const url = `https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${PAGE_ACCESS_TOKEN}`;
     console.log('[DEBUG] Request URL:', url);
-
     const response = await fetch(url);
     const data = await response.json();
 
     if (!response.ok) {
       console.error('[ERROR] Instagram API Error:', data);
-      throw new Error(data.error.message);
+      if (data.error.code === 803) {
+        console.warn('[WARN] IGSID not found for senderId:', senderId);
+      }
+      return null;
     }
-
     console.log('[DEBUG] Instagram User Info:', data);
     return data;
   } catch (err) {
@@ -184,6 +183,7 @@ async function fetchInstagramUserInfo(senderId) {
     return null;
   }
 }
+
 
 
 
