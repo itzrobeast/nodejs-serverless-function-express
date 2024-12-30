@@ -92,6 +92,23 @@ router.post('/', loginLimiter, async (req, res) => {
     for (const page of pagesData.data) {
       const { id: pageId, access_token: pageAccessToken, name: pageName } = page;
 
+      // Fetch Instagram Business Account ID
+  const igId = await fetchInstagramId(pageId, pageAccessToken);
+  if (igId) {
+    console.log(`[INFO] Instagram Business Account ID for Page ${pageId}:`, igId);
+
+    // Upsert Business with Instagram Business Account ID
+    await supabase
+      .from('businesses')
+      .upsert({
+        name: `${pageName} Business`, // Use the page name or other meaningful data
+        page_id: pageId,
+        ig_id: igId,
+        contact_email: email, // Use the user's email for the business
+      });
+  }
+
+
       // Step 3: Upsert Page in Supabase
       await supabase
         .from('pages')
