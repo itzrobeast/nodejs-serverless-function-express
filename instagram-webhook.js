@@ -63,7 +63,7 @@ const messageSchema = Joi.object({
 });
 
 /**
- * Fetch business Instagram details (ig_id and page_id)
+ * Fetch business details (ig_id and page_id) for a given businessId.
  */
 async function fetchBusinessDetails(businessId) {
   try {
@@ -117,7 +117,7 @@ async function getPageAccessToken(businessId, pageId) {
       return null;
     }
 
-    console.log(`[INFO] Page Access Token for businessId=${businessId}, pageId=${pageId}:`, data.page_access_token);
+    console.log(`[INFO] Page Access Token for businessId=${businessId}, pageId=${pageId}: ${data.page_access_token}`);
     return data.page_access_token;
   } catch (err) {
     console.error('[ERROR] Exception while fetching page access token:', err.message);
@@ -299,11 +299,8 @@ async function upsertInstagramUser(senderId, businessId) {
     const role = senderId === businessIgId ? 'business' : 'customer';
 
     // 3) Fetch user info from Instagram Graph API
-    // Note: pageId and pageAccessToken should already be fetched in processMessagingEvent
-    // This function now assumes it receives all necessary data
-    // Therefore, adjust the function signature if needed
-    // For simplicity, this example skips re-fetching userInfo
-    // As it's already fetched in processMessagingEvent
+    // Note: userInfo is already fetched in processMessagingEvent
+    // Here, we assume username is passed or fetched elsewhere
 
     // 4) Prepare data for upsert
     const userData = {
@@ -452,6 +449,7 @@ async function processMessagingEvent(message) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
+    // Fetch business details including ig_id and page_id
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
       console.error('[ERROR] Could not fetch business details.');
@@ -511,7 +509,12 @@ async function processMessagingEvent(message) {
     // Ensure the user exists in the database
     await upsertInstagramUser(senderId, businessId);
 
-    // Log the message in the database
+    // Determine user role: 'business' or 'customer'
+    const isBusinessMessage = senderId === businessIgId; // Defined here
+    const role = isBusinessMessage ? 'business' : 'customer';
+    console.log(`[INFO] Identified role: ${role}`);
+
+    // Log the received message in the database
     await logMessage(
       businessId,
       senderId,
@@ -524,11 +527,13 @@ async function processMessagingEvent(message) {
       userInfo?.username || ''
     );
 
+    // Parse user message for specific fields
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
+    // Generate AI response
     console.log('[DEBUG] Generating AI response...');
     const assistantResponse = await assistantHandler({ userMessage, businessId });
 
@@ -542,7 +547,7 @@ async function processMessagingEvent(message) {
         assistantResponse.message,
         'sent',
         null,
-        true,
+        true, // isBusinessMessage is true since it's sent by the business
         igIdFromDB,
         'Business'
       );
@@ -630,6 +635,13 @@ router.post('/', async (req, res) => {
       for (const event of entry) {
         if (event.messaging) {
           for (const messageEvent of event.messaging) {
+            // Validate message structure
+            const { error } = messageSchema.validate(messageEvent);
+            if (error) {
+              console.error('[ERROR] Invalid message format:', error.details[0].message);
+              continue; // Skip invalid messages
+            }
+
             await processMessagingEvent(messageEvent);
           }
         } else {
