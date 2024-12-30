@@ -10,7 +10,7 @@ const router = express.Router();
 
 // Environment Variables
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 
 if (!VERIFY_TOKEN || !PAGE_ACCESS_TOKEN || !FACEBOOK_APP_SECRET) {
