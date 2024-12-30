@@ -3,6 +3,7 @@ import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
 import Joi from 'joi';
 import rateLimit from 'express-rate-limit';
+import { fetchInstagramIdFromFacebook } from '../helpers.js';
 
 const router = express.Router();
 
@@ -92,7 +93,7 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Using First Page:', firstPage);
 
     // Step 3: Fetch Instagram Business ID for the Page
-    const igId = await fetchInstagramId(firstPage.id, firstPage.access_token);
+    const igId = await fetchInstagramIdFromFacebook(firstPage.id, firstPage.access_token);
 if (!igId) {
   console.warn('[WARN] Instagram Business ID not found for the page. Skipping Instagram linkage.');
 } else {
