@@ -89,38 +89,51 @@ router.post('/', loginLimiter, async (req, res) => {
     if (!pagesResponse.ok) throw new Error('Failed to fetch Facebook Pages');
     const pagesData = await pagesResponse.json();
 
+    let user, business;
+
     for (const page of pagesData.data) {
       const { id: pageId, access_token: pageAccessToken, name: pageName } = page;
 
       // Fetch Instagram Business Account ID
-  const igId = await fetchInstagramId(pageId, pageAccessToken);
-  if (igId) {
-    console.log(`[INFO] Instagram Business Account ID for Page ${pageId}:`, igId);
+      const igId = await fetchInstagramId(pageId, pageAccessToken);
 
-    // Upsert Business with Instagram Business Account ID
-    await supabase
-      .from('businesses')
-      .upsert({
-        name: `${pageName} Business`, // Use the page name or other meaningful data
-        page_id: pageId,
-        ig_id: igId,
-        contact_email: email, // Use the user's email for the business
-      });
-  }
+      // Step 3: Upsert Business with Instagram Business Account ID
+      const { data: businessData, error: businessError } = await supabase
+        .from('businesses')
+        .upsert({
+          name: `${pageName} Business`, // Use the page name or other meaningful data
+          page_id: pageId,
+          ig_id: igId,
+          contact_email: email, // Use the user's email for the business
+        })
+        .select()
+        .single();
 
+      if (businessError) {
+        console.error('[ERROR] Failed to upsert business:', businessError.message);
+        throw new Error('Business upsert failed.');
+      }
 
-      // Step 3: Upsert Page in Supabase
+      business = businessData;
+
+      // Step 4: Upsert Page in Supabase
       await supabase
         .from('pages')
         .upsert({ page_id: pageId, name: pageName, access_token: pageAccessToken });
 
-      // Step 4: Fetch Instagram Business Account ID
-      const igBusinessAccountId = await fetchInstagramId(pageId, pageAccessToken);
-
       // Step 5: Upsert User
-      await supabase
+      const { data: userData, error: userError } = await supabase
         .from('users')
-        .upsert({ fb_id, name, email, ig_id: igBusinessAccountId }, { onConflict: 'fb_id' });
+        .upsert({ fb_id, name, email, ig_id: igId }, { onConflict: 'fb_id' })
+        .select()
+        .single();
+
+      if (userError) {
+        console.error('[ERROR] Failed to upsert user:', userError.message);
+        throw new Error('User upsert failed.');
+      }
+
+      user = userData;
 
       // Step 6: Subscribe Page to Webhook
       const subscriptionSuccess = await subscribePageToWebhook(pageId, pageAccessToken);
@@ -129,48 +142,42 @@ router.post('/', loginLimiter, async (req, res) => {
       }
     }
 
+    // Ensure user and business are defined
+    if (!user || !business) {
+      console.error('[ERROR] Missing user or business data after processing.');
+      return res.status(500).json({ error: 'Login failed. Incomplete data.' });
+    }
 
-// Set Cookies
-if (user?.id && business?.id) {
-  console.log('[DEBUG] Setting cookies with userId and businessId');
-  
-  // Set authToken cookie
-  res.cookie('authToken', accessToken, { 
-    httpOnly: true, 
-    secure: true, 
-    sameSite: 'None', 
-    maxAge: 3600000 
-  });
+    // Step 7: Set Cookies and Respond
+    console.log('[DEBUG] Setting cookies with userId and businessId');
+    res.cookie('authToken', accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      maxAge: 3600000,
+    });
+    res.cookie('userId', user.id.toString(), {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      maxAge: 3600000,
+    });
+    res.cookie('businessId', business.id.toString(), {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      maxAge: 3600000,
+    });
 
-  // Set userId cookie
-  res.cookie('userId', user.id.toString(), { 
-    httpOnly: true, 
-    secure: true, 
-    sameSite: 'None', 
-    maxAge: 3600000 
-  });
-
-  // Set businessId cookie
-  res.cookie('businessId', business.id.toString(), { 
-    httpOnly: true, 
-    secure: true, 
-    sameSite: 'None', 
-    maxAge: 3600000 
-  });
-
-  // Respond with success
-  return res.status(200).json({ 
-    message: 'Login successful', 
-    userId: user.id, 
-    businessId: business.id 
-  });
-} else {
-  console.error('[ERROR] Missing userId or businessId during login process.');
-  return res.status(500).json({ 
-    error: 'Login failed. Missing user or business details.' 
-  });
-}
-
- 
+    return res.status(200).json({
+      message: 'Login successful',
+      userId: user.id,
+      businessId: business.id,
+    });
+  } catch (err) {
+    console.error('[ERROR]', err.message);
+    return res.status(500).json({ error: 'Login failed', details: err.message });
+  }
+});
 
 export default router;
