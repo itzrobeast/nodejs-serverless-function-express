@@ -88,17 +88,26 @@ async function fetchBusinessDetails(businessId) {
 /**
  * Fetch the ig_id for a given businessId from Supabase.
  */
-async function fetchBusinessInstagramId(businessId) {
+async function fetchInstagramId(pageId, pageAccessToken) {
   try {
-    const details = await fetchBusinessDetails(businessId);
-    if (!details) return null;
-    console.log(`[INFO] ig_id for businessId=${businessId}: ${details.ig_id}`);
-    return details.ig_id;
+    const response = await fetch(
+      `https://graph.facebook.com/v15.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
+    );
+    const data = await response.json();
+    console.log('[DEBUG] fetchInstagramId Response:', data);
+
+    if (response.ok && data.instagram_business_account) {
+      console.log(`[INFO] Instagram Business Account ID: ${data.instagram_business_account.id}`);
+      return data.instagram_business_account.id;
+    }
+    console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
+    return null;
   } catch (err) {
-    console.error('[ERROR] Exception while fetching ig_id:', err.message);
+    console.error('[ERROR] Failed to fetch Instagram Business Account ID:', err.message);
     return null;
   }
 }
+
 
 /**
  * Resolve a business ID by matching an incoming Instagram ID (object ID).
