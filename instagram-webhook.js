@@ -108,6 +108,28 @@ async function fetchInstagramId(pageId, pageAccessToken) {
   }
 }
 
+async function getPageAccessToken(businessId, pageId) {
+  try {
+    const { data, error } = await supabase
+      .from('page_access_tokens')
+      .select('page_access_token')
+      .eq('business_id', businessId)
+      .eq('page_id', pageId)
+      .single();
+
+    if (error || !data) {
+      console.error('[ERROR] Failed to fetch page access token:', error?.message || 'No data found');
+      return null;
+    }
+
+    console.log(`[INFO] Page Access Token for businessId=${businessId}, pageId=${pageId}: ${data.page_access_token}`);
+    return data.page_access_token;
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching page access token:', err.message);
+    return null;
+  }
+}
+
 
 /**
  * Resolve a business ID by matching an incoming Instagram ID (object ID).
