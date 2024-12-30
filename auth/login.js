@@ -18,8 +18,16 @@ const loginSchema = Joi.object({
   accessToken: Joi.string().required(),
 });
 
+
+// Fetch Instagram Business ID from Facebook (live call)
+const igIdFromFacebook = await fetchInstagramId(firstPage.id, firstPage.access_token);
+
+
+
+
+
 // Helper: Fetch Instagram Business ID
-async function fetchInstagramId(pageId, pageAccessToken) {
+async function fetchInstagramBusinessIdFromFacebook(pageId, pageAccessToken) {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v17.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
@@ -85,9 +93,11 @@ router.post('/', loginLimiter, async (req, res) => {
 
     // Step 3: Fetch Instagram Business ID for the Page
     const igId = await fetchInstagramId(firstPage.id, firstPage.access_token);
-    if (!igId) {
-      console.warn('[WARN] Instagram Business ID not found. Continuing without Instagram data.');
-    }
+if (!igId) {
+  console.warn('[WARN] Instagram Business ID not found for the page. Skipping Instagram linkage.');
+} else {
+  console.log(`[DEBUG] Fetched Instagram Business ID: ${igId}`);
+}
 
     // Step 4: Upsert User
     const { data: user, error: userError } = await supabase
