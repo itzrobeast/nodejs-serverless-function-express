@@ -26,6 +26,9 @@ const webhookLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
 });
 
+
+const igIdFromDatabase = await fetchBusinessInstagramId(businessId);
+
 // Signature Verification Middleware
 function verifyFacebookSignature(req, res, buf) {
   const signature = req.headers['x-hub-signature-256'];
@@ -88,7 +91,7 @@ async function fetchBusinessDetails(businessId) {
 /**
  * Fetch the ig_id for a given businessId from Supabase.
  */
-async function fetchInstagramId(pageId, pageAccessToken) {
+async function fetchInstagramBusinessIdFromDatabase(businessId) {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v15.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
