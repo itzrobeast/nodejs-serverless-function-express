@@ -28,7 +28,16 @@ const webhookLimiter = rateLimit({
 });
 
 
-const igIdFromDatabase = await fetchInstagramBusinessIdFromDatabase(businessId, supabase);
+async function getBusinessDetails(businessId) {
+  const igId = await fetchInstagramBusinessIdFromDatabase(businessId, supabase);
+  if (!igId) {
+    console.error(`[ERROR] Failed to fetch Instagram ID for business ID ${businessId}`);
+    return null;
+  }
+  console.log(`[DEBUG] Fetched IG ID for business ID ${businessId}: ${igId}`);
+  return igId;
+}
+
 
 
 // Signature Verification Middleware
