@@ -510,9 +510,9 @@ router.get('/fetch-conversations', async (req, res) => {
 
 
 
+
 // Webhook Route
-// Webhook Route
-router.post('/instagram-webhook', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const payload = req.body;
 
