@@ -510,38 +510,40 @@ router.get('/fetch-conversations', async (req, res) => {
 
 
 
-// Webhook Event Handler (POST)
-router.post(
-  '/',
-  webhookLimiter,
-  express.json({ verify: verifyFacebookSignature }),
-  async (req, res) => {
-    try {
-      console.log('[DEBUG] Incoming webhook payload:', JSON.stringify(req.body, null, 2));
-      const body = req.body;
-      if (body.object !== 'instagram') {
-        throw new Error('Invalid webhook payload.');
-      }
+// Webhook Route
+router.post('/instagram-webhook', (req, res) => {
+  try {
+    const payload = req.body;
 
-      for (const entry of body.entry) {
-        if (Array.isArray(entry.messaging)) {
-          for (const message of entry.messaging) {
-            const { error } = messageSchema.validate(message);
-            if (!error) {
-              await processMessagingEvent(message);
-            } else {
-              console.error('[ERROR] Invalid message format:', error.details);
-            }
-          }
-        }
-      }
+    // Log the incoming payload
+    console.log('[DEBUG] Incoming webhook payload:', payload);
 
-      res.status(200).send('EVENT_RECEIVED');
-    } catch (error) {
-      console.error('[ERROR] Failed to process webhook:', error.message);
-      res.status(500).send('Internal Server Error');
+    if (!payload || !payload.entry) {
+      throw new Error('Invalid webhook payload: Missing entry data');
     }
+
+    // Process payload based on object type
+    const { object, entry } = payload;
+
+    if (object === 'permissions') {
+      console.log('[INFO] Handling permissions change:', entry);
+      // Handle permissions-related payloads
+      return res.status(200).send('Permissions handled');
+    }
+
+    if (object === 'instagram') {
+      console.log('[INFO] Handling Instagram messaging event:', entry);
+      // Handle Instagram messaging-related payloads
+      return res.status(200).send('Instagram messaging handled');
+    }
+
+    console.warn('[WARN] Unhandled webhook object type:', object);
+    return res.status(200).send('Unhandled object type');
+  } catch (error) {
+    console.error('[ERROR] Failed to process webhook:', error.message);
+    return res.status(500).send('Webhook processing failed');
   }
-);
+});
+
 
 export default router;
