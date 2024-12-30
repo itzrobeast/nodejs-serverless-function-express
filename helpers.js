@@ -1,5 +1,3 @@
-// helpers.js
-
 import fetch from 'node-fetch';
 
 /**
