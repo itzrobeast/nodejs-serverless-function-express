@@ -133,13 +133,42 @@ router.post('/', loginLimiter, async (req, res) => {
 // Set Cookies
 if (user?.id && business?.id) {
   console.log('[DEBUG] Setting cookies with userId and businessId');
-  res.cookie('authToken', accessToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
-  res.cookie('userId', user.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
-  res.cookie('businessId', business.id.toString(), { httpOnly: true, secure: true, sameSite: 'None', maxAge: 3600000 });
-  return res.status(200).json({ message: 'Login successful', userId: user.id, businessId: business.id });
+  
+  // Set authToken cookie
+  res.cookie('authToken', accessToken, { 
+    httpOnly: true, 
+    secure: true, 
+    sameSite: 'None', 
+    maxAge: 3600000 
+  });
+
+  // Set userId cookie
+  res.cookie('userId', user.id.toString(), { 
+    httpOnly: true, 
+    secure: true, 
+    sameSite: 'None', 
+    maxAge: 3600000 
+  });
+
+  // Set businessId cookie
+  res.cookie('businessId', business.id.toString(), { 
+    httpOnly: true, 
+    secure: true, 
+    sameSite: 'None', 
+    maxAge: 3600000 
+  });
+
+  // Respond with success
+  return res.status(200).json({ 
+    message: 'Login successful', 
+    userId: user.id, 
+    businessId: business.id 
+  });
 } else {
   console.error('[ERROR] Missing userId or businessId during login process.');
-  return res.status(500).json({ error: 'Login failed. Missing user or business details.' });
+  return res.status(500).json({ 
+    error: 'Login failed. Missing user or business details.' 
+  });
 }
 
  
