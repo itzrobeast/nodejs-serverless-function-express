@@ -82,6 +82,35 @@ async function fetchBusinessInstagramId(businessId) {
   }
 }
 
+
+/**
+ * Retrieve the page access token for the specified business and page.
+ */
+async function getPageAccessToken(businessId, pageId) {
+  try {
+    const { data, error } = await supabase
+      .from('page_access_tokens')
+      .select('page_access_token')
+      .eq('business_id', businessId)
+      .eq('page_id', pageId)
+      .single();
+
+    if (error || !data) {
+      console.error('[ERROR] Failed to fetch page access token:', error?.message || 'No data found');
+      return null;
+    }
+
+    console.log(`[INFO] Page Access Token for businessId=${businessId}, pageId=${pageId}:`, data.page_access_token);
+    return data.page_access_token;
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching page access token:', err.message);
+    return null;
+  }
+}
+
+
+
+
 /**
  * Resolve a business ID by matching an incoming Instagram ID (object ID).
  */
@@ -161,11 +190,20 @@ async function ensurePartitionExists(businessId) {
 /**
  * Fetch Instagram user info (username, etc.) from the Graph API.
  */
-async function fetchInstagramUserInfo(senderId) {
+async function fetchInstagramUserInfo(senderId, businessId, pageId) {
   try {
     console.log('[DEBUG] Fetching Instagram User Info for:', senderId);
-    const url = `https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${PAGE_ACCESS_TOKEN}`;
+
+    // Fetch dynamic page access token
+    const pageAccessToken = await getPageAccessToken(businessId, pageId);
+    if (!pageAccessToken) {
+      console.error('[ERROR] Page access token not found or invalid for business ID:', businessId);
+      return null;
+    }
+
+    const url = `https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${pageAccessToken}`;
     console.log('[DEBUG] Request URL:', url);
+
     const response = await fetch(url);
     const data = await response.json();
 
@@ -176,6 +214,7 @@ async function fetchInstagramUserInfo(senderId) {
       }
       return null;
     }
+
     console.log('[DEBUG] Instagram User Info:', data);
     return data;
   } catch (err) {
@@ -415,7 +454,23 @@ async function processMessagingEvent(message) {
     console.log(`[INFO] Identified role: ${role}`);
 
 
+// Fetch Instagram user info dynamically
+    const userInfo = await fetchInstagramUserInfo(senderId, businessId, recipientId);
+    if (!userInfo) {
+      console.warn('[WARN] Skipping user processing as userInfo could not be fetched.');
+      return;
+    }
 
+    // Process the rest of the messaging event...
+  } catch (err) {
+    console.error('[ERROR] Failed to process messaging event:', err.message);
+  }
+}
+
+
+
+
+    
     
     // Ensure necessary database partitions exist
     console.log(`[DEBUG] Ensuring partitions for business ID: ${businessId}`);
