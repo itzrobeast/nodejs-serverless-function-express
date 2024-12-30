@@ -15,7 +15,7 @@ const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 
 if (!VERIFY_TOKEN || !FACEBOOK_APP_SECRET) {
   console.error('[ERROR] Missing required environment variables.');
-  process.exit(1);
+  throw new Error('Environment variables missing. Cannot start server.');
 }
 
 // Rate Limiting Middleware
