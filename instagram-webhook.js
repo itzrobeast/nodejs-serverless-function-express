@@ -448,10 +448,15 @@ async function processMessagingEvent(message) {
     const role = isBusinessMessage ? 'business' : 'customer';
     console.log(`[INFO] Identified role: ${role}`);
 
-    // Upsert the user in the instagram_users table
-    const userInfo = await fetchInstagramUserInfo(senderId);
-    await upsertInstagramUser(senderId, businessId);
+   const userInfo = await fetchInstagramUserInfo(senderId);
+if (!userInfo) {
+  console.warn(`[WARN] Skipping user upsert as userInfo could not be fetched for senderId=${senderId}`);
+  return; // Skip further processing to avoid database constraint errors
+}
+await upsertInstagramUser(senderId, businessId); // Ensure user exists before logging messages
 
+
+    
     // Log the incoming message as 'received'
     await logMessage(
       businessId,
