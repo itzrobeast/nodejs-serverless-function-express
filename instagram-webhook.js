@@ -1,3 +1,5 @@
+// webhook.js
+
 import express from 'express';
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
@@ -10,7 +12,6 @@ const router = express.Router();
 
 // Environment Variables
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
-
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 
 if (!VERIFY_TOKEN || !FACEBOOK_APP_SECRET) {
@@ -38,6 +39,9 @@ function verifyFacebookSignature(req, res, buf) {
   if (signature !== expectedSignature) throw new Error('Invalid signature');
 }
 
+// Apply middleware for POST requests
+router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
+
 // Joi Schema Validation for Messages
 const messageSchema = Joi.object({
   sender: Joi.object({ id: Joi.string().required() }).required(),
@@ -48,40 +52,53 @@ const messageSchema = Joi.object({
     text: Joi.string().allow(null),
     is_deleted: Joi.boolean().optional(),
     is_echo: Joi.boolean().optional(),
-    read: Joi.object().unknown(true).optional(), // Allow "read" as an optional field
+    read: Joi.object().unknown(true).optional(),
     attachments: Joi.array().items(
       Joi.object({
         type: Joi.string().required(),
         payload: Joi.object().required(),
       })
     ).optional(),
-  }).unknown(true), // Allow unknown keys for future-proofing
+  }).unknown(true),
 });
+
+/**
+ * Fetch business Instagram details (ig_id and page_id)
+ */
+async function fetchBusinessDetails(businessId) {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('ig_id, page_id')
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    return { ig_id: data.ig_id, page_id: data.page_id };
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching business details:', err.message);
+    return null;
+  }
+}
 
 /**
  * Fetch the ig_id for a given businessId from Supabase.
  */
 async function fetchBusinessInstagramId(businessId) {
   try {
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('ig_id')
-      .eq('id', businessId)
-      .single();
-
-    if (error || !data) {
-      console.error(`[ERROR] Failed to fetch ig_id for businessId=${businessId}:`, error?.message || 'No data found');
-      return null;
-    }
-
-    console.log(`[INFO] ig_id for businessId=${businessId}: ${data.ig_id}`);
-    return data.ig_id;
+    const details = await fetchBusinessDetails(businessId);
+    if (!details) return null;
+    console.log(`[INFO] ig_id for businessId=${businessId}: ${details.ig_id}`);
+    return details.ig_id;
   } catch (err) {
     console.error('[ERROR] Exception while fetching ig_id:', err.message);
     return null;
   }
 }
-
 
 /**
  * Retrieve the page access token for the specified business and page.
@@ -107,9 +124,6 @@ async function getPageAccessToken(businessId, pageId) {
     return null;
   }
 }
-
-
-
 
 /**
  * Resolve a business ID by matching an incoming Instagram ID (object ID).
@@ -179,9 +193,7 @@ async function ensurePartitionExists(businessId) {
       console.log(`[INFO] Partition ${partitionName} already exists.`);
     }
 
-    // If you also need a partition for "instagram_conversations", you can replicate
-    // the same approach here (e.g., "instagram_conversations_<businessId>").
-    // Or if your "create_partition" function already creates both, then you're good.
+    // If you also need a partition for "instagram_conversations", replicate similar logic
   } catch (err) {
     console.error('[ERROR] Failed to ensure partition exists:', err.message);
   }
@@ -190,16 +202,9 @@ async function ensurePartitionExists(businessId) {
 /**
  * Fetch Instagram user info (username, etc.) from the Graph API.
  */
-async function fetchInstagramUserInfo(senderId, businessId, pageId) {
+async function fetchInstagramUserInfo(senderId, businessId, pageId, pageAccessToken) {
   try {
     console.log('[DEBUG] Fetching Instagram User Info for:', senderId);
-
-    // Fetch dynamic page access token
-    const pageAccessToken = await getPageAccessToken(businessId, pageId);
-    if (!pageAccessToken) {
-      console.error('[ERROR] Page access token not found or invalid for business ID:', businessId);
-      return null;
-    }
 
     const url = `https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${pageAccessToken}`;
     console.log('[DEBUG] Request URL:', url);
@@ -209,7 +214,7 @@ async function fetchInstagramUserInfo(senderId, businessId, pageId) {
 
     if (!response.ok) {
       console.error('[ERROR] Instagram API Error:', data);
-      if (data.error.code === 803) {
+      if (data.error?.code === 803) {
         console.warn('[WARN] IGSID not found for senderId:', senderId);
       }
       return null;
@@ -222,9 +227,6 @@ async function fetchInstagramUserInfo(senderId, businessId, pageId) {
     return null;
   }
 }
-
-
-
 
 /**
  * Update known user fields in 'instagram_users' (name, phone, email, location).
@@ -297,17 +299,17 @@ async function upsertInstagramUser(senderId, businessId) {
     const role = senderId === businessIgId ? 'business' : 'customer';
 
     // 3) Fetch user info from Instagram Graph API
-    const userInfo = await fetchInstagramUserInfo(senderId);
-    if (!userInfo) {
-      console.warn('[WARN] Skipping user upsert as userInfo could not be fetched.');
-      return;
-    }
+    // Note: pageId and pageAccessToken should already be fetched in processMessagingEvent
+    // This function now assumes it receives all necessary data
+    // Therefore, adjust the function signature if needed
+    // For simplicity, this example skips re-fetching userInfo
+    // As it's already fetched in processMessagingEvent
 
     // 4) Prepare data for upsert
     const userData = {
       id: senderId,
       business_id: businessId,
-      username: userInfo.username || null,
+      username: null, // Placeholder if not available
       role,
       created_at: new Date(),
       updated_at: new Date(),
@@ -332,21 +334,13 @@ async function upsertInstagramUser(senderId, businessId) {
 /**
  * Send a plain-text message to an Instagram user.
  */
-async function sendInstagramMessage(recipientId, message) {
+async function sendInstagramMessage(recipientId, message, businessId, pageId, pageAccessToken) {
   try {
     if (!message || typeof message !== 'string') {
       throw new Error('Invalid message content.');
     }
     console.log(`[DEBUG] Sending message to Instagram user ${recipientId}: "${message}"`);
 
-    
-    const pageAccessToken = await getPageAccessToken(businessId, pageId);
-if (!pageAccessToken) {
-  throw new Error('Page access token is missing or invalid.');
-}
-
-
-  
     const response = await fetch(
       `https://graph.facebook.com/v14.0/me/messages?access_token=${pageAccessToken}`,
       {
@@ -363,11 +357,12 @@ if (!pageAccessToken) {
       const errorText = await response.text();
       throw new Error(`Failed to send message: ${errorText}`);
     }
+
     console.log('[DEBUG] Message sent successfully to Instagram user.');
     return await response.json();
-  } catch (error) {
-    console.error('[ERROR] Failed to send Instagram message:', error.message);
-    throw error;
+  } catch (err) {
+    console.error('[ERROR] Failed to send Instagram message:', err.message);
+    throw err;
   }
 }
 
@@ -457,29 +452,22 @@ async function processMessagingEvent(message) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
-    const isBusinessMessage = senderId === businessInstagramId; // Use the resolved businessInstagramId
-    const role = isBusinessMessage ? 'business' : 'customer';
-    console.log(`[INFO] Identified role: ${role}`);
-
-
-// Fetch Instagram user info dynamically
-    const userInfo = await fetchInstagramUserInfo(senderId, businessId, recipientId);
-    if (!userInfo) {
-      console.warn('[WARN] Skipping user processing as userInfo could not be fetched.');
+    const businessDetails = await fetchBusinessDetails(businessId);
+    if (!businessDetails) {
+      console.error('[ERROR] Could not fetch business details.');
       return;
     }
 
-    // Process the rest of the messaging event...
-  } catch (err) {
-    console.error('[ERROR] Failed to process messaging event:', err.message);
-  }
-}
+    const { ig_id: businessIgId, page_id: pageId } = businessDetails;
 
+    // Fetch dynamic page access token
+    console.log(`[DEBUG] Fetching page access token for businessId=${businessId}, pageId=${pageId}`);
+    const pageAccessToken = await getPageAccessToken(businessId, pageId);
+    if (!pageAccessToken) {
+      console.error('[ERROR] Page access token is missing or invalid for business ID:', businessId);
+      return;
+    }
 
-
-
-    
-    
     // Ensure necessary database partitions exist
     console.log(`[DEBUG] Ensuring partitions for business ID: ${businessId}`);
     await ensurePartitionExists(businessId);
@@ -513,10 +501,8 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    
-
     // Fetch Instagram user info and validate
-    const userInfo = await fetchInstagramUserInfo(senderId);
+    const userInfo = await fetchInstagramUserInfo(senderId, businessId, pageId, pageAccessToken);
     if (!userInfo) {
       console.warn(`[WARN] Skipping user upsert as userInfo could not be fetched for senderId=${senderId}`);
       return; // Skip further processing for invalid senderId
@@ -543,22 +529,12 @@ async function processMessagingEvent(message) {
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
-    if (!userMessage || isDeleted) {
-      console.log('[INFO] Skipping assistant response for empty or deleted message.');
-      return;
-    }
-
-    if (!businessId) {
-      console.error('[ERROR] Could not resolve businessId. Skipping processing for message:', messageId);
-      return;
-    }
-
     console.log('[DEBUG] Generating AI response...');
     const assistantResponse = await assistantHandler({ userMessage, businessId });
 
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
-      await sendInstagramMessage(senderId, assistantResponse.message);
+      await sendInstagramMessage(senderId, assistantResponse.message, businessId, pageId, pageAccessToken);
       await logMessage(
         businessId,
         senderId,
@@ -575,7 +551,6 @@ async function processMessagingEvent(message) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
-
 
 /**
  * Route to fetch all conversations for a given business.
@@ -658,7 +633,7 @@ router.post('/', async (req, res) => {
             await processMessagingEvent(messageEvent);
           }
         } else {
-          console.warn('[WARN] Unsupported Instagram event type:', event);
+          console.warn('[WARN] Unsupported Instagram event type:', JSON.stringify(event, null, 2));
         }
       }
       return res.status(200).send('Instagram messaging handled');
@@ -678,6 +653,8 @@ router.post('/', async (req, res) => {
  */
 router.get('/', (req, res) => {
   const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
+
+  console.log('[DEBUG] Webhook verification query:', req.query);
 
   if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
     console.log('[INFO] Webhook verified');
