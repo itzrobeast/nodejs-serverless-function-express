@@ -141,6 +141,8 @@ async function resolveBusinessIdByInstagramId(instagramId) {
       return null;
     }
 
+    const businessInstagramId = business.ig_id;
+
     console.log(`[DEBUG] Resolved business ID: ${business.id} for Instagram ID: ${business.ig_id}`);
     return business.id;
   } catch (err) {
