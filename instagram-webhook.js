@@ -101,6 +101,11 @@ async function fetchBusinessInstagramId(businessId) {
 }
 
 const businessInstagramId = business.ig_id;
+if (!business) {
+  console.error('[ERROR] Business object is not defined.');
+  return res.status(500).send('Business not found.');
+}
+
 
 /**
  * Retrieve the page access token for the specified business and page.
