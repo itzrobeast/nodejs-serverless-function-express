@@ -406,6 +406,13 @@ async function processMessagingEvent(message) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
+    const isBusinessMessage = senderId === businessInstagramId; // Use the resolved businessInstagramId
+    const role = isBusinessMessage ? 'business' : 'customer';
+    console.log(`[INFO] Identified role: ${role}`);
+
+
+
+    
     // Ensure necessary database partitions exist
     console.log(`[DEBUG] Ensuring partitions for business ID: ${businessId}`);
     await ensurePartitionExists(businessId);
