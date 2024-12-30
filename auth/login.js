@@ -3,7 +3,7 @@ import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
 import Joi from 'joi';
 import rateLimit from 'express-rate-limit';
-import { fetchInstagramIdFromFacebook } from '../helpers.js';
+import { fetchInstagramIdFromFacebook } from '../helpers.js'; // Import the helper function
 
 const router = express.Router();
 
@@ -47,14 +47,35 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Using First Page:', firstPage);
 
     // Step 3: Fetch Instagram Business ID for the Page
-    const igId = await fetchInstagramIdFromFacebook(firstPage.id, firstPage.access_token);
+    const igId = await fetchInstagramIdFromFacebook(firstPage.id, firstPage.access_token); // Use the imported function
     if (!igId) {
       console.warn('[WARN] Instagram Business ID not found for the page. Skipping Instagram linkage.');
     } else {
       console.log(`[DEBUG] Fetched Instagram Business ID: ${igId}`);
     }
 
-    // Remaining steps remain unchanged...
+    // Step 4: Upsert User in Supabase (example, unchanged)
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .upsert(
+        {
+          fb_id,
+          name,
+          email,
+          ig_id: igId || null, // Accept null if IG ID is not found
+        },
+        { onConflict: ['fb_id'] }
+      )
+      .select()
+      .single();
+
+    if (userError) throw new Error(`User upsert failed: ${userError.message}`);
+    console.log('[DEBUG] User Upserted:', user);
+
+    // Add more steps as required...
+
+    // Send response
+    res.status(200).json({ message: 'Login successful', user });
   } catch (err) {
     console.error('[ERROR]', err.message);
     return res.status(500).json({ error: 'Login failed', details: err.message });
