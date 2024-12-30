@@ -446,9 +446,7 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    const isBusinessMessage = senderId === igIdFromDB;
-    const role = isBusinessMessage ? 'business' : 'customer';
-    console.log(`[INFO] Identified role: ${role}`);
+    
 
     // Fetch Instagram user info and validate
     const userInfo = await fetchInstagramUserInfo(senderId);
