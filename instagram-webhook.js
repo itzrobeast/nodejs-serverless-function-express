@@ -558,4 +558,21 @@ router.post('/instagram-webhook', async (req, res) => {
   }
 });
 
+
+router.get('/', (req, res) => {
+  const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
+
+  if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
+    console.log('[INFO] Webhook verified');
+    res.status(200).send(req.query['hub.challenge']);
+  } else {
+    console.warn('[WARN] Webhook verification failed');
+    res.status(403).send('Verification failed');
+  }
+});
+
+
+
+
+
 export default router;
