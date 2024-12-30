@@ -7,6 +7,7 @@ import assistantHandler from './assistant.js';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import Joi from 'joi';
+import { fetchInstagramBusinessIdFromDatabase } from './helpers.js';
 
 const router = express.Router();
 
@@ -27,7 +28,8 @@ const webhookLimiter = rateLimit({
 });
 
 
-const igIdFromDatabase = await fetchBusinessInstagramId(businessId);
+const igIdFromDatabase = await fetchInstagramBusinessIdFromDatabase(businessId, supabase);
+
 
 // Signature Verification Middleware
 function verifyFacebookSignature(req, res, buf) {
