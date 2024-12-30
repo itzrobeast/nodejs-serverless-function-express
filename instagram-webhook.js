@@ -182,6 +182,7 @@ async function fetchInstagramUserInfo(senderId) {
   }
 }
 
+
 /**
  * Update known user fields in 'instagram_users' (name, phone, email, location).
  */
@@ -396,7 +397,6 @@ async function processMessagingEvent(message) {
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
 
-    // Determine which IG ID belongs to the business:
     const businessInstagramId = isEcho ? senderId : recipientId;
     const businessId = await resolveBusinessIdByInstagramId(businessInstagramId);
 
@@ -406,12 +406,11 @@ async function processMessagingEvent(message) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
-    // Ensure partitions exist before any DB operations:
+    // Ensure necessary database partitions exist
     console.log(`[DEBUG] Ensuring partitions for business ID: ${businessId}`);
     await ensurePartitionExists(businessId);
     console.log('[DEBUG] Partitions verified or created.');
 
-    // If the message is deleted (i.e., "unsent"), remove it from DB:
     if (isDeleted) {
       console.log('[INFO] Handling deleted message event.');
       if (!messageId) {
@@ -424,40 +423,37 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    // If the message is an echo (like your own page sending a message), skip:
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
       return;
     }
 
-    // If the userMessage is empty or just whitespace, skip responding:
     if (!userMessage.trim()) {
       console.log('[INFO] Skipping response for empty or missing message.');
       return;
     }
 
-    // Fetch the IG ID from DB for logging
     const igIdFromDB = await fetchBusinessInstagramId(businessId);
     if (!igIdFromDB) {
       console.error('[ERROR] Could not fetch ig_id for businessId:', businessId);
       return;
     }
 
-    // Identify role: 'business' vs. 'customer'
     const isBusinessMessage = senderId === igIdFromDB;
     const role = isBusinessMessage ? 'business' : 'customer';
     console.log(`[INFO] Identified role: ${role}`);
 
-   const userInfo = await fetchInstagramUserInfo(senderId);
-if (!userInfo) {
-  console.warn(`[WARN] Skipping user upsert as userInfo could not be fetched for senderId=${senderId}`);
-  return; // Skip further processing to avoid database constraint errors
-}
-await upsertInstagramUser(senderId, businessId); // Ensure user exists before logging messages
+    // Fetch Instagram user info and validate
+    const userInfo = await fetchInstagramUserInfo(senderId);
+    if (!userInfo) {
+      console.warn(`[WARN] Skipping user upsert as userInfo could not be fetched for senderId=${senderId}`);
+      return; // Skip further processing for invalid senderId
+    }
 
+    // Ensure the user exists in the database
+    await upsertInstagramUser(senderId, businessId);
 
-    
-    // Log the incoming message as 'received'
+    // Log the message in the database
     await logMessage(
       businessId,
       senderId,
@@ -470,13 +466,11 @@ await upsertInstagramUser(senderId, businessId); // Ensure user exists before lo
       userInfo?.username || ''
     );
 
-    // Check if the message includes contact info and update if found
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
-    // Skip AI response if message is empty or was deleted
     if (!userMessage || isDeleted) {
       console.log('[INFO] Skipping assistant response for empty or deleted message.');
       return;
@@ -487,11 +481,9 @@ await upsertInstagramUser(senderId, businessId); // Ensure user exists before lo
       return;
     }
 
-    // Generate AI response
     console.log('[DEBUG] Generating AI response...');
     const assistantResponse = await assistantHandler({ userMessage, businessId });
 
-    // If the AI provided a response, send it back to the user and log it
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
       await sendInstagramMessage(senderId, assistantResponse.message);
@@ -511,6 +503,7 @@ await upsertInstagramUser(senderId, businessId); // Ensure user exists before lo
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
 
 /**
  * Route to fetch all conversations for a given business.
