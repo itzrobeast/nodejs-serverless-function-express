@@ -163,24 +163,28 @@ async function ensurePartitionExists(businessId) {
  */
 async function fetchInstagramUserInfo(senderId) {
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${PAGE_ACCESS_TOKEN}`
-    );
+    console.log('[DEBUG] Fetching Instagram User Info for:', senderId);
+    console.log('[DEBUG] Using PAGE_ACCESS_TOKEN:', PAGE_ACCESS_TOKEN);
+
+    const url = `https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${PAGE_ACCESS_TOKEN}`;
+    console.log('[DEBUG] Request URL:', url);
+
+    const response = await fetch(url);
+    const data = await response.json();
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[ERROR] Failed to fetch user info for senderId ${senderId}:`, errorText);
-      return null;
+      console.error('[ERROR] Instagram API Error:', data);
+      throw new Error(data.error.message);
     }
 
-    const userInfo = await response.json();
-    console.log(`[INFO] Fetched user info for senderId ${senderId}:`, userInfo);
-    return userInfo;
-  } catch (error) {
-    console.error('[ERROR] Failed to fetch Instagram user info:', error.message);
+    console.log('[DEBUG] Instagram User Info:', data);
+    return data;
+  } catch (err) {
+    console.error('[ERROR] Fetching Instagram User Info:', err.message);
     return null;
   }
 }
+
 
 
 /**
