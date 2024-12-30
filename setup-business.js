@@ -65,9 +65,29 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Step 2: Hypothetical function to fetch Instagram ID (stubbed for now)
-    const igId = await fetchInstagramId(user.id, accessToken);
 
+    //fetch instagram business account ID
+   async function fetchInstagramId(pageId, pageAccessToken) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
+    );
+    const data = await response.json();
+    if (response.ok && data.instagram_business_account) {
+      console.log('[DEBUG] Instagram Business Account ID:', data.instagram_business_account.id);
+      return data.instagram_business_account.id;
+    }
+    console.warn('[WARN] No Instagram Business Account linked to Page ID:', pageId);
+    return null;
+  } catch (error) {
+    console.error('[ERROR] Failed to fetch Instagram Business Account ID:', error.message);
+    return null;
+  }
+}
+
+
+
+    
     // Step 3: Upsert user in Supabase
     const { data: existingUser, error: userError } = await supabase
       .from('users')
