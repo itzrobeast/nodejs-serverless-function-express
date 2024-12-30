@@ -28,7 +28,7 @@ const webhookLimiter = rateLimit({
 });
 
 
-async function getBusinessDetails(businessId) {
+async function getBusinessDetails(businessId, supabase) {
   const igId = await fetchInstagramBusinessIdFromDatabase(businessId, supabase);
   if (!igId) {
     console.error(`[ERROR] Failed to fetch Instagram ID for business ID ${businessId}`);
@@ -102,18 +102,42 @@ async function fetchBusinessDetails(businessId) {
 /**
  * Fetch the ig_id for a given businessId from Supabase.
  */
-async function fetchInstagramBusinessIdFromDatabase(businessId) {
+async function fetchInstagramBusinessIdFromDatabase(businessId, supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('ig_id')
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch Instagram ID for business ID ${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    console.log(`[DEBUG] Instagram ID for business ID ${businessId}: ${data.ig_id}`);
+    return data.ig_id;
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching Instagram ID from database:', err.message);
+    return null;
+  }
+}
+
+
+async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v15.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
     );
     const data = await response.json();
-    console.log('[DEBUG] fetchInstagramId Response:', data);
+
+    console.log('[DEBUG] fetchInstagramIdFromFacebook Response:', data);
 
     if (response.ok && data.instagram_business_account) {
       console.log(`[INFO] Instagram Business Account ID: ${data.instagram_business_account.id}`);
       return data.instagram_business_account.id;
     }
+
     console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
     return null;
   } catch (err) {
@@ -121,6 +145,7 @@ async function fetchInstagramBusinessIdFromDatabase(businessId) {
     return null;
   }
 }
+
 
 async function getPageAccessToken(businessId, pageId) {
   try {
