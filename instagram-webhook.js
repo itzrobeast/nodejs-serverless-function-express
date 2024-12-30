@@ -511,39 +511,51 @@ router.get('/fetch-conversations', async (req, res) => {
 
 
 // Webhook Route
-router.post('/instagram-webhook', (req, res) => {
+// Webhook Route
+router.post('/instagram-webhook', async (req, res) => {
   try {
     const payload = req.body;
 
     // Log the incoming payload
-    console.log('[DEBUG] Incoming webhook payload:', payload);
+    console.log('[DEBUG] Incoming webhook payload:', JSON.stringify(payload, null, 2));
 
     if (!payload || !payload.entry) {
-      throw new Error('Invalid webhook payload: Missing entry data');
+      console.error('[ERROR] Invalid webhook payload: Missing entry data');
+      return res.status(400).send('Invalid payload');
     }
 
-    // Process payload based on object type
     const { object, entry } = payload;
 
+    // Handle permissions-related changes
     if (object === 'permissions') {
       console.log('[INFO] Handling permissions change:', entry);
-      // Handle permissions-related payloads
       return res.status(200).send('Permissions handled');
     }
 
+    // Handle Instagram messaging-related payloads
     if (object === 'instagram') {
       console.log('[INFO] Handling Instagram messaging event:', entry);
-      // Handle Instagram messaging-related payloads
+
+      for (const event of entry) {
+        if (event.messaging) {
+          for (const messageEvent of event.messaging) {
+            await processMessagingEvent(messageEvent); // Your helper function
+          }
+        } else {
+          console.warn('[WARN] Unsupported Instagram event type:', event);
+        }
+      }
+
       return res.status(200).send('Instagram messaging handled');
     }
 
+    // Fallback for unhandled object types
     console.warn('[WARN] Unhandled webhook object type:', object);
-    return res.status(200).send('Unhandled object type');
+    return res.status(400).send('Unhandled object type');
   } catch (error) {
     console.error('[ERROR] Failed to process webhook:', error.message);
     return res.status(500).send('Webhook processing failed');
   }
 });
-
 
 export default router;
