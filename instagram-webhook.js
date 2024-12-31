@@ -122,7 +122,7 @@ async function processMessagingEvent(message) {
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
 
-    const businessInstagramId = isEcho ? senderId : recipientId;
+    const igId = isEcho ? senderId : recipientId;
     const businessId = await fetchInstagramIdFromDatabase(businessInstagramId, supabase);
 
     if (!businessId) {
@@ -166,7 +166,7 @@ async function processMessagingEvent(message) {
       return; // Prevent AI from responding
     }
 
-    const igIdFromDBFetched = await fetchInstagramIdFromDatabase(businessId);
+    const igIdFromDBFetched = await fetchInstagramIdFromDatabase(instagramId, supabase);
     if (!igIdFromDBFetched) {
       console.error('[ERROR] Could not fetch ig_id for businessId:', businessId);
       return;
