@@ -321,3 +321,29 @@ export async function upsertInstagramUser(senderId, userInfo, businessId) {
   }
 }
 
+
+
+/**
+ * Fetch all businesses for a specific business owner.
+ * @param {number} businessOwnerId - The ID of the business user (owner).
+ * @returns {Array} - Array of businesses owned by the user.
+ */
+export async function fetchBusinessesForOwner(businessOwnerId) {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('id, name, ig_id')
+      .eq('business_user_id', businessOwnerId); // Updated FK column
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch businesses for owner ID ${businessOwnerId}:`, error?.message || 'No data found');
+      return [];
+    }
+
+    return data;
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching businesses:', err.message);
+    return [];
+  }
+}
+
