@@ -72,6 +72,25 @@ export async function fetchInstagramIdFromDatabase(businessId, supabase) {
   }
 }
 
+async function fetchAccessTokenForBusiness(businessId, supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('page_access_tokens')
+      .select('page_access_token')
+      .eq('business_id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Could not fetch access token for businessId=${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    return data.page_access_token;
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch access token from Supabase:', err.message);
+    return null;
+  }
+}
 
 
 /**
@@ -79,18 +98,21 @@ export async function fetchInstagramIdFromDatabase(businessId, supabase) {
  * @param {string} senderId - The Instagram sender ID.
  * @returns {object|null} - The user info object or null if not found.
  */
-async function fetchInstagramUserInfo(senderId) {
+async function fetchInstagramUserInfo(senderId, businessId, supabase) {
   try {
-    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN; // Use a valid access token
+    // Fetch the access token for the specific business
+    const accessToken = await fetchAccessTokenForBusiness(businessId, supabase);
     if (!accessToken) {
-      throw new Error('Instagram Access Token is not defined in environment variables');
+      console.error(`[ERROR] Access token not found for businessId=${businessId}`);
+      return null;
     }
 
+    // Call the Instagram Graph API
     const response = await fetch(`https://graph.facebook.com/v17.0/${senderId}?fields=id,username&access_token=${accessToken}`);
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('[ERROR] Instagram API error:', data.error.message);
+      console.error(`[ERROR] Instagram API error for senderId=${senderId}:`, data.error?.message || 'Unknown error');
       return null;
     }
 
@@ -101,6 +123,5 @@ async function fetchInstagramUserInfo(senderId) {
     return null;
   }
 }
-
 export { fetchInstagramUserInfo };
 
