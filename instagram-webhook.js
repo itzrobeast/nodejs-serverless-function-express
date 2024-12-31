@@ -101,6 +101,24 @@ async function processMessagingEvent(messageEvent) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
+    const businessDetails = await fetchBusinessDetails(businessId);
+    if (!businessDetails) {
+      console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
+      return;
+    }
+
+    const { business_user_id } = businessDetails;
+    if (!business_user_id) {
+      console.error(`[ERROR] No associated business_user_id for businessId=${businessId}`);
+      return;
+    }
+
+    console.log(`[DEBUG] Using business_user_id=${business_user_id} for processing.`);
+
+
+
+
+    
     // Handle deleted messages
     if (isDeleted) {
       console.log('[INFO] Handling deleted message event...');
