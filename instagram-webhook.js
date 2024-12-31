@@ -11,7 +11,7 @@ import {
   fetchInstagramUserInfo,
   logMessage,
 } from './helpers.js';
-import { refreshPageAccessToken } from '../auth/refresh-token.js';
+import { refreshPageAccessToken } from './auth/refresh-token.js';
 
 const router = express.Router();
 
