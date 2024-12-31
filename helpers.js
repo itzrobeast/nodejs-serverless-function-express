@@ -114,12 +114,11 @@ export async function fetchBusinessDetails(businessId) {
 }
 
 
-
 export async function getPageAccessToken(businessId, pageId, supabase) {
   try {
     const { data, error } = await supabase
-      .from('pages')
-      .select('page_access_token, user_access_token')
+      .from('page_access_tokens')
+      .select('page_access_token, user_id')
       .eq('business_id', businessId)
       .eq('page_id', pageId)
       .single();
@@ -129,7 +128,7 @@ export async function getPageAccessToken(businessId, pageId, supabase) {
       return null;
     }
 
-    let { page_access_token: pageAccessToken, user_access_token: userAccessToken } = data;
+    const { page_access_token: pageAccessToken } = data;
 
     // Validate token by making a test API call
     const testResponse = await fetch(`https://graph.facebook.com/v15.0/me?access_token=${pageAccessToken}`);
@@ -137,7 +136,7 @@ export async function getPageAccessToken(businessId, pageId, supabase) {
 
     if (testData.error?.message.includes('Session has expired')) {
       console.warn(`[WARN] Access token expired for pageId=${pageId}. Refreshing token...`);
-      pageAccessToken = await refreshPageAccessToken(pageId, userAccessToken);
+      pageAccessToken = await refreshPageAccessToken(pageId, data.user_id);
 
       if (!pageAccessToken) {
         console.error(`[ERROR] Failed to refresh access token for pageId=${pageId}`);
