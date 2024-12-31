@@ -166,7 +166,7 @@ async function processMessagingEvent(message) {
       return; // Prevent AI from responding
     }
 
-    const igIdFromDBFetched = await fetchBusinessInstagramId(businessId);
+    const igIdFromDBFetched = await fetchInstagramIdFromDatabase(businessId);
     if (!igIdFromDBFetched) {
       console.error('[ERROR] Could not fetch ig_id for businessId:', businessId);
       return;
