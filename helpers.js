@@ -173,6 +173,11 @@ export async function logMessage(businessId, senderId, recipientId, message, typ
  * Parse user message.
  */
 export function parseUserMessage(userMessage) {
+  if (typeof userMessage !== 'string') {
+    console.error('[ERROR] Invalid input type for parseUserMessage:', typeof userMessage);
+    return { field: null, value: null };
+  }
+
   const regex = /(\w+):\s*(.+)/;
   const match = userMessage.match(regex);
   if (!match) return { field: null, value: null };
@@ -181,6 +186,7 @@ export function parseUserMessage(userMessage) {
     value: match[2].trim(),
   };
 }
+
 
 /**
  * Upsert Instagram user into the database.
