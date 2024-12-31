@@ -9,6 +9,7 @@ import {
   fetchInstagramIdFromDatabase,
   fetchInstagramIdFromFacebook,
   fetchInstagramUserInfo,
+  logMessage,
 } from './helpers.js';
 
 const router = express.Router();
