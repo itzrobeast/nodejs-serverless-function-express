@@ -57,7 +57,7 @@ router.post('/', async (req, res) => {
 
     // Step 2: Upsert User in Supabase
     const { error: userError } = await supabase
-      .from('users')
+      .from('business_users')
       .upsert({ fb_id: user.id, name: user.name, email: contactEmail });
 
     if (userError) {
