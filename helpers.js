@@ -141,6 +141,7 @@ export async function logMessage(
   }
 }
 
+console.log('[DEBUG] helpers.js loaded successfully');
 
 
 /**
