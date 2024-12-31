@@ -103,6 +103,27 @@ async function getPageAccessToken(businessId, pageId) {
   }
 }
 
+async function fetchBusinessIdFromInstagramId(igId, supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('ig_id', igId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Could not fetch businessId for Instagram ID ${igId}:`, error?.message || 'No data found');
+      return null;
+    }
+    return data.id;
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching businessId:', err.message);
+    return null;
+  }
+}
+
+
+
 // Core function to process incoming messages
 async function processMessagingEvent(message) {
   try {
@@ -122,15 +143,18 @@ async function processMessagingEvent(message) {
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
 
-    const igId = isEcho ? senderId : recipientId;
-    const businessId = await fetchInstagramIdFromDatabase(igId, supabase);
+    const igId = isEcho ? senderId : recipientId; // Instagram ID
+    console.log(`[DEBUG] Using Instagram ID: ${igId}`);
 
+    // Fetch businessId using Instagram ID
+    const businessId = await fetchBusinessIdFromInstagramId(igId, supabase);
     if (!businessId) {
-      console.error('[ERROR] Could not resolve businessId for Instagram ID:', businessInstagramId);
+      console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
       return;
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
+    // Fetch business details using businessId
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
       console.error('[ERROR] Could not fetch business details.');
@@ -161,25 +185,19 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    if (!userMessage.trim()) { // Check for empty or whitespace-only messages
+    if (!userMessage.trim()) {
       console.log('[INFO] Skipping response for empty or missing message.');
-      return; // Prevent AI from responding
-    }
-
-    const igIdFromDBFetched = await fetchInstagramIdFromDatabase(instagramId, supabase);
-    if (!igIdFromDBFetched) {
-      console.error('[ERROR] Could not fetch ig_id for businessId:', businessId);
       return;
     }
 
-    const isBusinessMessage = senderId === igIdFromDBFetched;
+    const isBusinessMessage = senderId === igIdFromDB;
     const role = isBusinessMessage ? 'business' : 'customer';
     console.log(`[INFO] Identified role: ${role}`);
 
     const userInfo = await fetchInstagramUserInfo(senderId);
     await upsertInstagramUser(senderId, businessId);
 
-    await logMessage(businessId, senderId, recipientId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDBFetched, userInfo?.username || '');
+    await logMessage(businessId, senderId, recipientId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
 
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
@@ -192,12 +210,13 @@ async function processMessagingEvent(message) {
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
       await sendInstagramMessage(senderId, assistantResponse.message);
-      await logMessage(businessId, senderId, recipientId, assistantResponse.message, 'sent', null, true, igIdFromDBFetched, 'Business');
+      await logMessage(businessId, senderId, recipientId, assistantResponse.message, 'sent', null, true, igIdFromDB, 'Business');
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
 
 // POST route for webhook
 router.post('/', async (req, res) => {
