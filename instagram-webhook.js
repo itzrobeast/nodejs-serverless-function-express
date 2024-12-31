@@ -196,6 +196,11 @@ async function processMessagingEvent(message) {
     console.log(`[INFO] Identified role: ${role}`);
 
     const userInfo = await fetchInstagramUserInfo(senderId);
+    if (!userInfo) {
+  console.warn('[WARN] Could not fetch user info for sender:', senderId);
+} else {
+  console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
+}
     await upsertInstagramUser(senderId, businessId);
 
     await logMessage(businessId, senderId, recipientId, userMessage, 'received', messageId, isBusinessMessage, igIdFromDB, userInfo?.username || '');
