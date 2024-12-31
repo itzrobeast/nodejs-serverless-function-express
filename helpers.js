@@ -181,7 +181,10 @@ export function parseUserMessage(userMessage) {
 
   // Define regex to match key-value pairs in the format "key: value"
   const regex = /^([\w-]+):\s*(.+)$/; // Allow hyphenated keys (e.g., "key-name")
-
+console.log("Regex is valid:", regex);
+  } catch (err) {
+  console.error("Regex is invalid:", err.message);
+}
   // Execute the regex match
   const match = userMessage.match(regex);
 
