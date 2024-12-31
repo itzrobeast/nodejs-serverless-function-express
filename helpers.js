@@ -123,7 +123,7 @@ export async function getValidUserAccessToken(userId, shortLivedToken) {
 export async function getUserAccessToken(userId) {
   try {
     const { data, error } = await supabase
-      .from('business_users')
+      .from('business_owners')
       .select('user_access_token, updated_at')
       .eq('id', userId)
       .single();
