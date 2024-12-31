@@ -157,7 +157,7 @@ export async function getPageAccessToken(businessId, pageId) {
       return null;
     }
 
-    const { page_access_token: pageAccessToken, business_owner_id: ownerId, updated_at: updatedAt } = data;
+    const { page_access_token: pageAccessToken, business_owner_id: businessOwnerId, updated_at: updatedAt } = data;
 
     if (isExpired(updatedAt)) {
       console.warn(`[WARN] Page access token expired for Page ID ${pageId}. Refreshing token...`);
