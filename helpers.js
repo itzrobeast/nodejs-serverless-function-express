@@ -1,5 +1,6 @@
 // helpers.js
 import fetch from 'node-fetch';
+import { supabase } from './supabaseClient.js';
 
 /**
  * Fetch Instagram Business ID using Facebook API.
@@ -92,6 +93,31 @@ async function fetchAccessTokenForBusiness(businessId, supabase) {
   }
 }
 
+
+export async function fetchBusinessDetails(businessId) {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('ig_id, page_id')
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+    return { ig_id: data.ig_id, page_id: data.page_id };
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching business details:', err.message);
+    return null;
+  }
+}
+
+
+
+
+
+
 /**
  * Logs a message into the database.
  * @param {string} businessId - The ID of the business.
@@ -113,7 +139,8 @@ export async function logMessage(
   messageId,
   isBusinessMessage,
   igId,
-  username
+  username,
+  supabase
 ) {
   try {
     const { data, error } = await supabase
@@ -123,7 +150,7 @@ export async function logMessage(
         sender_id: senderId,
         recipient_id: recipientId,
         message,
-        type, // 'sent' or 'received'
+        type,
         message_id: messageId,
         is_business_message: isBusinessMessage,
         ig_id: igId,
@@ -141,7 +168,23 @@ export async function logMessage(
   }
 }
 
+
 console.log('[DEBUG] helpers.js loaded successfully');
+
+
+
+export function parseUserMessage(userMessage) {
+  // Example implementation to extract a field and value
+  const regex = /(\w+):\s*(.+)/;
+  const match = userMessage.match(regex);
+
+  if (!match) return { field: null, value: null };
+
+  return {
+    field: match[1].toLowerCase(),
+    value: match[2].trim(),
+  };
+}
 
 
 /**
