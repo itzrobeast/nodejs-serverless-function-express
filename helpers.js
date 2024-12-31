@@ -1,7 +1,11 @@
+// helpers.js
 import fetch from 'node-fetch';
 
 /**
  * Fetch Instagram Business ID using Facebook API.
+ * @param {string} pageId - The Facebook Page ID.
+ * @param {string} pageAccessToken - The access token for the Facebook Page.
+ * @returns {string|null} - The Instagram Business Account ID as a string or null if not found.
  */
 export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
   try {
@@ -9,10 +13,20 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
       `https://graph.facebook.com/v17.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
     );
     const data = await response.json();
+
     if (response.ok && data.instagram_business_account) {
-      console.log(`[DEBUG] Instagram Business Account ID: ${data.instagram_business_account.id}`);
-      return data.instagram_business_account.id;
+      const fetchedIgId = data.instagram_business_account.id;
+      console.log(`[DEBUG] Fetched Instagram Business Account ID: ${fetchedIgId}`);
+      
+      // Validate that fetchedIgId is a string of digits
+      if (typeof fetchedIgId !== 'string' || !/^\d+$/.test(fetchedIgId)) {
+        console.error(`[ERROR] Invalid Instagram Business Account ID format: ${fetchedIgId}`);
+        return null;
+      }
+
+      return fetchedIgId; // Return as string
     }
+
     console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
     return null;
   } catch (err) {
