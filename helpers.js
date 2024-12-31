@@ -114,11 +114,31 @@ export async function fetchBusinessDetails(businessId) {
   }
 }
 
-export async function getUserAccessToken(userId) {
+
+export async function getValidUserAccessToken(userId, shortLivedToken) {
+  const userAccessToken = await getUserAccessToken(userId);
+
+  if (!userAccessToken || isExpired(userAccessToken)) {
+    console.log('[INFO] User access token expired or missing. Refreshing...');
+    const refreshedToken = await refreshUserAccessToken(userId, shortLivedToken);
+
+    if (!refreshedToken) {
+      console.error('[ERROR] Failed to refresh user access token.');
+      return null;
+    }
+
+    return refreshedToken;
+  }
+
+  return userAccessToken;
+}
+
+
+export async function getUserAccessToken(userId, shortLivedToken = null) {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('user_access_token')
+      .select('user_access_token, updated_at')
       .eq('id', userId)
       .single();
 
@@ -127,12 +147,42 @@ export async function getUserAccessToken(userId) {
       return null;
     }
 
-    return data.user_access_token;
+    const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
+
+    // Assume tokens expire in 60 days and check the last updated time
+    const isExpired = () => {
+      const tokenExpiryDays = 60;
+      const lastUpdated = new Date(updatedAt);
+      const now = new Date();
+      return (now - lastUpdated) / (1000 * 60 * 60 * 24) > tokenExpiryDays;
+    };
+
+    // If the token is missing or expired, refresh it
+    if (!userAccessToken || isExpired()) {
+      console.log('[INFO] User access token expired or missing. Refreshing...');
+      if (!shortLivedToken) {
+        console.error('[ERROR] No short-lived token available to refresh user access token.');
+        return null;
+      }
+
+      const refreshedToken = await refreshUserAccessToken(userId, shortLivedToken);
+      if (!refreshedToken) {
+        console.error('[ERROR] Failed to refresh user access token.');
+        return null;
+      }
+
+      return refreshedToken;
+    }
+
+    return userAccessToken;
   } catch (err) {
     console.error('[ERROR] Exception while fetching user access token:', err.message);
     return null;
   }
 }
+
+
+
 
 export async function getPageAccessToken(businessId, pageId) {
   try {
