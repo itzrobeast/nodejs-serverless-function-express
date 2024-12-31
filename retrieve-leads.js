@@ -382,7 +382,7 @@ router.get('/', Sentry.Handlers.requestHandler(), async (req, res) => {
     const { data: pageRow, error: pageRowError } = await supabase
       .from('page_access_tokens')
       .select('page_id, page_access_token')
-      .eq('user_id', userId)
+      .eq('business_owner_id', businessOwnerId)
       .eq('business_id', businessId)
       .single();
 
