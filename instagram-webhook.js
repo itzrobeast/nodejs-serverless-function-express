@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import Joi from 'joi';
 import {
-  fetchInstagramBusinessIdFromDatabase,
+  fetchInstagramIdFromDatabase,
   fetchInstagramIdFromFacebook,
 } from './helpers.js';
 
