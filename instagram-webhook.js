@@ -123,7 +123,7 @@ async function processMessagingEvent(message) {
     const messageId = message.message?.mid;
 
     const businessInstagramId = isEcho ? senderId : recipientId;
-    const businessId = await fetchInstagramBusinessIdFromDatabase(businessInstagramId, supabase);
+    const businessId = await fetchInstagramIdFromDatabase(businessInstagramId, supabase);
 
     if (!businessId) {
       console.error('[ERROR] Could not resolve businessId for Instagram ID:', businessInstagramId);
