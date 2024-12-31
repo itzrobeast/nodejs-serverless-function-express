@@ -78,20 +78,21 @@ export async function fetchBusinessDetails(businessId) {
   try {
     const { data, error } = await supabase
       .from('businesses')
-      .select('ig_id, page_id')
+      .select('id, name, ig_id, page_id, business_user_id') // Include business_user_id
       .eq('id', businessId)
       .single();
 
     if (error || !data) {
-      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
-      return null;
+      throw new Error(`[ERROR] Failed to fetch business details: ${error?.message || 'No data found'}`);
     }
-    return { ig_id: data.ig_id, page_id: data.page_id };
+
+    return data; // Return the complete business object
   } catch (err) {
     console.error('[ERROR] Exception while fetching business details:', err.message);
     return null;
   }
 }
+
 
 /**
  * Fetch user access token and refresh if expired.
