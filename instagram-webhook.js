@@ -46,6 +46,8 @@ function verifyFacebookSignature(req, res, buf) {
   if (signature !== expectedSignature) throw new Error('Invalid signature');
 }
 
+  
+
 router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
 
 // Helper to fetch business ID from Instagram ID
