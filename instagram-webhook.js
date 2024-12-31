@@ -52,7 +52,7 @@ router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }
 async function fetchBusinessIdFromInstagramId(igId) {
   try {
     const { data, error } = await supabase
-      .from('business_owners') // Updated table name
+      .from('businesses') // Updated table name
       .select('id')
       .eq('ig_id', igId)
       .single();
