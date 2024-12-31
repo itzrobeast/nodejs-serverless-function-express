@@ -1,12 +1,16 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import cron from 'node-cron';
-import supabase from '../supabaseClient.js'; // Adjust path as needed
+import supabase from '../supabaseClient.js';
 
 const router = express.Router();
 
-
-
+/**
+ * Refresh the user access token.
+ * @param {string} userId - The user ID in the database.
+ * @param {string} shortLivedToken - The short-lived token to exchange.
+ * @returns {string|null} - The refreshed user access token or null if the refresh fails.
+ */
 export async function refreshUserAccessToken(userId, shortLivedToken) {
   try {
     const response = await fetch(
@@ -15,14 +19,14 @@ export async function refreshUserAccessToken(userId, shortLivedToken) {
     const data = await response.json();
 
     if (!data.access_token) {
-      console.error('[ERROR] Failed to refresh user access token:', data.error.message);
+      console.error('[ERROR] Failed to refresh user access token:', data.error?.message || 'Unknown error');
       return null;
     }
 
-    // Update token in database
+    // Update the token in the database
     const { error } = await supabase
       .from('users')
-      .update({ user_access_token: data.access_token })
+      .update({ user_access_token: data.access_token, updated_at: new Date().toISOString() })
       .eq('id', userId);
 
     if (error) {
@@ -38,23 +42,24 @@ export async function refreshUserAccessToken(userId, shortLivedToken) {
   }
 }
 
-
-// Helper function to refresh a page access token
+/**
+ * Refresh the page access token.
+ * @param {string} pageId - The Facebook Page ID.
+ * @param {string} userAccessToken - The user access token with permissions for the page.
+ * @returns {string|null} - The refreshed page access token or null if the refresh fails.
+ */
 export async function refreshPageAccessToken(pageId, userAccessToken) {
   try {
     const response = await fetch(`https://graph.facebook.com/v15.0/me/accounts?access_token=${userAccessToken}`);
+
     if (!response.ok) {
       console.error(`[ERROR] Facebook API call failed for Page ID ${pageId}: ${response.statusText}`);
       return null;
     }
 
     const data = await response.json();
-    if (data.error) {
-      console.error(`[ERROR] Facebook API error for Page ID ${pageId}: ${data.error.message}`);
-      return null;
-    }
-
     const pageData = data.data.find((page) => page.id === pageId);
+
     if (!pageData) {
       console.warn(`[WARN] Page ID ${pageId} not found in the accounts response.`);
       return null;
@@ -63,9 +68,10 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
     const newPageAccessToken = pageData.access_token;
     console.log(`[DEBUG] New token fetched for Page ID ${pageId}: ${newPageAccessToken}`);
 
+    // Update the token in the database
     const { error } = await supabase
       .from('pages')
-      .update({ page_access_token: newPageAccessToken })
+      .update({ page_access_token: newPageAccessToken, updated_at: new Date().toISOString() })
       .eq('page_id', pageId);
 
     if (error) {
@@ -81,8 +87,9 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
   }
 }
 
-
-// Route to manually refresh a token for a specific page
+/**
+ * Manual refresh route for a specific page.
+ */
 router.post('/', async (req, res) => {
   try {
     const { pageId, userAccessToken } = req.body;
@@ -103,32 +110,32 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Scheduled task to refresh tokens for all pages in the database
+/**
+ * Scheduled task to refresh tokens for all pages.
+ */
 async function refreshAllTokens() {
   try {
     console.log('[INFO] Starting scheduled token refresh...');
-    
-    // Fetch all pages from Supabase
+
     const { data: pages, error } = await supabase
-  .from('pages')
-  .select('page_id, user_access_token, business_id');
+      .from('pages')
+      .select('page_id, user_access_token, business_id');
 
-if (error) {
-  console.error('[ERROR] Supabase query failed:', error.message);
-  return;
-}
+    if (error) {
+      console.error('[ERROR] Supabase query failed:', error.message);
+      return;
+    }
 
-for (const page of pages) {
-  const { page_id: pageId, user_access_token: userAccessToken, business_id: businessId } = page;
+    for (const page of pages) {
+      const { page_id: pageId, user_access_token: userAccessToken, business_id: businessId } = page;
 
-  console.log(`[INFO] Processing token refresh for Page ID ${pageId}, Business ID ${businessId}`);
-  const result = await refreshPageAccessToken(pageId, userAccessToken);
-  
-  if (!result) {
-    console.error(`[ERROR] Failed to refresh token for Page ID ${pageId}, Business ID ${businessId}`);
-  }
-}
+      console.log(`[INFO] Processing token refresh for Page ID ${pageId}, Business ID ${businessId}`);
+      const result = await refreshPageAccessToken(pageId, userAccessToken);
 
+      if (!result) {
+        console.error(`[ERROR] Failed to refresh token for Page ID ${pageId}, Business ID ${businessId}`);
+      }
+    }
 
     console.log('[INFO] Scheduled token refresh completed successfully.');
   } catch (error) {
