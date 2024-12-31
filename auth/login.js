@@ -48,7 +48,7 @@ router.post('/', loginLimiter, async (req, res) => {
       
       console.warn('[WARN] Instagram Business ID not found for the page. Skipping Instagram linkage.');
     } else {
-      console.log(`[DEBUG] Fetched Instagram Business ID: ${igId}`);
+      console.log(`[DEBUG] Fetched Instagram Business 123 ID: ${igId}`);
     }
 
     
