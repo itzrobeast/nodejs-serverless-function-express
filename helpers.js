@@ -115,6 +115,32 @@ export async function fetchBusinessDetails(businessId) {
 
 
 
+export async function getPageAccessToken(businessId, pageId, supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('pages')
+      .select('page_access_token, user_access_token')
+      .eq('business_id', businessId)
+      .eq('page_id', pageId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch access token for businessId=${businessId}, pageId=${pageId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    return data.page_access_token;
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch page access token:', err.message);
+    return null;
+  }
+}
+
+
+
+
+
+
 
 
 
@@ -192,7 +218,7 @@ export function parseUserMessage(userMessage) {
  * @param {string} senderId - The Instagram sender ID.
  * @returns {object|null} - The user info object or null if not found.
  */
-async function fetchInstagramUserInfo(senderId, businessId, supabase) {
+export async function fetchInstagramUserInfo(senderId, businessId, supabase) {
   try {
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
@@ -225,10 +251,29 @@ async function fetchInstagramUserInfo(senderId, businessId, supabase) {
 }
 
 
-export {
+export async function sendInstagramMessage(recipientId, message, accessToken) {
+  try {
+    const response = await fetch(`https://graph.facebook.com/v15.0/me/messages?access_token=${accessToken}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text: message },
+      }),
+    });
 
-  
-  fetchInstagramUserInfo, // Ensure this line exists
-  
-};
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[ERROR] Failed to send Instagram message:', data.error?.message || 'Unknown error');
+      return null;
+    }
+
+    console.log('[DEBUG] Message sent successfully:', data);
+    return data;
+  } catch (err) {
+    console.error('[ERROR] Failed to send Instagram message:', err.message);
+    return null;
+  }
+}
 
