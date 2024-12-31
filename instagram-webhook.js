@@ -1,19 +1,18 @@
 import express from 'express';
 import fetch from 'node-fetch';
-import supabase from './supabaseClient.js';
-import assistantHandler from './assistant.js';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
-import Joi from 'joi';
+import supabase from './supabaseClient.js';
+import assistantHandler from './assistant.js';
 import {
   fetchInstagramIdFromDatabase,
-  fetchInstagramIdFromFacebook,
   fetchInstagramUserInfo,
   logMessage,
   parseUserMessage,
   fetchBusinessDetails,
   getPageAccessToken,
   sendInstagramMessage,
+  upsertInstagramUser,
 } from './helpers.js';
 import { refreshPageAccessToken } from './auth/refresh-token.js';
 
@@ -30,7 +29,7 @@ if (!VERIFY_TOKEN || !FACEBOOK_APP_SECRET) {
 
 // Middleware for rate limiting and JSON parsing with Facebook signature verification
 const webhookLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   message: 'Too many requests from this IP, please try again later.',
 });
@@ -49,33 +48,11 @@ function verifyFacebookSignature(req, res, buf) {
 
 router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
 
-// Joi schema for message validation
-const messageSchema = Joi.object({
-  sender: Joi.object({ id: Joi.string().required() }).required(),
-  recipient: Joi.object({ id: Joi.string().required() }).required(),
-  timestamp: Joi.number().required(),
-  message: Joi.object({
-    mid: Joi.string().required(),
-    text: Joi.string().allow(null),
-    is_deleted: Joi.boolean().optional(),
-    is_echo: Joi.boolean().optional(),
-    read: Joi.object().unknown(true).optional(),
-    attachments: Joi.array().items(
-      Joi.object({
-        type: Joi.string().required(),
-        payload: Joi.object().required(),
-      })
-    ).optional(),
-  }).unknown(true),
-});
-
-// Helper to fetch business details from Supabase
-
-
-async function fetchBusinessIdFromInstagramId(igId, supabase) {
+// Helper to fetch business ID from Instagram ID
+async function fetchBusinessIdFromInstagramId(igId) {
   try {
     const { data, error } = await supabase
-      .from('businesses')
+      .from('business_users') // Updated table name
       .select('id')
       .eq('ig_id', igId)
       .single();
@@ -91,16 +68,14 @@ async function fetchBusinessIdFromInstagramId(igId, supabase) {
   }
 }
 
-
-
 // Core function to process incoming messages
-async function processMessagingEvent(message) {
+async function processMessagingEvent(messageEvent) {
   try {
-    console.log('[DEBUG] Incoming message payload:', JSON.stringify(message, null, 2));
+    console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
 
     // Extract sender and recipient IDs
-    const senderId = message.sender.id;
-    const recipientId = message.recipient.id;
+    const senderId = messageEvent.sender?.id;
+    const recipientId = messageEvent.recipient?.id;
 
     if (!senderId || !recipientId) {
       console.error('[ERROR] senderId or recipientId is missing in message payload.');
@@ -108,18 +83,18 @@ async function processMessagingEvent(message) {
     }
 
     // Determine message attributes
-    const isDeleted = message.message?.is_deleted || false;
+    const isDeleted = messageEvent.message?.is_deleted || false;
     console.log(`[DEBUG] Message is_deleted: ${isDeleted}`);
-    const isEcho = message.message?.is_echo || false;
-    const userMessage = message.message?.text || '';
-    const messageId = message.message?.mid;
+    const isEcho = messageEvent.message?.is_echo || false;
+    const userMessage = messageEvent.message?.text || '';
+    const messageId = messageEvent.message?.mid;
 
     // Determine the appropriate Instagram ID
     const igId = isEcho ? senderId : recipientId;
     console.log(`[DEBUG] Using Instagram ID: ${igId}`);
 
-    // Fetch businessId using Instagram ID
-    const businessId = await fetchBusinessIdFromInstagramId(igId, supabase);
+    // Fetch business ID using Instagram ID
+    const businessId = await fetchBusinessIdFromInstagramId(igId);
     if (!businessId) {
       console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
       return;
@@ -152,11 +127,12 @@ async function processMessagingEvent(message) {
     }
 
     // Fetch Instagram user information dynamically
-    const userInfo = await fetchInstagramUserInfo(senderId, businessId, supabase);
-    if (!userInfo) {
-      console.warn(`[WARN] Could not fetch user info for senderId=${senderId}.`);
-    } else {
+    const userInfo = await fetchInstagramUserInfo(senderId, businessId);
+    if (userInfo) {
       console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
+      await upsertInstagramUser(senderId, userInfo, businessId);
+    } else {
+      console.warn(`[WARN] Could not fetch user info for senderId=${senderId}.`);
     }
 
     // Log the incoming message
@@ -195,7 +171,7 @@ async function processMessagingEvent(message) {
       }
 
       const { page_id: pageId } = businessDetails;
-      const accessToken = await getPageAccessToken(businessId, pageId, supabase);
+      const accessToken = await getPageAccessToken(businessId, pageId);
       if (!accessToken) {
         console.error('[ERROR] Failed to fetch access token. Cannot send message.');
         return;
@@ -222,27 +198,17 @@ async function processMessagingEvent(message) {
   }
 }
 
-
-
 // POST route for webhook
 router.post('/', async (req, res) => {
   try {
     const payload = req.body;
-
-    if (!payload || !payload.entry) {
-      return res.status(400).send('Invalid payload');
-    }
+    if (!payload || !payload.entry) return res.status(400).send('Invalid payload');
 
     const { object, entry } = payload;
     if (object === 'instagram') {
       for (const event of entry) {
         if (event.messaging) {
           for (const messageEvent of event.messaging) {
-            const { error } = messageSchema.validate(messageEvent);
-            if (error) {
-              console.error('[ERROR] Invalid message format:', error.details);
-              continue; // Skip invalid messages
-            }
             await processMessagingEvent(messageEvent);
           }
         }
