@@ -184,8 +184,8 @@ async function fetchInstagramUserInfo(senderId, businessId, supabase) {
 
 export {
   fetchInstagramIdFromDatabase,
-  fetchInstagramIdFromFacebook,
+  
   fetchInstagramUserInfo, // Ensure this line exists
-  logMessage,
+  
 };
 
