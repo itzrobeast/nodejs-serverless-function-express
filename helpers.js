@@ -78,7 +78,7 @@ export async function fetchBusinessDetails(businessId) {
   try {
     const { data, error } = await supabase
       .from('businesses')
-      .select('id, name, ig_id, page_id, business_user_id') // Include business_user_id
+      .select('id, name, ig_id, page_id, business_owner_id') 
       .eq('id', businessId)
       .single();
 
