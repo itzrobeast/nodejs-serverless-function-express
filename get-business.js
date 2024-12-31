@@ -9,7 +9,7 @@ const router = express.Router();
  */
 router.get('/', async (req, res) => {
   try {
-    const business_owner_id = parseInt(req.query.business_owner_id, 10); /
+    const business_owner_id = parseInt(req.query.business_owner_id, 10); 
     if (isNaN(business_owner_id)) {
       console.error('[ERROR] Invalid or missing business_owner_id in query params:', req.query.business_owner_id);
       return res.status(400).json({ error: 'Invalid or missing business_owner_id in query parameters' });
