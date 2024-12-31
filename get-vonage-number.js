@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
       const { data: business, error: businessError } = await supabase
         .from('businesses')
         .select('id')
-        .eq('business_owner_id', ownerId) 
+        .eq('business_owner_id', businessOwnerId) 
         .single();
 
       if (businessError || !business) {
