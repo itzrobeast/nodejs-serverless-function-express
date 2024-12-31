@@ -72,3 +72,35 @@ export async function fetchInstagramIdFromDatabase(businessId, supabase) {
   }
 }
 
+
+
+/**
+ * Fetch Instagram user information using the sender ID.
+ * @param {string} senderId - The Instagram sender ID.
+ * @returns {object|null} - The user info object or null if not found.
+ */
+async function fetchInstagramUserInfo(senderId) {
+  try {
+    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN; // Use a valid access token
+    if (!accessToken) {
+      throw new Error('Instagram Access Token is not defined in environment variables');
+    }
+
+    const response = await fetch(`https://graph.facebook.com/v17.0/${senderId}?fields=id,username&access_token=${accessToken}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[ERROR] Instagram API error:', data.error.message);
+      return null;
+    }
+
+    console.log('[DEBUG] Fetched Instagram user info:', data);
+    return data; // Example: { id: '12345', username: 'example_user' }
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch Instagram user info:', err.message);
+    return null;
+  }
+}
+
+export { fetchInstagramUserInfo };
+
