@@ -63,7 +63,7 @@ export async function fetchInstagramBusinessIdFromDatabase(businessId, supabase)
       return null;
     }
 
-    console.log(`[DEBUG] Instagram ID for business ID ${businessId}: ${data.ig_id}`);
+    console.log(`[DEBUG] Instagram ID for business 123$ ID ${businessId}: ${data.ig_id}`);
     return data.ig_id;
   } catch (err) {
     console.error('[ERROR] Exception while fetching Instagram ID from database:', err.message);
