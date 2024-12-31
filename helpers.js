@@ -24,7 +24,7 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
         return null;
       }
 
-      return fetchedIgId; // Return as int
+  
 
       // Convert to integer
       const igIdInt = parseInt(fetchedIgId, 10);
