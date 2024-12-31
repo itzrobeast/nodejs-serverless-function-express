@@ -6,7 +6,7 @@ import supabase from '../supabaseClient.js'; // Adjust path as needed
 const router = express.Router();
 
 // Helper function to refresh a page access token
-async function refreshPageAccessToken(pageId, userAccessToken) {
+export async function refreshPageAccessToken(pageId, userAccessToken) {
   try {
     const response = await fetch(`https://graph.facebook.com/v15.0/me/accounts?access_token=${userAccessToken}`);
     const data = await response.json();
