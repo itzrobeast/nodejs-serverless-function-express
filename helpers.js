@@ -24,30 +24,25 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
         return null;
       }
 
-  
-
       // Convert to integer
       const igIdInt = parseInt(fetchedIgId, 10);
 
-        // If conversion fails, handle appropriately
+      // If conversion fails, handle appropriately
       if (isNaN(igIdInt)) {
-      console.error(`[ERROR] Invalid Instagram Business Account ID: ${fetchedIgId}`);
-      return null;
-    }
+        console.error(`[ERROR] Invalid Instagram Business Account ID: ${fetchedIgId}`);
+        return null;
+      }
 
       return igIdInt; // Return as integer
-
-      
-
-    
-    console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
-    return null;
+    } else {
+      console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
+      return null;
+    }
   } catch (err) {
     console.error('[ERROR] Failed to fetch Instagram Business Account ID:', err.message);
     return null;
   }
 }
-
 
 
 
