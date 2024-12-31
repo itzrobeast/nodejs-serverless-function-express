@@ -1,7 +1,7 @@
 // helpers.js
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
-import { refreshPageAccessToken } from './auth/refresh-token.js';
+import { refreshPageAccessToken, refreshUserAccessToken } from './auth/refresh-token.js';
 
 /**
  * Fetch Instagram Business ID using Facebook API.
@@ -114,10 +114,28 @@ export async function fetchBusinessDetails(businessId) {
   }
 }
 
-
-export async function getPageAccessToken(businessId, pageId, supabase) {
+export async function getUserAccessToken(userId) {
   try {
-    // Fetch access token and user ID from the database
+    const { data, error } = await supabase
+      .from('users')
+      .select('user_access_token')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch user access token for User ID ${userId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    return data.user_access_token;
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching user access token:', err.message);
+    return null;
+  }
+}
+
+export async function getPageAccessToken(businessId, pageId) {
+  try {
     const { data, error } = await supabase
       .from('page_access_tokens')
       .select('page_access_token, user_id')
@@ -126,34 +144,32 @@ export async function getPageAccessToken(businessId, pageId, supabase) {
       .single();
 
     if (error || !data) {
-      console.error(`[ERROR] Failed to fetch access token for businessId=${businessId}, pageId=${pageId}:`, error?.message || 'No data found');
+      console.error(`[ERROR] Failed to fetch page access token for Business ID ${businessId}, Page ID ${pageId}:`, error?.message || 'No data found');
       return null;
     }
 
-    let { page_access_token: pageAccessToken, user_id: userId } = data;
+    const { page_access_token: pageAccessToken, user_id: userId } = data;
 
-    // Validate token by making a test API call
+    // Fetch user access token
+    const userAccessToken = await getUserAccessToken(userId);
+
+    // Validate the page access token
     const testResponse = await fetch(`https://graph.facebook.com/v15.0/me?access_token=${pageAccessToken}`);
     const testData = await testResponse.json();
 
-    if (!testResponse.ok || testData.error?.message?.includes('Session has expired')) {
-      console.warn(`[WARN] Access token expired for pageId=${pageId}. Refreshing token...`);
-
-      // Refresh the token
-      pageAccessToken = await refreshPageAccessToken(pageId, userId);
-
-      if (!pageAccessToken) {
-        console.error(`[ERROR] Failed to refresh access token for pageId=${pageId}`);
-        return null;
-      }
+    if (testData.error?.message.includes('Session has expired')) {
+      console.warn(`[WARN] Page access token expired for Page ID ${pageId}. Refreshing token...`);
+      return await refreshPageAccessToken(pageId, userAccessToken);
     }
 
     return pageAccessToken;
   } catch (err) {
-    console.error(`[ERROR] Exception while fetching access token for pageId=${pageId}:`, err.message);
+    console.error(`[ERROR] Exception while fetching page access token for Page ID ${pageId}:`, err.message);
     return null;
   }
 }
+
+
 
 
 
