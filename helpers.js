@@ -129,16 +129,28 @@ export async function getPageAccessToken(businessId, pageId, supabase) {
       return null;
     }
 
-    return data.page_access_token;
+    let { page_access_token: pageAccessToken, user_access_token: userAccessToken } = data;
+
+    // Validate token by making a test API call
+    const testResponse = await fetch(`https://graph.facebook.com/v15.0/me?access_token=${pageAccessToken}`);
+    const testData = await testResponse.json();
+
+    if (testData.error?.message.includes('Session has expired')) {
+      console.warn(`[WARN] Access token expired for pageId=${pageId}. Refreshing token...`);
+      pageAccessToken = await refreshPageAccessToken(pageId, userAccessToken);
+
+      if (!pageAccessToken) {
+        console.error(`[ERROR] Failed to refresh access token for pageId=${pageId}`);
+        return null;
+      }
+    }
+
+    return pageAccessToken;
   } catch (err) {
-    console.error('[ERROR] Failed to fetch page access token:', err.message);
+    console.error(`[ERROR] Exception while fetching access token for pageId=${pageId}:`, err.message);
     return null;
   }
 }
-
-
-
-
 
 
 
