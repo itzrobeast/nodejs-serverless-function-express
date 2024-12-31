@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
     // Extract user details from token validation
     const user = {
-      fb_id: tokenDetails.user_id,
+      fb_id: tokenDetails.business_owner_id,
       scopes: tokenDetails.scopes,
     };
 
