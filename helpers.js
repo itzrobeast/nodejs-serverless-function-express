@@ -172,6 +172,7 @@ export async function logMessage(businessId, senderId, recipientId, message, typ
 /**
  * Parse user message.
  */
+/*
 export function parseUserMessage(userMessage) {
   // Validate input
   if (typeof userMessage !== 'string' || userMessage.trim() === '') {
