@@ -147,6 +147,13 @@ export async function getUserAccessToken(userId, shortLivedToken = null) {
       return null;
     }
 
+     return { token: data.user_access_token, updatedAt: data.updated_at };
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching user access token:', err.message);
+    return null;
+  }
+}
+
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
 
     // Assume tokens expire in 60 days and check the last updated time
