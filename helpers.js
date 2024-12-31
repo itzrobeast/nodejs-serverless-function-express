@@ -116,22 +116,25 @@ export async function fetchBusinessDetails(businessId) {
 
 
 export async function getValidUserAccessToken(userId, shortLivedToken) {
-  const userAccessToken = await getUserAccessToken(userId);
+  const userAccessTokenDetails = await getUserAccessToken(userId);
 
-  if (!userAccessToken || isExpired(userAccessToken)) {
+  if (!userAccessTokenDetails || isExpired(userAccessTokenDetails.updatedAt)) {
     console.log('[INFO] User access token expired or missing. Refreshing...');
+    if (!shortLivedToken) {
+      console.error('[ERROR] No short-lived token available to refresh user access token.');
+      return null;
+    }
     const refreshedToken = await refreshUserAccessToken(userId, shortLivedToken);
-
     if (!refreshedToken) {
       console.error('[ERROR] Failed to refresh user access token.');
       return null;
     }
-
     return refreshedToken;
   }
 
-  return userAccessToken;
+  return userAccessTokenDetails.token;
 }
+
 
 
 export async function getUserAccessToken(userId, shortLivedToken = null) {
@@ -157,7 +160,7 @@ export async function getUserAccessToken(userId, shortLivedToken = null) {
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
 
     // Assume tokens expire in 60 days and check the last updated time
-    const isExpired = () => {
+    const  = () => {
       const tokenExpiryDays = 60;
       const lastUpdated = new Date(updatedAt);
       const now = new Date();
