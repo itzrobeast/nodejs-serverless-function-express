@@ -185,7 +185,7 @@ export {
   fetchInstagramIdFromDatabase,
   fetchInstagramIdFromFacebook,
   fetchInstagramUserInfo,
-  logMessage,
+
 };
 
 
