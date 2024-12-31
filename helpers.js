@@ -92,8 +92,29 @@ async function fetchAccessTokenForBusiness(businessId, supabase) {
   }
 }
 
-
-async function logMessage(businessId, senderId, recipientId, message, type, messageId, isBusinessMessage, igId, username) {
+/**
+ * Logs a message into the database.
+ * @param {string} businessId - The ID of the business.
+ * @param {string} senderId - The ID of the message sender.
+ * @param {string} recipientId - The ID of the message recipient.
+ * @param {string} message - The message content.
+ * @param {string} type - The type of message ('received' or 'sent').
+ * @param {string|null} messageId - The unique message ID.
+ * @param {boolean} isBusinessMessage - Whether the message is from the business.
+ * @param {string} igId - The Instagram ID of the business or user.
+ * @param {string} username - The Instagram username of the sender.
+ */
+export async function logMessage(
+  businessId,
+  senderId,
+  recipientId,
+  message,
+  type,
+  messageId,
+  isBusinessMessage,
+  igId,
+  username
+) {
   try {
     const { data, error } = await supabase
       .from('messages')
@@ -158,5 +179,12 @@ async function fetchInstagramUserInfo(senderId, businessId, supabase) {
     return null;
   }
 }
-export { fetchInstagramUserInfo };
+
+export {
+  fetchInstagramIdFromDatabase,
+  fetchInstagramIdFromFacebook,
+  fetchInstagramUserInfo,
+  logMessage,
+};
+
 
