@@ -93,6 +93,35 @@ async function fetchAccessTokenForBusiness(businessId, supabase) {
 }
 
 
+async function logMessage(businessId, senderId, recipientId, message, type, messageId, isBusinessMessage, igId, username) {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .insert([{
+        business_id: businessId,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        message,
+        type, // 'sent' or 'received'
+        message_id: messageId,
+        is_business_message: isBusinessMessage,
+        ig_id: igId,
+        username,
+      }]);
+
+    if (error) {
+      console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message);
+      return;
+    }
+
+    console.log('[DEBUG] Message logged successfully:', data);
+  } catch (err) {
+    console.error('[ERROR] Exception while logging message:', err.message);
+  }
+}
+
+
+
 /**
  * Fetch Instagram user information using the sender ID.
  * @param {string} senderId - The Instagram sender ID.
