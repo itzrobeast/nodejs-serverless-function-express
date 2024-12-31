@@ -76,7 +76,7 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log(`[DEBUG] Preparing to upsert business with ig_id: ${igId}`);
     // Step 5: Upsert Business
     const businessData = {
-      business_owner_id: owner.id,
+      business_owner_id: businessOwner.id,
       name: `${name}'s Business`,
       page_id: firstPage.id,
       ig_id: igId || null,
@@ -180,7 +180,7 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log(`[DEBUG] Preparing to upsert business with ig_id: ${igId}`);
     // Step 5: Upsert Business
     const businessData = {
-      business_owner_id: owner.id,
+      business_owner_id: businessOwner.id,
       name: `${name}'s Business`,
       page_id: firstPage.id,
       ig_id: igId || null,
