@@ -1,6 +1,7 @@
 import express from 'express';
 import supabase from './supabaseClient.js';
 import fetch from 'node-fetch';
+import { fetchInstagramIdFromFacebook } from './helpers.js';
 
 const router = express.Router();
 
@@ -26,27 +27,6 @@ async function subscribePageToWebhook(pageId, pageAccessToken) {
   } catch (error) {
     console.error('[ERROR] Subscription to webhook failed:', error.message);
     return false;
-  }
-}
-
-/**
- * Helper: Fetch Instagram Business Account ID
- */
-async function fetchInstagramId(pageId, pageAccessToken) {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v15.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
-    );
-    const data = await response.json();
-    if (response.ok && data.instagram_business_account) {
-      console.log(`[INFO] Instagram Business Account ID for Page ${pageId}:`, data.instagram_business_account.id);
-      return data.instagram_business_account.id;
-    }
-    console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
-    return null;
-  } catch (error) {
-    console.error('[ERROR] Failed to fetch Instagram Business Account ID:', error.message);
-    return null;
   }
 }
 
@@ -102,7 +82,9 @@ router.post('/', async (req, res) => {
       const { id: pageId, access_token: pageAccessToken, name: pageName } = page;
 
       // Fetch Instagram Business Account ID
-      const igId = await fetchInstagramId(pageId, pageAccessToken);
+      
+      const igId = await fetchInstagramIdFromFacebook(pageId, pageAccessToken);
+
 
       // Upsert Business in Supabase
       const { error: businessError } = await supabase.from('businesses').upsert({
