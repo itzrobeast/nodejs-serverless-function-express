@@ -11,7 +11,7 @@ const router = express.Router();
  * @param {string} shortLivedToken - The short-lived token to exchange.
  * @returns {string|null} - The refreshed user access token or null if the refresh fails.
  */
-export async function refreshUserAccessToken(userId, shortLivedToken) {
+export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=<app_id>&client_secret=<app_secret>&fb_exchange_token=${shortLivedToken}`
@@ -27,7 +27,7 @@ export async function refreshUserAccessToken(userId, shortLivedToken) {
     const { error } = await supabase
       .from('business_owners')
       .update({ user_access_token: data.access_token, updated_at: new Date().toISOString() })
-      .eq('id', userId);
+      .eq('id', businessOwnerId);
 
     if (error) {
       console.error('[ERROR] Failed to update user access token in database:', error.message);
