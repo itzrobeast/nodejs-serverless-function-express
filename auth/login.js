@@ -45,11 +45,14 @@ router.post('/', loginLimiter, async (req, res) => {
     // Step 3: Fetch Instagram Business ID for the Page
     const igId = await fetchInstagramIdFromFacebook(firstPage.id, firstPage.access_token);
     if (!igId) {
+      
       console.warn('[WARN] Instagram Business ID not found for the page. Skipping Instagram linkage.');
     } else {
       console.log(`[DEBUG] Fetched Instagram Business ID: ${igId}`);
     }
 
+    
+console.log(`[DEBUG] Preparing to upsert user with ig_id: ${igId}`);
     // Step 4: Upsert User in Supabase
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -68,6 +71,8 @@ router.post('/', loginLimiter, async (req, res) => {
     if (userError) throw new Error(`User upsert failed: ${userError.message}`);
     console.log('[DEBUG] User Upserted:', user);
 
+
+    console.log(`[DEBUG] Preparing to upsert business with ig_id: ${igId}`);
     // Step 5: Upsert Business
     const businessData = {
       user_id: user.id,
