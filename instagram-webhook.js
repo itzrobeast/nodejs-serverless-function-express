@@ -151,7 +151,7 @@ async function processMessagingEvent(message) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(message, null, 2));
 
-    // Extract sender and recipient IDs from the message payload
+    // Extract sender and recipient IDs
     const senderId = message.sender.id;
     const recipientId = message.recipient.id;
 
@@ -160,18 +160,18 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    // Determine if the message is deleted or an echo
+    // Determine message attributes
     const isDeleted = message.message?.is_deleted || false;
     console.log(`[DEBUG] Message is_deleted: ${isDeleted}`);
     const isEcho = message.message?.is_echo || false;
     const userMessage = message.message?.text || '';
     const messageId = message.message?.mid;
 
-    // Use the appropriate Instagram ID based on whether it's an echo message
+    // Determine the appropriate Instagram ID
     const igId = isEcho ? senderId : recipientId;
     console.log(`[DEBUG] Using Instagram ID: ${igId}`);
 
-    // Fetch the corresponding businessId using the Instagram ID
+    // Fetch businessId using Instagram ID
     const businessId = await fetchBusinessIdFromInstagramId(igId, supabase);
     if (!businessId) {
       console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
@@ -179,16 +179,16 @@ async function processMessagingEvent(message) {
     }
     console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
-    // If the message is marked as deleted, handle it and stop further processing
+    // Handle deleted messages
     if (isDeleted) {
-      console.log('[INFO] Handling deleted message event.');
+      console.log('[INFO] Handling deleted message event...');
       if (!messageId) {
-        console.error('[WARN] Deleted message has no valid message ID.');
+        console.error('[WARN] Deleted message does not have a valid message ID.');
         return;
       }
       console.log(`[DEBUG] Deleting message with ID: ${messageId}`);
       await handleUnsentMessage(messageId, businessId);
-      console.log('[INFO] Deleted message handled.');
+      console.log('[INFO] Deleted message handled successfully.');
       return;
     }
 
@@ -198,38 +198,59 @@ async function processMessagingEvent(message) {
       return;
     }
 
-    // Skip response for empty or whitespace-only messages
+    // Skip empty or whitespace-only messages
     if (!userMessage.trim()) {
-      console.log('[INFO] Skipping response for empty or missing message.');
+      console.log('[INFO] Skipping empty or missing message.');
       return;
     }
 
-    // Fetch the user's Instagram information dynamically
+    // Fetch Instagram user information dynamically
     const userInfo = await fetchInstagramUserInfo(senderId, businessId, supabase);
     if (!userInfo) {
-      console.warn(`[WARN] Could not fetch user info for senderId=${senderId}`);
+      console.warn(`[WARN] Could not fetch user info for senderId=${senderId}.`);
     } else {
       console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
     }
 
-    // Log the incoming message for tracking purposes
-    await logMessage(businessId, senderId, recipientId, userMessage, 'received', messageId, false, igId, userInfo?.username || '');
+    // Log the incoming message
+    await logMessage(
+      businessId,
+      senderId,
+      recipientId,
+      userMessage,
+      'received',
+      messageId,
+      false, // isBusinessMessage
+      igId,
+      userInfo?.username || ''
+    );
 
-    // Parse the user's message and update their profile info if applicable
+    // Parse user message and update user profile if applicable
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
+      console.log(`[INFO] Updating user info for senderId=${senderId}, field=${field}, value=${value}`);
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
-    // Generate an AI response using the assistant handler
+    // Generate an AI response
     console.log('[DEBUG] Generating AI response...');
     const assistantResponse = await assistantHandler({ userMessage, businessId });
 
-    // If the AI generates a response, send it and log the outgoing message
+    // Send AI response if generated
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
       await sendInstagramMessage(senderId, assistantResponse.message);
-      await logMessage(businessId, senderId, recipientId, assistantResponse.message, 'sent', null, true, igId, 'Business');
+      await logMessage(
+        businessId,
+        senderId,
+        recipientId,
+        assistantResponse.message,
+        'sent',
+        null,
+        true, // isBusinessMessage
+        igId,
+        'Business'
+      );
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
