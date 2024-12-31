@@ -1,6 +1,6 @@
 // helpers.js
 import fetch from 'node-fetch';
-import { supabase } from './supabaseClient.js';
+import supabase from './supabaseClient.js';
 
 /**
  * Fetch Instagram Business ID using Facebook API.
