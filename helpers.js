@@ -33,7 +33,7 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
         return null;
       }
 
-      return fetchedIgId;   // Return as integer
+      return fetchedIgId;  
       
     } else {
       console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
