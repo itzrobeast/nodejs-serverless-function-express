@@ -25,7 +25,7 @@ export async function refreshUserAccessToken(userId, shortLivedToken) {
 
     // Update the token in the database
     const { error } = await supabase
-      .from('users')
+      .from('business_users')
       .update({ user_access_token: data.access_token, updated_at: new Date().toISOString() })
       .eq('id', userId);
 
