@@ -5,21 +5,21 @@ const router = express.Router();
 
 /**
  * Fetch business data for a specific user.
- * GET /get-business?user_id=XYZ
+ * GET /get-business?business_owner_id=XYZ
  */
 router.get('/', async (req, res) => {
   try {
-    const user_id = parseInt(req.query.user_id, 10); // Ensure `user_id` is an integer
-    if (isNaN(user_id)) {
-      console.error('[ERROR] Invalid or missing user_id in query params:', req.query.user_id);
-      return res.status(400).json({ error: 'Invalid or missing user_id in query parameters' });
+    const business_owner_id = parseInt(req.query.business_owner_id, 10); /
+    if (isNaN(business_owner_id)) {
+      console.error('[ERROR] Invalid or missing business_owner_id in query params:', req.query.business_owner_id);
+      return res.status(400).json({ error: 'Invalid or missing business_owner_id in query parameters' });
     }
 
-    console.log(`[DEBUG] Fetching business data for user_id: ${user_id}`);
+    console.log(`[DEBUG] Fetching business data for business_owner_id: ${business_owner_id}`);
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
-      .eq('user_id', user_id)
+      .eq('business_owner_id', business_owner_id)
       .single();
 
     if (error) {
@@ -43,10 +43,10 @@ router.get('/', async (req, res) => {
  */
 router.put('/update-business', async (req, res) => {
   try {
-    const user_id = parseInt(req.body.user_id, 10);
-    if (isNaN(user_id)) {
-      console.error('[ERROR] Invalid or missing user_id in request body:', req.body.user_id);
-      return res.status(400).json({ error: 'Invalid or missing user_id in request body' });
+    const business_owner_id = parseInt(req.body.business_owner_id, 10);
+    if (isNaN(business_owner_id)) {
+      console.error('[ERROR] Invalid or missing business_owner_id in request body:', req.body.business_owner_id);
+      return res.status(400).json({ error: 'Invalid or missing business_owner_id in request body' });
     }
 
     const {
@@ -79,11 +79,11 @@ router.put('/update-business', async (req, res) => {
       
     };
 
-    console.log(`[DEBUG] Updating business for user_id: ${user_id}`, updateFields);
+    console.log(`[DEBUG] Updating business for business_owner_id: ${business_owner_id}`, updateFields);
     const { data, error } = await supabase
       .from('businesses')
       .update(updateFields)
-      .eq('user_id', user_id)
+      .eq('business_owner_id', business_owner_id)
       .select('*');
 
     if (error) {
@@ -105,10 +105,10 @@ router.put('/update-business', async (req, res) => {
  */
 router.post('/add-or-update-business', async (req, res) => {
   try {
-    const user_id = parseInt(req.body.user_id, 10);
-    if (isNaN(user_id)) {
-      console.error('[ERROR] Invalid or missing user_id in request body:', req.body.user_id);
-      return res.status(400).json({ error: 'Invalid or missing user_id in request body' });
+    const business_owner_id = parseInt(req.body.business_owner_id, 10);
+    if (isNaN(business_owner_id)) {
+      console.error('[ERROR] Invalid or missing business_owner_id in request body:', req.body.business_owner_id);
+      return res.status(400).json({ error: 'Invalid or missing business_owner_id in request body' });
     }
 
     const {
@@ -128,11 +128,11 @@ router.post('/add-or-update-business', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: name or contact_email' });
     }
 
-    console.log(`[DEBUG] Processing business data for user_id: ${user_id}`);
+    console.log(`[DEBUG] Processing business data for business_owner_id: ${business_owner_id}`);
     const { data: existingBusiness, error: fetchError } = await supabase
       .from('businesses')
       .select('*')
-      .eq('user_id', user_id)
+      .eq('business_owner_id', business_owner_id)
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
@@ -141,7 +141,7 @@ router.post('/add-or-update-business', async (req, res) => {
     }
 
     if (existingBusiness) {
-      console.log(`[DEBUG] Business exists for user_id: ${user_id}. Updating data.`);
+      console.log(`[DEBUG] Business exists for business_owner_id: ${business_owner_id}. Updating data.`);
       const updateFields = {
         name,
         contact_email,
@@ -168,12 +168,12 @@ router.post('/add-or-update-business', async (req, res) => {
       console.log('[DEBUG] Business updated successfully:', data);
       return res.status(200).json({ message: 'Business information updated successfully', data });
     } else {
-      console.log(`[DEBUG] No business found for user_id: ${user_id}. Adding new business.`);
+      console.log(`[DEBUG] No business found for business_owner_id: ${business_owner_id}. Adding new business.`);
       const { data, error: insertError } = await supabase
         .from('businesses')
         .insert([
           {
-            user_id,
+            business_owner_id,
             name,
             contact_email,
             locations: locations || '',
