@@ -171,7 +171,7 @@ console.log('[DEBUG] Generating AI response...');
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
-}
+
 
 
 
