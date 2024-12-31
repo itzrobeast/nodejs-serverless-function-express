@@ -173,19 +173,33 @@ export async function logMessage(businessId, senderId, recipientId, message, typ
  * Parse user message.
  */
 export function parseUserMessage(userMessage) {
-  if (typeof userMessage !== 'string') {
-    console.error('[ERROR] Invalid input type for parseUserMessage:', typeof userMessage);
+  // Validate input
+  if (typeof userMessage !== 'string' || userMessage.trim() === '') {
+    console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
     return { field: null, value: null };
   }
 
-  const regex = /(\w+):\s*(.+)/;
+  // Define regex to match key-value pairs in the format "key: value"
+  const regex = /^([\w-]+):\s*(.+)$/; // Allow hyphenated keys (e.g., "key-name")
+
+  // Execute the regex match
   const match = userMessage.match(regex);
-  if (!match) return { field: null, value: null };
+
+  // Handle cases where regex does not match
+  if (!match) {
+    console.warn('[WARN] User message does not match expected format:', userMessage);
+    return { field: null, value: null };
+  }
+
+  // Extract field and value
+  const [, field, value] = match;
+
   return {
-    field: match[1].toLowerCase(),
-    value: match[2].trim(),
+    field: field.toLowerCase(),
+    value: value.trim(),
   };
 }
+
 
 
 /**
