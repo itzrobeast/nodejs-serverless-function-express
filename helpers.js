@@ -129,15 +129,21 @@ async function logMessage(businessId, senderId, recipientId, message, type, mess
  */
 async function fetchInstagramUserInfo(senderId, businessId, supabase) {
   try {
-    // Fetch the access token for the specific business
-    const accessToken = await fetchAccessTokenForBusiness(businessId, supabase);
-    if (!accessToken) {
-      console.error(`[ERROR] Access token not found for businessId=${businessId}`);
+    const businessDetails = await fetchBusinessDetails(businessId);
+    if (!businessDetails) {
+      console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
       return null;
     }
 
-    // Call the Instagram Graph API
-    const response = await fetch(`https://graph.facebook.com/v17.0/${senderId}?fields=id,username&access_token=${accessToken}`);
+    const { page_id: pageId } = businessDetails;
+    const accessToken = await getPageAccessToken(businessId, pageId, supabase);
+
+    if (!accessToken) {
+      console.error(`[ERROR] Access token not available for businessId=${businessId}, pageId=${pageId}`);
+      return null;
+    }
+
+    const response = await fetch(`https://graph.facebook.com/v15.0/${senderId}?fields=id,username&access_token=${accessToken}`);
     const data = await response.json();
 
     if (!response.ok) {
@@ -146,7 +152,7 @@ async function fetchInstagramUserInfo(senderId, businessId, supabase) {
     }
 
     console.log('[DEBUG] Fetched Instagram user info:', data);
-    return data; // Example: { id: '12345', username: 'example_user' }
+    return data;
   } catch (err) {
     console.error('[ERROR] Failed to fetch Instagram user info:', err.message);
     return null;
