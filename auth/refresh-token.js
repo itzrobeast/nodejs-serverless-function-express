@@ -5,6 +5,40 @@ import supabase from '../supabaseClient.js'; // Adjust path as needed
 
 const router = express.Router();
 
+
+
+export async function refreshUserAccessToken(userId, shortLivedToken) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=<app_id>&client_secret=<app_secret>&fb_exchange_token=${shortLivedToken}`
+    );
+    const data = await response.json();
+
+    if (!data.access_token) {
+      console.error('[ERROR] Failed to refresh user access token:', data.error.message);
+      return null;
+    }
+
+    // Update token in database
+    const { error } = await supabase
+      .from('users')
+      .update({ user_access_token: data.access_token })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[ERROR] Failed to update user access token in database:', error.message);
+      return null;
+    }
+
+    console.log('[INFO] User access token refreshed successfully for user:', userId);
+    return data.access_token;
+  } catch (err) {
+    console.error('[ERROR] Exception while refreshing user access token:', err.message);
+    return null;
+  }
+}
+
+
 // Helper function to refresh a page access token
 export async function refreshPageAccessToken(pageId, userAccessToken) {
   try {
