@@ -8,6 +8,7 @@ import Joi from 'joi';
 import {
   fetchInstagramIdFromDatabase,
   fetchInstagramIdFromFacebook,
+  fetchInstagramUserInfo,
 } from './helpers.js';
 
 const router = express.Router();
