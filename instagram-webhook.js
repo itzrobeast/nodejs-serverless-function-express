@@ -12,6 +12,8 @@ import {
   logMessage,
   parseUserMessage,
   fetchBusinessDetails,
+  getPageAccessToken,
+  sendInstagramMessage,
 } from './helpers.js';
 import { refreshPageAccessToken } from './auth/refresh-token.js';
 
@@ -224,14 +226,32 @@ async function processMessagingEvent(message) {
     // Send AI response if generated
     if (assistantResponse && assistantResponse.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
-      await sendInstagramMessage(senderId, assistantResponse.message);
+
+      // Fetch the access token dynamically
+      const businessDetails = await fetchBusinessDetails(businessId);
+      if (!businessDetails) {
+        console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
+        return;
+      }
+
+      const { page_id: pageId } = businessDetails;
+      const accessToken = await getPageAccessToken(businessId, pageId, supabase);
+      if (!accessToken) {
+        console.error('[ERROR] Failed to fetch access token. Cannot send message.');
+        return;
+      }
+
+      // Send the AI response
+      await sendInstagramMessage(senderId, assistantResponse.message, accessToken);
+
+      // Log the outgoing message
       await logMessage(
         businessId,
         senderId,
         recipientId,
         assistantResponse.message,
         'sent',
-        null,
+        null, // No messageId for outgoing messages
         true, // isBusinessMessage
         igId,
         'Business'
