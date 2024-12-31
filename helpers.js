@@ -147,7 +147,7 @@ export async function getPageAccessToken(businessId, pageId) {
   try {
     const { data, error } = await supabase
       .from('page_access_tokens')
-      .select('page_access_token, user_id, updated_at')
+      .select('page_access_token, business_owner_id, updated_at')
       .eq('business_id', businessId)
       .eq('page_id', pageId)
       .single();
@@ -157,7 +157,7 @@ export async function getPageAccessToken(businessId, pageId) {
       return null;
     }
 
-    const { page_access_token: pageAccessToken, user_id: userId, updated_at: updatedAt } = data;
+    const { page_access_token: pageAccessToken, business_owner_id: ownerId, updated_at: updatedAt } = data;
 
     if (isExpired(updatedAt)) {
       console.warn(`[WARN] Page access token expired for Page ID ${pageId}. Refreshing token...`);
@@ -333,7 +333,7 @@ export async function fetchBusinessesForOwner(businessOwnerId) {
     const { data, error } = await supabase
       .from('businesses')
       .select('id, name, ig_id')
-      .eq('business_user_id', businessOwnerId); // Updated FK column
+      .eq('business_owner_id', businessOwnerId); // Updated FK column
 
     if (error || !data) {
       console.error(`[ERROR] Failed to fetch businesses for owner ID ${businessOwnerId}:`, error?.message || 'No data found');
