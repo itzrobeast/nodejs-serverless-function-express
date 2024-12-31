@@ -71,3 +71,4 @@ export async function fetchInstagramIdFromDatabase(businessId, supabase) {
     return null;
   }
 }
+
