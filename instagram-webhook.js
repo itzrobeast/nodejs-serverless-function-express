@@ -157,6 +157,24 @@ async function processMessagingEvent(message) {
   }
 }
 
+console.log(`[DEBUG] Processing message for Instagram ID: ${businessInstagramId}`);
+
+
+console.log('[DEBUG] Generating AI response...');
+    const assistantResponse = await assistantHandler({ userMessage, businessId });
+   
+    if (assistantResponse && assistantResponse.message) {
+      console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
+      await sendInstagramMessage(senderId, assistantResponse.message);
+      await logMessage(businessId, senderId, recipientId, assistantResponse.message, 'sent', null, true, igIdFromDB, 'Business');
+    }
+  } catch (err) {
+    console.error('[ERROR] Failed to process messaging event:', err.message);
+  }
+}
+
+
+
 // POST route for webhook
 router.post('/', async (req, res) => {
   try {
