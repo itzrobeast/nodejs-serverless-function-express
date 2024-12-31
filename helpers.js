@@ -233,6 +233,25 @@ export async function sendInstagramMessage(recipientId, message, accessToken) {
   }
 }
 
+
+
+export function parseUserMessage(userMessage) {
+    // Example implementation to extract a field and value
+    const regex = /(\w+):\s*(.+)/;
+    const match = userMessage.match(regex);
+
+    if (!match) return { field: null, value: null };
+
+    return {
+        field: match[1].toLowerCase(),
+        value: match[2].trim(),
+    };
+}
+
+
+
+
+
 /**
  * Log a message into the database.
  */
