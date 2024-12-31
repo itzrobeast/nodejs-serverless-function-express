@@ -68,24 +68,7 @@ const messageSchema = Joi.object({
 });
 
 // Helper to fetch business details from Supabase
-async function fetchBusinessDetails(businessId) {
-  try {
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('ig_id, page_id')
-      .eq('id', businessId)
-      .single();
 
-    if (error || !data) {
-      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
-      return null;
-    }
-    return { ig_id: data.ig_id, page_id: data.page_id };
-  } catch (err) {
-    console.error('[ERROR] Exception while fetching business details:', err.message);
-    return null;
-  }
-}
 
 // Helper to get page access token from Supabase
 async function getPageAccessToken(businessId, pageId, supabase) {
