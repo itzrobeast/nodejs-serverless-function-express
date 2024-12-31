@@ -76,7 +76,7 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log(`[DEBUG] Preparing to upsert business with ig_id: ${igId}`);
     // Step 5: Upsert Business
     const businessData = {
-      user_id: user.id,
+      business_owner_id: owner.id,
       name: `${name}'s Business`,
       page_id: firstPage.id,
       ig_id: igId || null,
@@ -84,7 +84,7 @@ router.post('/', loginLimiter, async (req, res) => {
 
     const { data: business, error: businessError } = await supabase
       .from('businesses')
-      .upsert(businessData, { onConflict: ['user_id'] })
+      .upsert(businessData, { onConflict: ['business_owner_id'] })
       .select()
       .single();
 
@@ -180,7 +180,7 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log(`[DEBUG] Preparing to upsert business with ig_id: ${igId}`);
     // Step 5: Upsert Business
     const businessData = {
-      user_id: user.id,
+      business_owner_id: owner.id,
       name: `${name}'s Business`,
       page_id: firstPage.id,
       ig_id: igId || null,
@@ -188,7 +188,7 @@ router.post('/', loginLimiter, async (req, res) => {
 
     const { data: business, error: businessError } = await supabase
       .from('businesses')
-      .upsert(businessData, { onConflict: ['user_id'] })
+      .upsert(businessData, { onConflict: ['business_owner_id'] })
       .select()
       .single();
 
