@@ -17,16 +17,29 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
     if (response.ok && data.instagram_business_account) {
       const fetchedIgId = data.instagram_business_account.id;
       console.log(`[DEBUG] Fetched Instagram Business Account ID: ${fetchedIgId}`);
-      
+
       // Validate that fetchedIgId is a string of digits
       if (typeof fetchedIgId !== 'string' || !/^\d+$/.test(fetchedIgId)) {
         console.error(`[ERROR] Invalid Instagram Business Account ID format: ${fetchedIgId}`);
         return null;
       }
 
-      return fetchedIgId; // Return as string
+      return fetchedIgId; // Return as int
+
+      // Convert to integer
+      const igIdInt = parseInt(fetchedIgId, 10);
+
+        // If conversion fails, handle appropriately
+      if (isNaN(igIdInt)) {
+      console.error(`[ERROR] Invalid Instagram Business Account ID: ${fetchedIgId}`);
+      return null;
     }
 
+      return igIdInt; // Return as integer
+
+      
+
+    
     console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
     return null;
   } catch (err) {
@@ -34,6 +47,10 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
     return null;
   }
 }
+
+
+
+
 
 /**
  * Fetch Instagram Business ID from the database.
