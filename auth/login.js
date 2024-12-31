@@ -56,7 +56,7 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log(`[DEBUG] Preparing to upsert user with ig_id: ${igId}`);
     // Step 4: Upsert User in Supabase
     const { data: user, error: userError } = await supabase
-      .from('users')
+      .from('business_users')
       .upsert(
         {
           fb_id,
@@ -160,7 +160,7 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log(`[DEBUG] Preparing to upsert user with ig_id: ${igId}`);
     // Step 4: Upsert User in Supabase
     const { data: user, error: userError } = await supabase
-      .from('users')
+      .from('business_users')
       .upsert(
         {
           fb_id,
