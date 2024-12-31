@@ -1,6 +1,7 @@
 // helpers.js
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
+import { refreshPageAccessToken } from './auth/refresh-token.js';
 
 /**
  * Fetch Instagram Business ID using Facebook API.
@@ -116,6 +117,7 @@ export async function fetchBusinessDetails(businessId) {
 
 export async function getPageAccessToken(businessId, pageId, supabase) {
   try {
+    // Fetch access token and user ID from the database
     const { data, error } = await supabase
       .from('page_access_tokens')
       .select('page_access_token, user_id')
@@ -128,15 +130,17 @@ export async function getPageAccessToken(businessId, pageId, supabase) {
       return null;
     }
 
-    const { page_access_token: pageAccessToken } = data;
+    let { page_access_token: pageAccessToken, user_id: userId } = data;
 
     // Validate token by making a test API call
     const testResponse = await fetch(`https://graph.facebook.com/v15.0/me?access_token=${pageAccessToken}`);
     const testData = await testResponse.json();
 
-    if (testData.error?.message.includes('Session has expired')) {
+    if (!testResponse.ok || testData.error?.message?.includes('Session has expired')) {
       console.warn(`[WARN] Access token expired for pageId=${pageId}. Refreshing token...`);
-      pageAccessToken = await refreshPageAccessToken(pageId, data.user_id);
+
+      // Refresh the token
+      pageAccessToken = await refreshPageAccessToken(pageId, userId);
 
       if (!pageAccessToken) {
         console.error(`[ERROR] Failed to refresh access token for pageId=${pageId}`);
@@ -150,6 +154,7 @@ export async function getPageAccessToken(businessId, pageId, supabase) {
     return null;
   }
 }
+
 
 
 
