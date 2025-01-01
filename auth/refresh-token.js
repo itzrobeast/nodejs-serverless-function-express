@@ -1,5 +1,10 @@
 import fetch from 'node-fetch';
 import supabase from '../supabaseClient.js';
+import express from 'express';
+import cron from 'node-cron';
+
+
+const router = express.Router();
 
 /**
  * Check if a token is expired based on the last updated time.
@@ -153,5 +158,43 @@ export async function getPageAccessToken(businessId, pageId) {
   }
 }
 
+
+/**
+ * Manual refresh route for a specific page.
+ */
+router.post('/', async (req, res) => {
+  try {
+    const { pageId, userAccessToken } = req.body;
+
+    if (!pageId || !userAccessToken) {
+      return res.status(400).json({ error: 'Page ID and User Access Token are required.' });
+    }
+
+    const newPageAccessToken = await refreshPageAccessToken(pageId, userAccessToken);
+
+    if (!newPageAccessToken) {
+      return res.status(500).json({ error: 'Failed to refresh page access token.' });
+    }
+
+    res.status(200).json({ message: 'Token refreshed successfully', newPageAccessToken });
+  } catch (error) {
+    res.status(500).json({ error: 'An error occurred during token refresh.' });
+  }
+});
+
+/**
+ * Scheduled task to refresh tokens for all pages.
+ */
+async function refreshAllTokens() {
+  console.log('[INFO] Starting scheduled token refresh...');
+  // Function implementation
+}
+
+// Schedule the token refresh task to run every 24 hours
+cron.schedule('0 0 * * *', refreshAllTokens);
+console.log('[INFO] Token refresh scheduler initialized.');
+
+// Export the router and other functions
 export default router;
+
 
