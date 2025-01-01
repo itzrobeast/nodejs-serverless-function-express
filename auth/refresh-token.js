@@ -37,6 +37,7 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
       `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=<app_id>&client_secret=<app_secret>&fb_exchange_token=${shortLivedToken}`
     );
     const data = await response.json();
+    console.log('[DEBUG] Facebook API response:', data);
 
     if (!data.access_token) {
       console.error('[ERROR] Failed to refresh user access token:', data.error?.message || 'Unknown error');
