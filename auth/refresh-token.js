@@ -152,3 +152,6 @@ export async function getPageAccessToken(businessId, pageId) {
     return null;
   }
 }
+
+export default router;
+
