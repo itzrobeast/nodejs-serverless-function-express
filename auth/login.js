@@ -95,7 +95,7 @@ router.post('/', loginLimiter, async (req, res) => {
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
-    res.cookie('userId', user.id.toString(), {
+    res.cookie('businessOwnerId', user.id.toString(), {
       httpOnly: true,
       secure: true,
       sameSite: 'None',
