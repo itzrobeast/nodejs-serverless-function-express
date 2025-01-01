@@ -365,17 +365,17 @@ const storeLeadsInSupabase = async (leads, businessId) => {
 /**
  * GET /retrieve-leads
  * Fetches leads from Facebook using stored page access tokens and stores them in Supabase
- * Requires userId and businessId from cookies
+ * Requires businessOwnerId and businessId from cookies
  */
 router.get('/', Sentry.Handlers.requestHandler(), async (req, res) => {
   try {
-    const { userId, businessId } = req.cookies;
+    const { businessOwnerId, businessId } = req.cookies;
 
-    console.log('[DEBUG] Parsed Cookies:', { userId, businessId });
+    console.log('[DEBUG] Parsed Cookies:', { businessOwnerId, businessId });
 
-    if (!userId || !businessId) {
-      console.error('[ERROR] Missing userId or businessId in cookies.');
-      return res.status(400).json({ error: 'Missing userId or businessId in cookies.' });
+    if (!businessOwnerId || !businessId) {
+      console.error('[ERROR] Missing businessOwnerId or businessId in cookies.');
+      return res.status(400).json({ error: 'Missing businessOwnerId or businessId in cookies.' });
     }
 
     // 1. Retrieve the page access token and page ID from 'page_access_tokens' table
@@ -387,7 +387,7 @@ router.get('/', Sentry.Handlers.requestHandler(), async (req, res) => {
       .single();
 
     if (pageRowError || !pageRow) {
-      console.error(`[ERROR] Page access token not found for userId: ${userId}, businessId: ${businessId}. Error: ${pageRowError?.message}`);
+      console.error(`[ERROR] Page access token not found for businessOwnerId: ${businessOwnerId}, businessId: ${businessId}. Error: ${pageRowError?.message}`);
       return res.status(404).json({ error: 'Page access token not found.' });
     }
 
