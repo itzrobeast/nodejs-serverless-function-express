@@ -35,7 +35,7 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
       return null;
     }
 
-    console.log('[INFO] User access token refreshed successfully for user:', userId);
+    console.log('[INFO] user access token refreshed successfully for user:', businessOwnerId);
     return data.access_token;
   } catch (err) {
     console.error('[ERROR] Exception while refreshing user access token:', err.message);
