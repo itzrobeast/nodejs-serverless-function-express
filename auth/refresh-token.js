@@ -52,7 +52,12 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
     if (error) {
       console.error('[ERROR] Failed to update user access token in database:', error.message);
       return null;
-    }
+    } else {
+  console.log('[INFO] Successfully updated user access token in database for Business Owner ID:', businessOwnerId);
+}
+
+
+    
 
     console.log('[INFO] User access token refreshed successfully for Business Owner ID:', businessOwnerId);
     return data.access_token;
