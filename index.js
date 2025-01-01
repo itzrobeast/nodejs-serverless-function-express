@@ -28,6 +28,7 @@ import verifySessionRouter from './auth/verify-session.js';
 import refreshTokenRouter from './auth/refresh-token.js';
 import loginRouter from './auth/login.js';
 import { handleInboundCall } from './vonage.js';
+import logoutRouter from './auth/logout.js';
 
 
 const app = express();
@@ -44,7 +45,7 @@ const loginLimiter = rateLimit({
 
 app.use('/auth/login', loginLimiter); // Apply rate limiter
 
-
+app.use('/auth/logout', logoutRouter);
 
 
 // Middleware
@@ -113,6 +114,7 @@ const routes = [
   { path: '/auth/verify-session', router: verifySessionRouter },
   { path: '/auth/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
+  { path: '/auth/logout', router: logoutRouter },
   { path: '/api/inbound-call', router: express.Router().post('/', handleInboundCall) },
 ];
 
