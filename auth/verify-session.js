@@ -21,6 +21,7 @@ const validateFacebookToken = async (token) => {
     const { data } = response;
     if (!data || !data.data || !data.data.is_valid) {
       const errorMessage = data?.data?.error?.message || 'Invalid token';
+      console.error('[ERROR] Token validation failed:', errorMessage);
       throw new Error(errorMessage);
     }
 
