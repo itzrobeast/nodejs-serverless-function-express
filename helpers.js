@@ -237,3 +237,52 @@ export async function fetchBusinessesForOwner(businessOwnerId) {
 }
 
 console.log('[DEBUG] helpers.js loaded successfully');
+
+
+/**
+ * Log a message into the database.
+ * @param {number} businessId - The ID of the business.
+ * @param {string} senderId - The ID of the sender (Instagram user).
+ * @param {string} recipientId - The ID of the recipient (your business).
+ * @param {string} message - The message content.
+ * @param {string} type - The type of the message (e.g., "sent" or "received").
+ * @param {string|null} messageId - The unique message ID.
+ * @param {boolean} isBusinessMessage - Whether the message is from the business.
+ * @param {string} igId - The Instagram ID associated with the message.
+ * @param {string} username - The username of the sender.
+ */
+export async function logMessage(
+  businessId,
+  senderId,
+  recipientId,
+  message,
+  type,
+  messageId,
+  isBusinessMessage,
+  igId,
+  username
+) {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .insert([{
+        business_id: businessId,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        message,
+        type,
+        message_id: messageId,
+        is_business_message: isBusinessMessage,
+        ig_id: igId,
+        username,
+      }]);
+
+    if (error) {
+      console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message);
+      return;
+    }
+    console.log('[DEBUG] Message logged successfully:', data);
+  } catch (err) {
+    console.error('[ERROR] Exception while logging message:', err.message);
+  }
+}
