@@ -148,11 +148,11 @@ async function processMessagingEvent(messageEvent) {
     if (assistantResponse?.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
 
-      const accessToken = await getPageAccessToken(businessId, pageId);
-      if (!accessToken) {
-        console.error('[ERROR] Failed to fetch access token. Cannot send message.');
-        return;
-      }
+      const pageAccessToken = await getPageAccessToken(businessId, pageId);
+      if (!pageAccessToken) {
+  console.error(`[ERROR] Missing page access token or page ID for businessId=${businessId}`);
+  return;
+}
 
       await sendInstagramMessage(senderId, assistantResponse.message, accessToken);
 
