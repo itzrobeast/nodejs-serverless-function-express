@@ -43,6 +43,58 @@ export async function getPageAccessToken(pageId, userAccessToken) {
   }
 }
 
+
+/**
+ * Fetch Instagram user info from the Facebook Graph API.
+ * @param {string} senderId - The Instagram user's sender ID.
+ * @param {number} businessId - The business ID for authentication context.
+ * @returns {Promise<object|null>} - The user info object or null if not found.
+ */
+export async function fetchInstagramUserInfo(senderId, businessId) {
+  try {
+    // Fetch business details to get access token
+    const { data: businessDetails, error: fetchError } = await supabase
+      .from('businesses')
+      .select('page_id, access_token')
+      .eq('id', businessId)
+      .single();
+
+    if (fetchError || !businessDetails) {
+      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, fetchError?.message || 'No data found');
+      return null;
+    }
+
+    const { page_id: pageId, access_token: accessToken } = businessDetails;
+
+    if (!accessToken || !pageId) {
+      console.error(`[ERROR] Missing page access token or page ID for businessId=${businessId}`);
+      return null;
+    }
+
+    // Fetch user info from Graph API
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${senderId}?fields=id,username&access_token=${accessToken}`
+    );
+    const userInfo = await response.json();
+
+    if (!response.ok || !userInfo.id) {
+      console.error(`[ERROR] Failed to fetch Instagram user info for senderId=${senderId}:`, userInfo.error?.message || 'No data found');
+      return null;
+    }
+
+    return {
+      id: userInfo.id,
+      username: userInfo.username || null,
+    };
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching Instagram user info:', err.message);
+    return null;
+  }
+}
+
+
+
+
 /**
  * Ensure valid Page Access Token by checking its existence or refreshing it dynamically.
  */
