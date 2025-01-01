@@ -187,8 +187,26 @@ router.post('/', async (req, res) => {
  */
 async function refreshAllTokens() {
   console.log('[INFO] Starting scheduled token refresh...');
-  // Function implementation
+  // Fetch all pages and refresh their tokens
+  const { data: pages, error } = await supabase
+    .from('pages')
+    .select('page_id, business_id');
+
+  if (error) {
+    console.error('[ERROR] Failed to fetch pages for scheduled token refresh:', error.message);
+    return;
+  }
+
+  for (const page of pages) {
+    const userAccessToken = await getUserAccessToken(page.business_id);
+    if (!userAccessToken) continue;
+
+    await refreshPageAccessToken(page.page_id, userAccessToken);
+  }
+
+  console.log('[INFO] Scheduled token refresh completed.');
 }
+
 
 // Schedule the token refresh task to run every 24 hours
 cron.schedule('0 0 * * *', refreshAllTokens);
