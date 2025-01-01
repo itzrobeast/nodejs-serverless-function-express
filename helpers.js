@@ -318,3 +318,34 @@ export async function logMessage(
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
+
+/**
+ * Send a message to a user via Instagram Messaging API.
+ * @param {string} recipientId - Instagram user ID of the recipient.
+ * @param {string} messageText - Message content to be sent.
+ * @param {string} accessToken - Facebook page access token.
+ * @returns {Promise<void>}
+ */
+export async function sendInstagramMessage(recipientId, messageText, accessToken) {
+  try {
+    const response = await fetch(`https://graph.facebook.com/v17.0/me/messages?access_token=${accessToken}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text: messageText },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorResponse = await response.json();
+      console.error('[ERROR] Failed to send Instagram message:', errorResponse);
+      throw new Error(errorResponse.error?.message || 'Unknown error');
+    }
+
+    console.log('[INFO] Instagram message sent successfully.');
+  } catch (err) {
+    console.error('[ERROR] Exception while sending Instagram message:', err.message);
+    throw err;
+  }
+}
