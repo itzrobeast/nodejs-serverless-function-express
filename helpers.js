@@ -239,6 +239,38 @@ export async function fetchBusinessesForOwner(businessOwnerId) {
 console.log('[DEBUG] helpers.js loaded successfully');
 
 
+
+/**
+ * Parse user messages to extract field-value pairs in the format "key: value".
+ * @param {string} userMessage - The message from the user.
+ * @returns {Object} Parsed field and value or null if the message format is incorrect.
+ */
+export function parseUserMessage(userMessage) {
+  if (typeof userMessage !== 'string' || userMessage.trim() === '') {
+    console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
+    return { field: null, value: null };
+  }
+
+  // Define regex to match key-value pairs in the format "key: value"
+  const regex = /^([\w-]+):\s*(.+)$/; // Allow hyphenated keys (e.g., "key-name")
+  const match = userMessage.match(regex);
+
+  if (!match) {
+    console.warn('[WARN] User message does not match expected format:', userMessage);
+    return { field: null, value: null };
+  }
+
+  const [, field, value] = match;
+
+  return {
+    field: field.toLowerCase(),
+    value: value.trim(),
+  };
+}
+
+
+
+
 /**
  * Log a message into the database.
  * @param {number} businessId - The ID of the business.
