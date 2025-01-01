@@ -112,6 +112,37 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
   }
 }
 
+
+
+/**
+ * Fetch Instagram ID from the database using a business ID.
+ * @param {number} businessId - The business ID to search for.
+ * @returns {Promise<string|null>} - The Instagram ID or null if not found.
+ */
+export async function fetchInstagramIdFromDatabase(businessId) {
+  try {
+    const { data, error } = await supabase
+      .from('businesses') // Ensure 'businesses' is the correct table
+      .select('ig_id') // Ensure 'ig_id' is the correct column name
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Could not fetch Instagram ID for business ID ${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+    return data.ig_id;
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching Instagram ID:', err.message);
+    return null;
+  }
+}
+
+
+
+
+
+
 /**
  * Fetch business details from the database.
  */
