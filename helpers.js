@@ -54,6 +54,36 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
   }
 }
 
+
+/**
+ * Fetch Instagram Business ID using Facebook API.
+ * @param {string} pageId - The Facebook Page ID.
+ * @param {string} pageAccessToken - The page access token.
+ * @returns {Promise<string|null>} - The Instagram Business ID or null if not found.
+ */
+export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`
+    );
+    const data = await response.json();
+    if (response.ok && data.instagram_business_account) {
+      return data.instagram_business_account.id;
+    } else {
+      console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
+      return null;
+    }
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch Instagram Business Account ID:', err.message);
+    return null;
+  }
+}
+
+
+
+
+
+
 /**
  * Fetch Instagram ID from the database using a business ID.
  * @param {number} businessId - The business ID to search for.
