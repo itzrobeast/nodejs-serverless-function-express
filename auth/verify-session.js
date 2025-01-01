@@ -43,15 +43,15 @@ export default async function handler(req, res) {
     // Parse cookies to extract tokens
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
     const authToken = cookies.authToken;
-    const userId = cookies.userId ? parseInt(cookies.userId, 10) : NaN;
+    const businessOwnerId = cookies.businessOwnerId ? parseInt(cookies.businessOwnerId, 10) : NaN;
 
-    console.log('[DEBUG] Cookies Parsed in Verify-Session:', { authToken, userId });
+    console.log('[DEBUG] Cookies Parsed in Verify-Session:', { authToken, businessOwnerId });
 
-    if (!authToken || isNaN(userId)) {
-      console.error('[ERROR] Missing or invalid cookies:', { authToken, userId });
+    if (!authToken || isNaN(businessOwnerId)) {
+      console.error('[ERROR] Missing or invalid cookies:', { authToken, businessOwnerId });
       return res.status(401).json({
-        error: 'Unauthorized: Missing or invalid authToken or userId',
-        details: { authToken, userId },
+        error: 'Unauthorized: Missing or invalid authToken or businessOwnerId',
+        details: { authToken, businessOwnerId },
       });
     }
 
@@ -59,18 +59,18 @@ export default async function handler(req, res) {
     console.log('[DEBUG] Sending request to Facebook for token validation');
     const tokenDetails = await validateFacebookToken(authToken);
 
-    // Extract user details from token validation
-    const user = {
+    // Extract businessOwnerId details from token validation
+    const businessOwner = {
       fb_id: tokenDetails.business_owner_id,
       scopes: tokenDetails.scopes,
     };
 
-    console.log('[DEBUG] Session verified successfully:', user);
+    console.log('[DEBUG] Session verified successfully:', businessOwner);
 
     // Send success response
     return res.status(200).json({
       message: 'Session verified successfully',
-      user,
+      businessOwner,
     });
   } catch (error) {
     console.error('[ERROR] Unexpected error during session verification:', error.message);
