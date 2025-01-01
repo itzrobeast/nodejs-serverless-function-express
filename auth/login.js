@@ -91,19 +91,19 @@ router.post('/', loginLimiter, async (req, res) => {
     // Step 6: Set Secure Cookies
     res.cookie('authToken', accessToken, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
     res.cookie('businessOwnerId', user.id.toString(), {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
     res.cookie('businessId', business.id.toString(), {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'None',
       maxAge: 3600000, // 1 hour
     });
