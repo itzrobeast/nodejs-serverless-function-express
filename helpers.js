@@ -1,6 +1,5 @@
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
-import { refreshPageAccessToken, refreshUserAccessToken } from './auth/refresh-token.js';
 
 /**
  * Check if a token is expired based on the last updated time.
@@ -14,6 +13,81 @@ export function isExpired(updatedAt, expiryDays = 60) {
   } catch (err) {
     console.error('[ERROR] Failed to calculate token expiration:', err.message);
     return true; // Assume expired if there's an error
+  }
+}
+
+/**
+ * Fetch the Page Access Token dynamically using a User Access Token.
+ */
+export async function getPageAccessToken(pageId, userAccessToken) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${pageId}?fields=access_token&access_token=${userAccessToken}`
+    );
+
+    const data = await response.json();
+
+    if (response.ok && data.access_token) {
+      console.log(`[INFO] Successfully fetched Page Access Token for Page ID: ${pageId}`);
+      return data.access_token;
+    } else {
+      console.warn(
+        `[WARN] Failed to fetch Page Access Token for Page ID: ${pageId}`,
+        data.error ? data.error.message : 'No data returned'
+      );
+      return null;
+    }
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching Page Access Token:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Ensure valid Page Access Token by checking its existence or refreshing it dynamically.
+ */
+export async function ensurePageAccessToken(pageId, userAccessToken) {
+  try {
+    const { data, error } = await supabase
+      .from('pages')
+      .select('access_token, updated_at')
+      .eq('page_id', pageId)
+      .single();
+
+    if (error || !data || !data.access_token) {
+      console.warn(`[WARN] No Page Access Token found in the database for Page ID: ${pageId}`);
+      const dynamicToken = await getPageAccessToken(pageId, userAccessToken);
+      if (dynamicToken) {
+        await supabase
+          .from('pages')
+          .upsert({ page_id: pageId, access_token: dynamicToken, updated_at: new Date().toISOString() });
+        return dynamicToken;
+      }
+      return null;
+    }
+
+    const tokenUpdatedAt = new Date(data.updated_at);
+    const now = new Date();
+    const isExpired = (now - tokenUpdatedAt) / (1000 * 60 * 60 * 24) > 60;
+
+    if (isExpired) {
+      console.log(`[INFO] Page Access Token for Page ID: ${pageId} is expired. Refreshing...`);
+      const refreshedToken = await getPageAccessToken(pageId, userAccessToken);
+      if (refreshedToken) {
+        await supabase
+          .from('pages')
+          .update({ access_token: refreshedToken, updated_at: new Date().toISOString() })
+          .eq('page_id', pageId);
+        return refreshedToken;
+      }
+      return null;
+    }
+
+    console.log(`[INFO] Valid Page Access Token retrieved for Page ID: ${pageId}`);
+    return data.access_token;
+  } catch (err) {
+    console.error('[ERROR] Exception in ensurePageAccessToken:', err.message);
+    return null;
   }
 }
 
@@ -34,48 +108,6 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
     }
   } catch (err) {
     console.error('[ERROR] Failed to fetch Instagram Business Account ID:', err.message);
-    return null;
-  }
-}
-
-/**
- * Fetch Instagram Business ID from the database.
- */
-export async function fetchInstagramIdFromDatabase(businessId) {
-  try {
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('ig_id')
-      .eq('id', businessId)
-      .single();
-    if (error || !data) {
-      console.error(`[ERROR] Failed to fetch Instagram ID for business ID ${businessId}:`, error?.message || 'No data found');
-      return null;
-    }
-    return data.ig_id;
-  } catch (err) {
-    console.error('[ERROR] Exception while fetching Instagram ID from database:', err.message);
-    return null;
-  }
-}
-
-/**
- * Fetch Instagram User Info using Facebook API.
- */
-export async function fetchInstagramUserInfo(instagramId, accessToken) {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v17.0/${instagramId}?fields=username&access_token=${accessToken}`
-    );
-    const data = await response.json();
-    if (response.ok && data.username) {
-      return { username: data.username };
-    } else {
-      console.warn(`[WARN] Failed to fetch Instagram user info for ID: ${instagramId}`);
-      return null;
-    }
-  } catch (err) {
-    console.error('[ERROR] Failed to fetch Instagram user info:', err.message);
     return null;
   }
 }
@@ -117,127 +149,6 @@ export async function fetchBusinessesForOwner(businessOwnerId) {
   } catch (err) {
     console.error('[ERROR] Exception while fetching businesses:', err.message);
     return [];
-  }
-}
-
-/**
- * Fetch user access token and refresh if expired.
- */
-export async function getValidUserAccessToken(userId, shortLivedToken) {
-  try {
-    const { token, updatedAt } = await getUserAccessToken(userId);
-    if (!token || isExpired(updatedAt)) {
-      console.log('[INFO] User access token expired or missing. Refreshing...');
-      if (!shortLivedToken) {
-        console.error('[ERROR] No short-lived token available to refresh user access token.');
-        return null;
-      }
-      return await refreshUserAccessToken(userId, shortLivedToken);
-    }
-    return token;
-  } catch (err) {
-    console.error('[ERROR] Failed to get valid user access token:', err.message);
-    return null;
-  }
-}
-
-/**
- * Fetch user access token from the database.
- */
-export async function getUserAccessToken(userId) {
-  try {
-    const { data, error } = await supabase
-      .from('business_owners')
-      .select('user_access_token, updated_at')
-      .eq('id', userId)
-      .single();
-    if (error || !data) {
-      console.error(`[ERROR] Failed to fetch user access token for User ID ${userId}:`, error?.message || 'No data found');
-      return null;
-    }
-    return { token: data.user_access_token, updatedAt: data.updated_at };
-  } catch (err) {
-    console.error('[ERROR] Exception while fetching user access token:', err.message);
-    return null;
-  }
-}
-
-/**
- * Log a message into the database.
- */
-export async function logMessage(businessId, senderId, recipientId, message, type, messageId, isBusinessMessage, igId, username) {
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .insert([{
-        business_id: businessId,
-        sender_id: senderId,
-        recipient_id: recipientId,
-        message,
-        type,
-        message_id: messageId,
-        is_business_message: isBusinessMessage,
-        ig_id: igId,
-        username,
-      }]);
-    if (error) {
-      console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message);
-      return;
-    }
-    console.log('[DEBUG] Message logged successfully:', data);
-  } catch (err) {
-    console.error('[ERROR] Exception while logging message:', err.message);
-  }
-}
-
-/**
- * Parse user message.
- */
-export function parseUserMessage(userMessage) {
-  if (typeof userMessage !== 'string' || userMessage.trim() === '') {
-    console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
-    return { field: null, value: null };
-  }
-  const regex = /^([\w-]+):\s*(.+)$/;
-  const match = userMessage.match(regex);
-  if (!match) {
-    console.warn('[WARN] User message does not match expected format:', userMessage);
-    return { field: null, value: null };
-  }
-  const [, field, value] = match;
-  return {
-    field: field.toLowerCase(),
-    value: value.trim(),
-  };
-}
-
-/**
- * Upsert Instagram user into the database.
- */
-export async function upsertInstagramUser(senderId, userInfo, businessId) {
-  try {
-    const { username } = userInfo;
-    const { data, error } = await supabase
-      .from('instagram_users')
-      .upsert(
-        {
-          instagram_id: senderId,
-          username: username || null,
-          business_id: businessId,
-        },
-        { onConflict: ['instagram_id', 'business_id'] }
-      )
-      .select()
-      .single();
-    if (error) {
-      console.error(`[ERROR] Failed to upsert Instagram user:`, error.message);
-      return null;
-    }
-    console.log(`[INFO] Instagram user upserted successfully: ${JSON.stringify(data)}`);
-    return data;
-  } catch (err) {
-    console.error(`[ERROR] Exception while upserting Instagram user:`, err.message);
-    return null;
   }
 }
 
