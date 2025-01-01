@@ -26,12 +26,23 @@ const validateFacebookToken = async (token) => {
     }
 
     console.log('[DEBUG] Facebook Token Validated:', data.data);
-    return data.data;
+    return {
+      isValid: data.data.is_valid,
+      appId: data.data.app_id,
+      userId: data.data.user_id, // Extract user_id explicitly
+      scopes: data.data.scopes,
+    };
   } catch (error) {
     console.error('[ERROR] Facebook token validation failed:', error.message);
     throw new Error('Your session has expired. Please log in again.');
   }
 };
+
+
+
+
+
+
 
 export default async function handler(req, res) {
   try {
@@ -62,7 +73,7 @@ export default async function handler(req, res) {
 
     // Extract businessOwnerId details from token validation
     const businessOwner = {
-      fb_id: tokenDetails.business_owner_id,
+      fb_id: tokenDetails.userId,
       scopes: tokenDetails.scopes,
     };
 
