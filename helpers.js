@@ -60,6 +60,27 @@ export async function fetchInstagramIdFromDatabase(businessId) {
 }
 
 /**
+ * Fetch Instagram User Info using Facebook API.
+ */
+export async function fetchInstagramUserInfo(instagramId, accessToken) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${instagramId}?fields=username&access_token=${accessToken}`
+    );
+    const data = await response.json();
+    if (response.ok && data.username) {
+      return { username: data.username };
+    } else {
+      console.warn(`[WARN] Failed to fetch Instagram user info for ID: ${instagramId}`);
+      return null;
+    }
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch Instagram user info:', err.message);
+    return null;
+  }
+}
+
+/**
  * Fetch business details from the database.
  */
 export async function fetchBusinessDetails(businessId) {
@@ -172,39 +193,23 @@ export async function logMessage(businessId, senderId, recipientId, message, typ
 /**
  * Parse user message.
  */
-/*
 export function parseUserMessage(userMessage) {
-  // Validate input
   if (typeof userMessage !== 'string' || userMessage.trim() === '') {
     console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
     return { field: null, value: null };
   }
-
-  // Define regex to match key-value pairs in the format "key: value"
-  const regex = /^([\w-]+):\s*(.+)$/; // Allow hyphenated keys (e.g., "key-name")
-console.log("Regex is valid:", regex);
-  } catch (err) {
-  console.error("Regex is invalid:", err.message);
-}
-  // Execute the regex match
+  const regex = /^([\w-]+):\s*(.+)$/;
   const match = userMessage.match(regex);
-
-  // Handle cases where regex does not match
   if (!match) {
     console.warn('[WARN] User message does not match expected format:', userMessage);
     return { field: null, value: null };
   }
-
-  // Extract field and value
   const [, field, value] = match;
-
   return {
     field: field.toLowerCase(),
     value: value.trim(),
   };
 }
-
-
 
 /**
  * Upsert Instagram user into the database.
