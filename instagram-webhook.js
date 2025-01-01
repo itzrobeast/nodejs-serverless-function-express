@@ -163,11 +163,6 @@ if (!field || !value) {
 }
 
 
-if (!businessId || !senderId || !recipientId || !userMessage || !messageId) {
-  console.error(`[ERROR] Missing required fields for logging message. BusinessId=${businessId}, SenderId=${senderId}, RecipientId=${recipientId}, Message=${userMessage}`);
-  return;
-}
-
       await logMessage(
         businessId,
         senderId,
