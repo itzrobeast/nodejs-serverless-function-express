@@ -79,7 +79,7 @@ async function fetchBusinessIdFromInstagramId(igId) {
  * @param {string} igId - The Instagram ID associated with the message.
  * @param {string} username - The username of the sender.
  */
-async function respondAndLog(businessId, senderId, recipientId, messageText, igId, username) {
+async function respondAndLog(businessId, senderId, recipientId, messageText, igId, username, businessDetails) {
   try {
     // Fetch the page access token
     const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
@@ -90,7 +90,7 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
 
     // Send the message
     await sendInstagramMessage(senderId, messageText, pageAccessToken);
-    
+
     // Log the sent message
     await logMessage(
       businessId,
@@ -99,7 +99,7 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
       messageText,
       'sent',
       null,
-      true,
+      true, // isBusinessMessage
       igId,
       username
     );
@@ -140,8 +140,6 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    const { page_id: pageId } = businessDetails;
-
     if (isDeleted) {
       if (!messageId) {
         console.error('[WARN] Deleted message does not have a valid message ID.');
@@ -163,11 +161,6 @@ async function processMessagingEvent(messageEvent) {
       await upsertInstagramUser(senderId, userInfo, businessId);
     }
 
-    if (!businessId || !senderId || !recipientId || !userMessage || !messageId) {
-      console.error(`[ERROR] Missing required fields for logging message. BusinessId=${businessId}, SenderId=${senderId}, RecipientId=${recipientId}, Message=${userMessage}`);
-      return;
-    }
-
     await logMessage(
       businessId,
       senderId,
@@ -181,49 +174,31 @@ async function processMessagingEvent(messageEvent) {
     );
 
     const { field, value } = parseUserMessage(userMessage);
-    if (!field || !value) {
-      console.warn(`[WARN] User message does not match expected format: ${userMessage}`);
-      
-      // Generate a generic response
-      const assistantResponse = await assistantHandler({ userMessage, businessId });
-      
-      if (assistantResponse && assistantResponse.message) {
-        // Use the helper to respond and log
-        await respondAndLog(
-          businessId,
-          senderId,
-          recipientId,
-          assistantResponse.message,
-          igId,
-          userInfo?.username || ''
-        );
-      } else {
-        console.error(`[ERROR] assistantHandler did not return a valid response for businessId=${businessId}`);
-      }
-      return;
-    }
+    const assistantResponse = await assistantHandler({
+      userMessage,
+      businessId,
+      field,
+      value,
+    });
 
-    // Handle messages that match the expected format
-    const assistantResponse = await assistantHandler({ userMessage, businessId, field, value });
-    
     if (assistantResponse && assistantResponse.message) {
-      // Use the helper to respond and log
       await respondAndLog(
         businessId,
         senderId,
         recipientId,
         assistantResponse.message,
         igId,
-        userInfo?.username || ''
+        userInfo?.username || '',
+        businessDetails // Pass businessDetails here
       );
     } else {
       console.error(`[ERROR] assistantHandler did not return a valid response for businessId=${businessId}`);
     }
-
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
 
 
 
