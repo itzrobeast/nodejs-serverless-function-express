@@ -62,6 +62,7 @@ async function fetchBusinessIdFromInstagramId(igId) {
       .from('businesses')
       .select('id')
       .eq('ig_id', igId)
+      .limit(1)
       .single();
 
     if (error || !data) {
@@ -153,12 +154,8 @@ if (!businessDetails) {
   console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
   return;
 }
-   // Ensure the page access token is valid
-const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
-if (!pageAccessToken) {
-  console.error(`[ERROR] Missing or invalid page access token for businessId=${businessId}`);
-  return;
-}
+   
+
 
     if (isDeleted) {
       if (!messageId) {
