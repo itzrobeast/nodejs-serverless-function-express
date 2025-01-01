@@ -111,7 +111,7 @@ router.post('/', loginLimiter, async (req, res) => {
     // Step 7: Send Response
     return res.status(200).json({
       message: 'Login successful',
-      businessOwnerId: businessOwner.id,
+      businessOwnerId: user.id,
       businessId: business.id,
       user,
       business,
