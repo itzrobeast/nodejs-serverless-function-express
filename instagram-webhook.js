@@ -6,6 +6,8 @@ import supabase from './supabaseClient.js';
 import assistantHandler from './assistant.js';
 import {
   fetchInstagramIdFromDatabase,
+  ensurePageAccessToken,
+  fetchInstagramIdFromFacebook,
   fetchInstagramUserInfo,
   logMessage,
   parseUserMessage,
@@ -14,7 +16,6 @@ import {
   sendInstagramMessage,
   upsertInstagramUser,
 } from './helpers.js';
-import { refreshPageAccessToken } from './auth/refresh-token.js';
 
 const router = express.Router();
 
@@ -46,15 +47,13 @@ function verifyFacebookSignature(req, res, buf) {
   if (signature !== expectedSignature) throw new Error('Invalid signature');
 }
 
-  
-
 router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
 
 // Helper to fetch business ID from Instagram ID
 async function fetchBusinessIdFromInstagramId(igId) {
   try {
     const { data, error } = await supabase
-      .from('businesses') // Updated table name
+      .from('businesses')
       .select('id')
       .eq('ig_id', igId)
       .single();
@@ -75,7 +74,6 @@ async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
 
-    // Extract sender and recipient IDs
     const senderId = messageEvent.sender?.id;
     const recipientId = messageEvent.recipient?.id;
 
@@ -84,24 +82,19 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    // Determine message attributes
     const isDeleted = messageEvent.message?.is_deleted || false;
-    console.log(`[DEBUG] Message is_deleted: ${isDeleted}`);
     const isEcho = messageEvent.message?.is_echo || false;
     const userMessage = messageEvent.message?.text || '';
     const messageId = messageEvent.message?.mid;
 
-    // Determine the appropriate Instagram ID
     const igId = isEcho ? senderId : recipientId;
     console.log(`[DEBUG] Using Instagram ID: ${igId}`);
 
-    // Fetch business ID using Instagram ID
     const businessId = await fetchBusinessIdFromInstagramId(igId);
     if (!businessId) {
       console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
       return;
     }
-    console.log(`[DEBUG] Resolved business ID: ${businessId}`);
 
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
@@ -109,53 +102,29 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    const { business_owner_id } = businessDetails;
-    if (!business_owner_id) {
-      console.error(`[ERROR] No associated business_owner_id for businessId=${businessId}`);
-      return;
-    }
+    const { page_id: pageId } = businessDetails;
 
-    console.log(`[DEBUG] Using business_owner_id=${business_owner_id} for processing.`);
-
-
-
-
-    
-    // Handle deleted messages
     if (isDeleted) {
-      console.log('[INFO] Handling deleted message event...');
       if (!messageId) {
         console.error('[WARN] Deleted message does not have a valid message ID.');
         return;
       }
-      console.log(`[DEBUG] Deleting message with ID: ${messageId}`);
+      console.log(`[INFO] Handling deleted message with ID: ${messageId}`);
       await handleUnsentMessage(messageId, businessId);
-      console.log('[INFO] Deleted message handled successfully.');
       return;
     }
 
-    // Ignore echo messages
-    if (isEcho) {
-      console.log('[INFO] Ignoring echo message.');
+    if (isEcho || !userMessage.trim()) {
+      console.log('[INFO] Ignoring echo or empty message.');
       return;
     }
 
-    // Skip empty or whitespace-only messages
-    if (!userMessage.trim()) {
-      console.log('[INFO] Skipping empty or missing message.');
-      return;
-    }
-
-    // Fetch Instagram user information dynamically
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
       console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
       await upsertInstagramUser(senderId, userInfo, businessId);
-    } else {
-      console.warn(`[WARN] Could not fetch user info for senderId=${senderId}.`);
     }
 
-    // Log the incoming message
     await logMessage(
       businessId,
       senderId,
@@ -163,52 +132,38 @@ async function processMessagingEvent(messageEvent) {
       userMessage,
       'received',
       messageId,
-      false, // isBusinessMessage
+      false,
       igId,
       userInfo?.username || ''
     );
 
-    // Parse user message and update user profile if applicable
     const { field, value } = parseUserMessage(userMessage);
     if (field && value) {
       console.log(`[INFO] Updating user info for senderId=${senderId}, field=${field}, value=${value}`);
       await updateInstagramUserInfo(senderId, businessId, field, value);
     }
 
-    // Generate an AI response
-    console.log('[DEBUG] Generating AI response...');
     const assistantResponse = await assistantHandler({ userMessage, businessId });
 
-    // Send AI response if generated
-    if (assistantResponse && assistantResponse.message) {
+    if (assistantResponse?.message) {
       console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
 
-      // Fetch the access token dynamically
-      const businessDetails = await fetchBusinessDetails(businessId);
-      if (!businessDetails) {
-        console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
-        return;
-      }
-
-      const { page_id: pageId } = businessDetails;
       const accessToken = await getPageAccessToken(businessId, pageId);
       if (!accessToken) {
         console.error('[ERROR] Failed to fetch access token. Cannot send message.');
         return;
       }
 
-      // Send the AI response
       await sendInstagramMessage(senderId, assistantResponse.message, accessToken);
 
-      // Log the outgoing message
       await logMessage(
         businessId,
         senderId,
         recipientId,
         assistantResponse.message,
         'sent',
-        null, // No messageId for outgoing messages
-        true, // isBusinessMessage
+        null,
+        true,
         igId,
         'Business'
       );
@@ -221,10 +176,7 @@ async function processMessagingEvent(messageEvent) {
 // POST route for webhook
 router.post('/', async (req, res) => {
   try {
-    const payload = req.body;
-    if (!payload || !payload.entry) return res.status(400).send('Invalid payload');
-
-    const { object, entry } = payload;
+    const { object, entry } = req.body;
     if (object === 'instagram') {
       for (const event of entry) {
         if (event.messaging) {
