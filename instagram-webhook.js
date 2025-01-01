@@ -6,16 +6,22 @@ import supabase from './supabaseClient.js';
 import assistantHandler from './assistant.js';
 import {
   fetchInstagramIdFromDatabase,
-  ensurePageAccessToken,
   fetchInstagramIdFromFacebook,
   fetchInstagramUserInfo,
   logMessage,
   parseUserMessage,
   fetchBusinessDetails,
-  getPageAccessToken,
   sendInstagramMessage,
   upsertInstagramUser,
 } from './helpers.js';
+
+import {
+  getPageAccessToken,
+  getUserAccessToken,
+  refreshUserAccessToken,
+  refreshPageAccessToken,
+  isExpired,
+} from './auth/refresh-token.js';
 
 const router = express.Router();
 
@@ -69,26 +75,17 @@ async function fetchBusinessIdFromInstagramId(igId) {
   }
 }
 
-// Core function to process incoming messages
-/**
- * Sends a message to the user and logs it.
- * @param {string} businessId - The business ID.
- * @param {string} senderId - The sender's Instagram ID.
- * @param {string} recipientId - The recipient's Instagram ID.
- * @param {string} messageText - The message to send.
- * @param {string} igId - The Instagram ID associated with the message.
- * @param {string} username - The username of the sender.
- */
+
 async function respondAndLog(businessId, senderId, recipientId, messageText, igId, username, businessDetails) {
   try {
-    // Fetch the page access token
+    // Fetch the page access token dynamically
     const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
       console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
       return;
     }
 
-    // Send the message
+    // Send the message via Instagram API
     await sendInstagramMessage(senderId, messageText, pageAccessToken);
 
     // Log the sent message
@@ -107,6 +104,22 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
     console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
   }
 }
+
+
+
+
+
+// Core function to process incoming messages
+/**
+ * Sends a message to the user and logs it.
+ * @param {string} businessId - The business ID.
+ * @param {string} senderId - The sender's Instagram ID.
+ * @param {string} recipientId - The recipient's Instagram ID.
+ * @param {string} messageText - The message to send.
+ * @param {string} igId - The Instagram ID associated with the message.
+ * @param {string} username - The username of the sender.
+ */
+
 
 async function processMessagingEvent(messageEvent) {
   try {
@@ -134,11 +147,18 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    const businessDetails = await fetchBusinessDetails(businessId);
-    if (!businessDetails) {
-      console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
-      return;
-    }
+    
+const businessDetails = await fetchBusinessDetails(businessId);
+if (!businessDetails) {
+  console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
+  return;
+}
+   // Ensure the page access token is valid
+const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
+if (!pageAccessToken) {
+  console.error(`[ERROR] Missing or invalid page access token for businessId=${businessId}`);
+  return;
+}
 
     if (isDeleted) {
       if (!messageId) {
