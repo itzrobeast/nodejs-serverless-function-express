@@ -2,6 +2,7 @@
 
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
+import { refreshUserAccessToken, refreshPageAccessToken } from './auth/refresh-token.js';
 
 /**
  * Check if a token is expired based on the last updated time.
@@ -18,32 +19,114 @@ export function isExpired(updatedAt, expiryDays = 60) {
   }
 }
 
+
 /**
- * Fetch the Page Access Token dynamically using a User Access Token.
+ * Ensure the user access token is valid and fetch a refreshed one if necessary.
  */
-export async function getPageAccessToken(pageId, userAccessToken) {
+export async function getUserAccessToken(businessOwnerId) {
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/v17.0/${pageId}?fields=access_token&access_token=${userAccessToken}`
-    );
+    const { data, error } = await supabase
+      .from('business_owners')
+      .select('user_access_token, updated_at')
+      .eq('id', businessOwnerId)
+      .single();
 
-    const data = await response.json();
-
-    if (response.ok && data.access_token) {
-      console.log(`[INFO] Successfully fetched Page Access Token for Page ID: ${pageId}`);
-      return data.access_token;
-    } else {
-      console.warn(
-        `[WARN] Failed to fetch Page Access Token for Page ID: ${pageId}`,
-        data.error ? data.error.message : 'No data returned'
-      );
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch user access token for Business Owner ID ${businessOwnerId}:`, error.message);
       return null;
     }
+
+    const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
+
+    // Check if the token is expired
+    if (!userAccessToken || isExpired(updatedAt)) {
+      console.log(`[INFO] User access token for Business Owner ID ${businessOwnerId} is expired. Refreshing...`);
+      const refreshedToken = await refreshUserAccessToken(businessOwnerId, userAccessToken);
+      return refreshedToken;
+    }
+
+    return userAccessToken;
   } catch (err) {
-    console.error('[ERROR] Exception while fetching Page Access Token:', err.message);
+    console.error(`[ERROR] Exception while fetching user access token for Business Owner ID ${businessOwnerId}:`, err.message);
     return null;
   }
 }
+
+
+/**
+ * Ensure the page access token is valid and fetch or refresh it dynamically.
+ */
+export async function getPageAccessToken(businessId, pageId) {
+  try {
+    const { data: pageData, error: pageError } = await supabase
+      .from('pages')
+      .select('page_access_token, updated_at')
+      .eq('page_id', pageId)
+      .single();
+
+    if (pageError || !pageData) {
+      console.warn(`[WARN] Page access token not found for Page ID ${pageId}. Fetching dynamically...`);
+
+      // Fetch the user access token for the associated business owner
+      const { data: businessDetails, error: businessError } = await supabase
+        .from('businesses')
+        .select('business_owner_id')
+        .eq('id', businessId)
+        .single();
+
+      if (businessError || !businessDetails) {
+        console.error(`[ERROR] Failed to fetch business owner ID for Business ID ${businessId}:`, businessError.message);
+        return null;
+      }
+
+      const userAccessToken = await getUserAccessToken(businessDetails.business_owner_id);
+      if (!userAccessToken) {
+        console.error(`[ERROR] Failed to fetch user access token for Business Owner ID ${businessDetails.business_owner_id}`);
+        return null;
+      }
+
+      const newPageAccessToken = await refreshPageAccessToken(pageId, userAccessToken);
+      return newPageAccessToken;
+    }
+
+    const { page_access_token: pageAccessToken, updated_at: updatedAt } = pageData;
+
+    // Check if the token is expired
+    if (isExpired(updatedAt)) {
+      console.log(`[INFO] Page access token for Page ID ${pageId} is expired. Refreshing...`);
+
+      // Fetch the user access token for the associated business owner
+      const { data: businessDetails, error: businessError } = await supabase
+        .from('businesses')
+        .select('business_owner_id')
+        .eq('id', businessId)
+        .single();
+
+      if (businessError || !businessDetails) {
+        console.error(`[ERROR] Failed to fetch business owner ID for Business ID ${businessId}:`, businessError.message);
+        return null;
+      }
+
+      const userAccessToken = await getUserAccessToken(businessDetails.business_owner_id);
+      if (!userAccessToken) {
+        console.error(`[ERROR] Failed to fetch user access token for Business Owner ID ${businessDetails.business_owner_id}`);
+        return null;
+      }
+
+      const refreshedPageAccessToken = await refreshPageAccessToken(pageId, userAccessToken);
+      return refreshedPageAccessToken;
+    }
+
+    return pageAccessToken;
+  } catch (err) {
+    console.error(`[ERROR] Exception while fetching page access token for Page ID ${pageId}:`, err.message);
+    return null;
+  }
+}
+
+
+
+
 
 
 /**
