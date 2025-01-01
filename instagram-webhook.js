@@ -125,36 +125,48 @@ async function processMessagingEvent(messageEvent) {
       await upsertInstagramUser(senderId, userInfo, businessId);
     }
 
-    await logMessage(
-      businessId,
-      senderId,
-      recipientId,
-      userMessage,
-      'received',
-      messageId,
-      false,
-      igId,
-      userInfo?.username || ''
-    );
-
-    const { field, value } = parseUserMessage(userMessage);
-    if (field && value) {
-      console.log(`[INFO] Updating user info for senderId=${senderId}, field=${field}, value=${value}`);
-      await updateInstagramUserInfo(senderId, businessId, field, value);
-    }
-
-    const assistantResponse = await assistantHandler({ userMessage, businessId });
-
-    if (assistantResponse?.message) {
-      console.log(`[DEBUG] AI Response: ${assistantResponse.message}`);
-
-      const pageAccessToken = await getPageAccessToken(businessId, pageId);
-      if (!pageAccessToken) {
-  console.error(`[ERROR] Missing page access token or page ID for businessId=${businessId}`);
+    if (!businessId || !senderId || !recipientId || !userMessage || !messageId) {
+  console.error(`[ERROR] Missing required fields for logging message. BusinessId=${businessId}, SenderId=${senderId}, RecipientId=${recipientId}, Message=${userMessage}`);
   return;
 }
 
-      await sendInstagramMessage(senderId, assistantResponse.message, accessToken);
+await logMessage(
+  businessId,
+  senderId,
+  recipientId,
+  userMessage,
+  'received',
+  messageId,
+  false, // isBusinessMessage
+  igId,
+  userInfo?.username || ''
+);
+
+
+    const { field, value } = parseUserMessage(userMessage);
+if (!field || !value) {
+  console.warn(`[WARN] User message does not match expected format: ${userMessage}`);
+  
+  // Skip the profile update and proceed with a generic response
+  const assistantResponse = await assistantHandler({ userMessage, businessId });
+  if (assistantResponse && assistantResponse.message) {
+    // Fetch access token dynamically
+    const pageAccessToken = await getPageAccessToken(businessDetails.page_id, businessDetails.user_access_token);
+    if (!pageAccessToken) {
+      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
+      return;
+    }
+
+    await sendInstagramMessage(senderId, assistantResponse.message, pageAccessToken);
+  }
+  return;
+}
+
+
+if (!businessId || !senderId || !recipientId || !userMessage || !messageId) {
+  console.error(`[ERROR] Missing required fields for logging message. BusinessId=${businessId}, SenderId=${senderId}, RecipientId=${recipientId}, Message=${userMessage}`);
+  return;
+}
 
       await logMessage(
         businessId,
@@ -172,6 +184,7 @@ async function processMessagingEvent(messageEvent) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
 
 // POST route for webhook
 router.post('/', async (req, res) => {
