@@ -349,3 +349,42 @@ export async function sendInstagramMessage(recipientId, messageText, accessToken
     throw err;
   }
 }
+
+
+/**
+ * Upsert Instagram user into the database.
+ * @param {string} senderId - Instagram user ID.
+ * @param {object} userInfo - Instagram user information (e.g., username).
+ * @param {number} businessId - Associated business ID.
+ * @returns {Promise<object|null>} The upserted user data or null on failure.
+ */
+export async function upsertInstagramUser(senderId, userInfo, businessId) {
+  try {
+    const { username } = userInfo;
+
+    const { data, error } = await supabase
+      .from('instagram_users')
+      .upsert(
+        {
+          instagram_id: senderId,
+          username: username || null,
+          business_id: businessId,
+        },
+        { onConflict: ['instagram_id', 'business_id'] }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[ERROR] Failed to upsert Instagram user:', error.message);
+      return null;
+    }
+
+    console.log('[INFO] Instagram user upserted successfully:', data);
+    return data;
+  } catch (err) {
+    console.error('[ERROR] Exception while upserting Instagram user:', err.message);
+    return null;
+  }
+}
+
