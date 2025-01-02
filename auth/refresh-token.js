@@ -143,38 +143,38 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
  */
 export async function getUserAccessToken(businessOwnerId) {
   try {
-    console.log(`[DEBUG] Fetching user access token for Business Owner ID: ${businessOwnerId}`);
-    
+    const numericId = Number(businessOwnerId); // Convert to a number
+    console.log(`[DEBUG] Fetching user access token for Business Owner ID: ${numericId}`);
+
     const { data, error } = await supabase
       .from('business_owners')
       .select('user_access_token, updated_at')
-      .eq('id', businessOwnerId)
-      .limit(1); // Ensure single row is returned
-    
-    console.log(`[DEBUG] Raw query result for Business Owner ID ${businessOwnerId}:`, data);
+      .eq('id', numericId); // Use numeric ID
+
+    console.log(`[DEBUG] Raw query result for Business Owner ID ${numericId}:`, data);
 
     if (error) {
-      console.error(`[ERROR] Supabase query error for Business Owner ID ${businessOwnerId}:`, error.message);
+      console.error(`[ERROR] Supabase query error for Business Owner ID ${numericId}:`, error.message);
       return null;
     }
 
     if (!data || data.length === 0) {
-      console.error(`[ERROR] No user access token found for Business Owner ID ${businessOwnerId}`);
+      console.error(`[ERROR] No user access token found for Business Owner ID ${numericId}`);
       return null;
     }
 
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data[0];
 
     if (!userAccessToken) {
-      console.error(`[ERROR] User access token is missing for Business Owner ID ${businessOwnerId}`);
+      console.error(`[ERROR] User access token is missing for Business Owner ID ${numericId}`);
       return null;
     }
 
-    console.log(`[DEBUG] Retrieved user access token for Business Owner ID ${businessOwnerId}:`, userAccessToken);
+    console.log(`[DEBUG] Retrieved user access token for Business Owner ID ${numericId}:`, userAccessToken);
 
     if (isExpired(updatedAt)) {
-      console.log(`[INFO] User access token for Business Owner ID ${businessOwnerId} is expired. Refreshing...`);
-      return await refreshUserAccessToken(businessOwnerId, userAccessToken);
+      console.log(`[INFO] User access token for Business Owner ID ${numericId} is expired. Refreshing...`);
+      return await refreshUserAccessToken(numericId, userAccessToken);
     }
 
     return userAccessToken;
