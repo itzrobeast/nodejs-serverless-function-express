@@ -18,6 +18,7 @@ import {
  * @param {number} businessId - The business ID for authentication context.
  * @returns {Promise<object|null>} - The user info object or null if not found.
  */
+
 export async function fetchInstagramUserInfo(senderId, businessId) {
   try {
     const { data: businessDetails, error } = await supabase
@@ -38,7 +39,7 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
     }
 
     const response = await fetch(
-      `https://graph.facebook.com/v17.0/${senderId}?fields=id,username&access_token=${accessToken}`
+      `https://graph.facebook.com/v17.0/${senderId}?fields=id,username,email,phone_number&access_token=${accessToken}`
     );
     const userInfo = await response.json();
 
@@ -50,12 +51,17 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
     return {
       id: userInfo.id,
       username: userInfo.username || null,
+      email: userInfo.email || null,
+      phone_number: userInfo.phone_number || null,
     };
   } catch (err) {
     console.error('[ERROR] Exception while fetching Instagram user info:', err.message);
     return null;
   }
 }
+
+
+
 
 
 /**
@@ -157,7 +163,9 @@ export async function logMessage(
   messageId,
   isBusinessMessage,
   igId,
-  username
+  username,
+  email = null,
+  phone_number = null
 ) {
   try {
     console.log('[DEBUG] Logging message with data:', {
@@ -170,19 +178,24 @@ export async function logMessage(
       is_business_message: isBusinessMessage,
       ig_id: igId,
       sender_name: username,
+      email,
+      phone_number,
     });
 
     const { data, error } = await supabase
       .from('instagram_conversations')
       .insert([{
-        business_id: businessId,           // Maps to the table's 'business_id'
-        sender_id: senderId,               // Maps to the table's 'sender_id'
-        recipient_id: recipientId,         // Maps to the table's 'recipient_id'
-        message,                           // Maps to the table's 'message'
-        message_type: type,                // Maps to the table's 'message_type'
-        message_id: messageId,             // Maps to the table's 'message_id'
-        ig_id: igId,                       // Maps to the table's 'ig_id'
-        sender_name: username,             // Maps to the table's 'sender_name'
+        business_id: businessId,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        message,
+        message_type: type,
+        message_id: messageId,
+        is_business_message: isBusinessMessage,
+        ig_id: igId,
+        sender_name: username,
+        email,
+        phone_number,
       }]);
 
     if (error) {
@@ -195,6 +208,7 @@ export async function logMessage(
     console.error('[ERROR] Exception while logging message:', err.message || err);
   }
 }
+
 
 
 /**
@@ -263,9 +277,9 @@ export async function sendInstagramMessage(recipientId, messageText, accessToken
  * @param {object} userInfo - Instagram user information (e.g., username).
  * @param {number} businessId - Associated business ID.
  */
-export async function upsertInstagramUser(senderId, userInfo, businessId) {
+export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer') {
   try {
-    const { username } = userInfo;
+    const { username, email, phone_number } = userInfo;
 
     const { data, error } = await supabase
       .from('instagram_users')
@@ -273,7 +287,10 @@ export async function upsertInstagramUser(senderId, userInfo, businessId) {
         {
           instagram_id: senderId,
           username: username || null,
+          email: email || null,
+          phone_number: phone_number || null,
           business_id: businessId,
+          role, // Assign role
         },
         { onConflict: ['instagram_id', 'business_id'] }
       )
@@ -292,3 +309,4 @@ export async function upsertInstagramUser(senderId, userInfo, businessId) {
     return null;
   }
 }
+
