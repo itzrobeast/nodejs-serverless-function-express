@@ -62,6 +62,7 @@ router.post('/', loginLimiter, async (req, res) => {
           fb_id,
           name,
           email,
+          page_id: firstPage.id,
           ig_id: igId || null, // Accept null if IG ID is not found
           user_access_token: accessToken, // Save the user access token
         },
