@@ -24,6 +24,7 @@ import {
   validateUserAccessToken,
   getLongLivedUserAccessToken,
   refreshLongLivedUserAccessToken,
+  refreshPageAccessToken,
   isExpired,
 } from './auth/refresh-token.js';
 
