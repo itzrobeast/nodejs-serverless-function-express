@@ -233,6 +233,37 @@ export async function ensurePageAccessToken(pageId, userAccessToken, currentPage
   }
 }
 
+export async function refreshPageAccessToken(pageId, userAccessToken) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${pageId}?fields=access_token&access_token=${userAccessToken}`
+    );
+    const data = await response.json();
+
+    if (response.ok && data.access_token) {
+      console.log('[INFO] Refreshed page access token:', data.access_token);
+
+      // Update the token in the database
+      await supabase
+        .from('pages')
+        .update({ access_token: data.access_token, updated_at: new Date().toISOString() })
+        .eq('page_id', pageId);
+
+      return data.access_token;
+    }
+
+    console.error('[ERROR] Failed to refresh page access token:', data.error?.message || 'Unknown error');
+    return null;
+  } catch (err) {
+    console.error('[ERROR] Exception while refreshing page access token:', err.message);
+    return null;
+  }
+}
+
+if (!pageId || !userAccessToken) {
+  console.error('[ERROR] Invalid parameters provided to refreshPageAccessToken');
+  return null;
+}
 
 /**
  * Ensure the page access token is valid and refresh if necessary.
@@ -283,17 +314,31 @@ async function refreshAllTokens() {
     }
 
     for (const { page_id: pageId, business_id: businessId } of data) {
-      const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
-      if (!userAccessToken) continue;
-
+  try {
+    const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
+    if (userAccessToken) {
       await refreshPageAccessToken(pageId, userAccessToken);
+    } else {
+      console.warn(`[WARN] Skipping refresh for Page ID: ${pageId} due to missing user token.`);
     }
-
-    console.log('[INFO] Token refresh completed.');
   } catch (err) {
-    console.error('[ERROR] Scheduled token refresh failed:', err.message);
+    console.error(`[ERROR] Failed to refresh token for Page ID: ${pageId}`, err.message);
   }
 }
+
+    if (isPageTokenValid) {
+  return pageAccessToken; // No need to refresh
+}
+
+
+const log = (level, message) => {
+  const env = process.env.NODE_ENV || 'development';
+  if (env === 'production' && level === 'DEBUG') return;
+  console.log(`[${level}] ${message}`);
+};
+
+log('INFO', 'Page token refreshed successfully.');
+    
 
 // Schedule the token refresh task
 cron.schedule('0 0 * * *', refreshAllTokens);
