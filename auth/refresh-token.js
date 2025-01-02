@@ -143,13 +143,13 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
  */
 export async function getUserAccessToken(businessOwnerId) {
   try {
-    const numericId = Number(businessOwnerId); // Convert to a number
+    const numericId = Number(businessOwnerId); // Ensure numeric type
     console.log(`[DEBUG] Fetching user access token for Business Owner ID: ${numericId}`);
 
     const { data, error } = await supabase
       .from('business_owners')
       .select('user_access_token, updated_at')
-      .eq('id', numericId); // Use numeric ID
+      .eq('id', numericId);
 
     console.log(`[DEBUG] Raw query result for Business Owner ID ${numericId}:`, data);
 
@@ -183,6 +183,7 @@ export async function getUserAccessToken(businessOwnerId) {
     return null;
   }
 }
+
 
 
 
