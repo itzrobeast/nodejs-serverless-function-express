@@ -42,7 +42,7 @@ export const isExpired = (updatedAt, tokenType = 'general') => {
  * @param {string} userToken - The user access token to validate.
  * @returns {Promise<boolean>} True if the token is valid, otherwise false.
  */
-async function validateUserAccessToken(userToken) {
+ async function validateUserAccessToken(userToken) {
   const appId = process.env.FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
 
@@ -69,7 +69,7 @@ async function validateUserAccessToken(userToken) {
  * @param {string} pageToken - The page access token to validate.
  * @returns {Promise<boolean>} True if the token is valid, otherwise false.
  */
-async function validatePageAccessToken(pageToken) {
+ async function validatePageAccessToken(pageToken) {
   const appId = process.env.FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
 
@@ -90,6 +90,33 @@ async function validatePageAccessToken(pageToken) {
   console.error('[ERROR] Page access token validation failed:', data.error || 'Unknown error');
   return false;
 }
+
+
+
+export async function getBusinessOwnerId(businessId) {
+  try {
+    console.log(`[DEBUG] Fetching business owner ID for Business ID: ${businessId}`);
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('business_owner_id')
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch business owner ID for Business ID ${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    console.log(`[DEBUG] Retrieved business owner ID: ${data.business_owner_id}`);
+    return data.business_owner_id;
+  } catch (err) {
+    console.error(`[ERROR] Exception while fetching business owner ID for Business ID ${businessId}:`, err.message);
+    return null;
+  }
+}
+
+
+
 
 /**
  * Refresh a user access token.
