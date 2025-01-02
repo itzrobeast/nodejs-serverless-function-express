@@ -26,7 +26,7 @@ export const isExpired = (updatedAt, expiryDays = 1) => {
 
 /**
  * Refresh the user access token using Facebook API.
- * @param {string} businessOwnerId - The business owner ID in the database.
+ * @param {number} businessOwnerId - The business owner ID in the database.
  * @param {string} shortLivedToken - The short-lived token to exchange.
  * @returns {Promise<string|null>} The refreshed user access token or null if the refresh fails.
  */
@@ -52,12 +52,7 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
     if (error) {
       console.error('[ERROR] Failed to update user access token in database:', error.message);
       return null;
-    } else {
-  console.log('[INFO] Successfully updated user access token in database for Business Owner ID:', businessOwnerId);
-}
-
-
-    
+    }
 
     console.log('[INFO] User access token refreshed successfully for Business Owner ID:', businessOwnerId);
     return data.access_token;
@@ -103,7 +98,6 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
       return null;
     }
 
-    // Update database with the new token
     const { error: pageError } = await supabase
       .from('pages')
       .update({ access_token: newPageAccessToken, updated_at: new Date().toISOString() })
@@ -111,16 +105,6 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
 
     if (pageError) {
       console.error(`[ERROR] Failed to update pages table for Page ID ${pageId}:`, pageError.message);
-      return null;
-    }
-
-    const { error: accessTokenError } = await supabase
-      .from('page_access_tokens')
-      .update({ page_access_token: newPageAccessToken, updated_at: new Date().toISOString() })
-      .eq('page_id', pageId);
-
-    if (accessTokenError) {
-      console.error(`[ERROR] Failed to update page_access_tokens table for Page ID ${pageId}:`, accessTokenError.message);
       return null;
     }
 
@@ -132,18 +116,42 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
   }
 }
 
+/**
+ * Fetch the business owner ID dynamically using the business ID.
+ * @param {number} businessId - The business ID.
+ * @returns {Promise<number|null>} The business owner ID or null if not found.
+ */
+export async function getBusinessOwnerId(businessId) {
+  try {
+    console.log(`[DEBUG] Fetching business owner ID for Business ID: ${businessId}`);
 
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('business_owner_id')
+      .eq('id', businessId)
+      .single();
 
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch business owner ID for Business ID ${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
 
+    console.log(`[DEBUG] Retrieved business owner ID: ${data.business_owner_id}`);
+    return data.business_owner_id;
+  } catch (err) {
+    console.error(`[ERROR] Exception while fetching business owner ID for Business ID ${businessId}:`, err.message);
+    return null;
+  }
+}
 
 /**
  * Ensure the user access token is valid and refresh it if necessary.
- * @param {string} businessOwnerId - The business owner ID in the database.
+ * @param {number} businessOwnerId - The business owner ID in the database.
  * @returns {Promise<string|null>} The valid user access token or null if it cannot be fetched or refreshed.
  */
 export async function getUserAccessToken(businessOwnerId) {
   try {
-    const numericId = Number(businessOwnerId); // Ensure numeric type
+    const numericId = Number(businessOwnerId);
     console.log(`[DEBUG] Fetching user access token for Business Owner ID: ${numericId}`);
 
     const { data, error } = await supabase
@@ -183,8 +191,6 @@ export async function getUserAccessToken(businessOwnerId) {
     return null;
   }
 }
-
-
 
 
 /**
