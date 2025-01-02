@@ -76,24 +76,34 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
 export async function refreshPageAccessToken(pageId, userAccessToken) {
   try {
     console.log(`[INFO] Refreshing page access token for Page ID: ${pageId}`);
-    const response = await fetch(`https://graph.facebook.com/v15.0/me/accounts?access_token=${userAccessToken}`);
-    const data = await response.json();
 
-    if (!response.ok) {
-      console.error(`[ERROR] Failed to fetch accounts for Page ID ${pageId}: ${data.error?.message}`);
+    if (!userAccessToken || userAccessToken.trim() === '') {
+      console.error('[ERROR] User access token is missing or invalid.');
       return null;
     }
 
-    const pageData = data.data.find((page) => page.id === pageId);
+    const response = await fetch(`https://graph.facebook.com/v15.0/me/accounts?access_token=${userAccessToken}`);
+    const data = await response.json();
 
+    if (!data || !data.data) {
+      console.error(`[ERROR] Invalid response from Facebook API for Page ID ${pageId}:`, JSON.stringify(data));
+      return null;
+    }
+    console.log('[DEBUG] Facebook API response:', JSON.stringify(data, null, 2));
+
+    const pageData = data.data.find((page) => page.id === pageId);
     if (!pageData) {
       console.warn(`[WARN] Page ID ${pageId} not found in the accounts response.`);
       return null;
     }
 
     const newPageAccessToken = pageData.access_token;
+    if (!newPageAccessToken) {
+      console.error(`[ERROR] Missing new page access token for Page ID ${pageId}.`);
+      return null;
+    }
 
-    // Update both the pages and page_access_tokens tables
+    // Update database with the new token
     const { error: pageError } = await supabase
       .from('pages')
       .update({ access_token: newPageAccessToken, updated_at: new Date().toISOString() })
@@ -121,6 +131,10 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
     return null;
   }
 }
+
+
+
+
 
 /**
  * Ensure the user access token is valid and refresh it if necessary.
