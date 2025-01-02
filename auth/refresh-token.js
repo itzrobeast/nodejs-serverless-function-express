@@ -11,7 +11,7 @@ const router = express.Router();
  * @param {number} expiryDays - Number of days before the token is considered expired.
  * @returns {boolean} True if the token is expired, otherwise false.
  */
-const isExpired = (updatedAt, expiryDays = 1) => {
+export const isExpired = (updatedAt, expiryDays = 1) => {
   try {
     const lastUpdated = new Date(updatedAt);
     const now = new Date();
