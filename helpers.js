@@ -5,7 +5,7 @@ import {
   getPageAccessToken,
   getUserAccessToken,
   refreshUserAccessToken,
-  refreshPageAccessToken,
+  ensurePageAccessToken,
   isExpired
 } from './auth/refresh-token.js';
 
