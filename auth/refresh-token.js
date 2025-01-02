@@ -32,43 +32,62 @@ export const isExpired = (updatedAt, expiryDays = 1) => {
  */
 
 export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
-  try {
-    console.log(`[INFO] Refreshing user access token for Business Owner ID: ${businessOwnerId}`);
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
 
-    const appId = process.env.FACEBOOK_APP_ID;
-    const appSecret = process.env.FACEBOOK_APP_SECRET;
-    if (!appId || !appSecret) {
-      console.error('[ERROR] Missing Facebook App ID or Secret in environment variables');
-      return null;
-    }
-
-    const response = await fetch(
-      `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`
-    );
-    const data = await response.json();
-    console.log('[DEBUG] Facebook API response:', data);
-
-    if (!data.access_token) {
-      console.error('[ERROR] Failed to refresh user access token:', data.error?.message || 'Unknown error');
-      return null;
-    }
-
-    const { error } = await supabase
-      .from('business_owners')
-      .update({ user_access_token: data.access_token, updated_at: new Date().toISOString() })
-      .eq('id', businessOwnerId);
-
-    if (error) {
-      console.error('[ERROR] Failed to update user access token in database:', error.message);
-      return null;
-    }
-
-    console.log('[INFO] User access token refreshed successfully for Business Owner ID:', businessOwnerId);
-    return data.access_token;
-  } catch (err) {
-    console.error('[ERROR] Exception while refreshing user access token:', err.message);
+  if (!appId || !appSecret) {
+    console.error('[ERROR] Missing Facebook App ID or Secret in environment variables');
     return null;
   }
+
+  let attempts = 0;
+  const maxAttempts = 3;
+  const backoffDelay = 2000; // Start with 2 seconds
+
+  while (attempts < maxAttempts) {
+    try {
+      console.log(`[INFO] Attempting to refresh user access token (Attempt ${attempts + 1}) for Business Owner ID: ${businessOwnerId}`);
+
+      const response = await fetch(
+        `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`
+      );
+
+      const data = await response.json();
+      console.log('[DEBUG] Facebook API response:', data);
+
+      if (!data.access_token) {
+        if (data.error?.is_transient) {
+          console.warn('[WARN] Transient error encountered. Retrying...', data.error?.message);
+          attempts++;
+          await new Promise((resolve) => setTimeout(resolve, backoffDelay * attempts)); // Exponential backoff
+          continue;
+        }
+        console.error('[ERROR] Failed to refresh user access token:', data.error?.message || 'Unknown error');
+        return null;
+      }
+
+      const { error } = await supabase
+        .from('business_owners')
+        .update({ user_access_token: data.access_token, updated_at: new Date().toISOString() })
+        .eq('id', businessOwnerId);
+
+      if (error) {
+        console.error('[ERROR] Failed to update user access token in database:', error.message);
+        return null;
+      }
+
+      console.log('[INFO] User access token refreshed successfully for Business Owner ID:', businessOwnerId);
+      return data.access_token;
+
+    } catch (err) {
+      console.error(`[ERROR] Exception during user access token refresh (Attempt ${attempts + 1}):`, err.message);
+      attempts++;
+      await new Promise((resolve) => setTimeout(resolve, backoffDelay * attempts)); // Exponential backoff
+    }
+  }
+
+  console.error('[ERROR] Failed to refresh user access token after maximum attempts');
+  return null;
 }
 
 
