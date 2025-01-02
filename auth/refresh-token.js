@@ -233,37 +233,6 @@ export async function ensurePageAccessToken(pageId, userAccessToken, currentPage
   }
 }
 
-export async function refreshPageAccessToken(pageId, userAccessToken) {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/${pageId}?fields=access_token&access_token=${userAccessToken}`
-    );
-    const data = await response.json();
-
-    if (response.ok && data.access_token) {
-      console.log('[INFO] Refreshed page access token:', data.access_token);
-
-      // Update the token in the database
-      await supabase
-        .from('pages')
-        .update({ access_token: data.access_token, updated_at: new Date().toISOString() })
-        .eq('page_id', pageId);
-
-      return data.access_token;
-    }
-
-    console.error('[ERROR] Failed to refresh page access token:', data.error?.message || 'Unknown error');
-    return null;
-  } catch (err) {
-    console.error('[ERROR] Exception while refreshing page access token:', err.message);
-    return null;
-  }
-}
-
-if (!pageId || !userAccessToken) {
-  console.error('[ERROR] Invalid parameters provided to refreshPageAccessToken');
-  return null;
-}
 
 /**
  * Ensure the page access token is valid and refresh if necessary.
@@ -281,24 +250,59 @@ export async function getPageAccessToken(businessId, pageId) {
       .single();
 
     if (error || !data) {
+      console.warn(`[WARN] No page access token found in database for Page ID: ${pageId}`);
       const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
-      return await refreshPageAccessToken(pageId, userAccessToken);
+      return userAccessToken ? await refreshPageAccessToken(pageId, userAccessToken) : null;
     }
 
     const { access_token: pageAccessToken, updated_at: updatedAt } = data;
-    const isPageTokenValid = await validatePageAccessToken(pageAccessToken);
 
-    if (!isPageTokenValid || isExpired(updatedAt, 'page')) {
+    if (!pageAccessToken || isExpired(updatedAt, 'page')) {
+      console.log(`[INFO] Page token expired for Page ID: ${pageId}. Refreshing...`);
       const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
-      return await refreshPageAccessToken(pageId, userAccessToken);
+      return userAccessToken ? await refreshPageAccessToken(pageId, userAccessToken) : null;
     }
 
     return pageAccessToken;
   } catch (err) {
-    console.error(`[ERROR] Failed to fetch page access token for Page ID ${pageId}:`, err.message);
+    console.error(`[ERROR] Failed to fetch page access token for Page ID: ${pageId}`, err.message);
     return null;
   }
 }
+
+
+export async function refreshPageAccessToken(pageId, userAccessToken) {
+  if (!pageId || !userAccessToken) {
+    console.error('[ERROR] Invalid parameters provided to refreshPageAccessToken');
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${pageId}?fields=access_token&access_token=${userAccessToken}`
+    );
+    const data = await response.json();
+
+    if (response.ok && data.access_token) {
+      console.log('[INFO] Refreshed page access token:', data.access_token);
+
+      await supabase
+        .from('pages')
+        .update({ access_token: data.access_token, updated_at: new Date().toISOString() })
+        .eq('page_id', pageId);
+
+      return data.access_token;
+    }
+
+    console.error('[ERROR] Failed to refresh page access token:', data.error?.message || 'Unknown error');
+    return null;
+  } catch (err) {
+    console.error('[ERROR] Exception while refreshing page access token:', err.message);
+    return null;
+  }
+}
+
+
 
 /**
  * Refresh tokens for all pages at scheduled intervals.
@@ -309,39 +313,31 @@ async function refreshAllTokens() {
     const { data, error } = await supabase.from('pages').select('page_id, business_id');
 
     if (error || !data) {
-      console.error('[ERROR] Failed to fetch pages for token refresh:', error.message);
+      console.error('[ERROR] Failed to fetch pages for token refresh:', error?.message);
       return;
     }
 
     for (const { page_id: pageId, business_id: businessId } of data) {
-  try {
-    const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
-    if (userAccessToken) {
-      await refreshPageAccessToken(pageId, userAccessToken);
-    } else {
-      console.warn(`[WARN] Skipping refresh for Page ID: ${pageId} due to missing user token.`);
+      try {
+        const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
+        if (userAccessToken) {
+          await refreshPageAccessToken(pageId, userAccessToken);
+        } else {
+          console.warn(`[WARN] Skipping refresh for Page ID: ${pageId} due to missing user token.`);
+        }
+      } catch (err) {
+        console.error(`[ERROR] Failed to refresh token for Page ID: ${pageId}`, err.message);
+      }
     }
+
+    console.log('[INFO] Token refresh completed.');
   } catch (err) {
-    console.error(`[ERROR] Failed to refresh token for Page ID: ${pageId}`, err.message);
+    console.error('[ERROR] Scheduled token refresh failed:', err.message);
   }
 }
 
-    if (isPageTokenValid) {
-  return pageAccessToken; // No need to refresh
-}
-
-
-const log = (level, message) => {
-  const env = process.env.NODE_ENV || 'development';
-  if (env === 'production' && level === 'DEBUG') return;
-  console.log(`[${level}] ${message}`);
-};
-
-log('INFO', 'Page token refreshed successfully.');
-    
-
-// Schedule the token refresh task
 cron.schedule('0 0 * * *', refreshAllTokens);
 console.log('[INFO] Token refresh scheduler initialized.');
+
 
 export default router;
