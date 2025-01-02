@@ -30,11 +30,20 @@ export const isExpired = (updatedAt, expiryDays = 1) => {
  * @param {string} shortLivedToken - The short-lived token to exchange.
  * @returns {Promise<string|null>} The refreshed user access token or null if the refresh fails.
  */
+
 export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
   try {
     console.log(`[INFO] Refreshing user access token for Business Owner ID: ${businessOwnerId}`);
+
+    const appId = process.env.FACEBOOK_APP_ID;
+    const appSecret = process.env.FACEBOOK_APP_SECRET;
+    if (!appId || !appSecret) {
+      console.error('[ERROR] Missing Facebook App ID or Secret in environment variables');
+      return null;
+    }
+
     const response = await fetch(
-      `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=<app_id>&client_secret=<app_secret>&fb_exchange_token=${shortLivedToken}`
+      `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`
     );
     const data = await response.json();
     console.log('[DEBUG] Facebook API response:', data);
@@ -61,6 +70,8 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
     return null;
   }
 }
+
+
 
 /**
  * Refresh the page access token using Facebook API.
