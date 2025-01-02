@@ -191,10 +191,12 @@ if (!businessDetails) {
       return;
     }
 
-    const userInfo = await fetchInstagramUserInfo(senderId, businessId);
+const { field, value, location } = parseUserMessage(userMessage);
+
+const userInfo = await fetchInstagramUserInfo(senderId, businessId);
 if (userInfo) {
   console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
-  await upsertInstagramUser(senderId, userInfo, businessId, 'customer'); // Assign role
+  await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location); // Pass location
 }
 
 await logMessage(
@@ -208,12 +210,12 @@ await logMessage(
   igId,
   userInfo?.username || '',
   userInfo?.email || null,
-  userInfo?.phone_number || null
+  userInfo?.phone_number || null,
+  location // Log location
 );
 
 
 
-    const { field, value } = parseUserMessage(userMessage);
     const assistantResponse = await assistantHandler({
       userMessage,
       businessId,
