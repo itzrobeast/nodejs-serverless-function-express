@@ -165,7 +165,8 @@ export async function logMessage(
   igId,
   username,
   email = null,
-  phone_number = null
+  phone_number = null,
+  location = null
 ) {
   try {
     console.log('[DEBUG] Logging message with data:', {
@@ -180,6 +181,7 @@ export async function logMessage(
       sender_name: username,
       email,
       phone_number,
+      location,
     });
 
     const { data, error } = await supabase
@@ -196,6 +198,7 @@ export async function logMessage(
         sender_name: username,
         email,
         phone_number,
+        location,
       }]);
 
     if (error) {
@@ -211,6 +214,7 @@ export async function logMessage(
 
 
 
+
 /**
  * Parse user messages to extract field-value pairs in the format "key: value".
  * @param {string} userMessage - The message from the user.
@@ -219,24 +223,22 @@ export async function logMessage(
 export function parseUserMessage(userMessage) {
   if (typeof userMessage !== 'string' || userMessage.trim() === '') {
     console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
-    return { field: null, value: null };
+    return { field: null, value: null, location: null };
   }
 
-  const regex = /^([\w-]+):\s*(.+)$/;
-  const match = userMessage.match(regex);
+  // Regex to match location-related keywords (e.g., "Location: New York")
+  const locationRegex = /location:\s*(.+)$/i;
+  const match = userMessage.match(locationRegex);
 
-  if (!match) {
-    console.warn('[WARN] User message does not match expected format:', userMessage);
-    return { field: null, value: null };
-  }
-
-  const [, field, value] = match;
+  const location = match ? match[1].trim() : null;
 
   return {
-    field: field.toLowerCase(),
-    value: value.trim(),
+    field: null, // Add logic for other fields if needed
+    value: null, // Add logic for other fields if needed
+    location,
   };
 }
+
 
 /**
  * Send a message to a user via Instagram Messaging API.
@@ -277,7 +279,7 @@ export async function sendInstagramMessage(recipientId, messageText, accessToken
  * @param {object} userInfo - Instagram user information (e.g., username).
  * @param {number} businessId - Associated business ID.
  */
-export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer') {
+export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null) {
   try {
     const { username, email, phone_number } = userInfo;
 
@@ -291,6 +293,7 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
           phone_number: phone_number || null,
           business_id: businessId,
           role, // Assign role
+          location, // Store location
         },
         { onConflict: ['instagram_id', 'business_id'] }
       )
