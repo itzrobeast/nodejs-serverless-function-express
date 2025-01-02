@@ -42,6 +42,8 @@ router.post('/', loginLimiter, async (req, res) => {
     const firstPage = pagesData.data[0];
     console.log('[DEBUG] Using First Page:', firstPage);
 
+    const pageAccessToken = firstPage.access_token;
+
     // Step 3: Fetch Instagram Business ID for the Page
     const fetchedIgId = await fetchInstagramIdFromFacebook(firstPage.id, firstPage.access_token);
     const igId = fetchedIgId; // Map Instagram Business Account ID to ig_id
