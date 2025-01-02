@@ -108,6 +108,13 @@ router.post('/', loginLimiter, async (req, res) => {
       maxAge: 3600000, // 1 hour
     });
 
+    res.cookie('pageAccessToken', pageAccessToken, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'None',
+  maxAge: 3600000, // 1 hour
+});
+
     // Step 7: Send Response
     return res.status(200).json({
       message: 'Login successful',
