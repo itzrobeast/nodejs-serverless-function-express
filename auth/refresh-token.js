@@ -148,26 +148,22 @@ export async function getUserAccessToken(businessOwnerId) {
     const { data, error } = await supabase
       .from('business_owners')
       .select('user_access_token, updated_at')
-      .eq('id', businessOwnerId);
-
+      .eq('id', businessOwnerId)
+      .limit(1); // Ensure single row is returned
+    
     if (error) {
       console.error(`[ERROR] Supabase query error for Business Owner ID ${businessOwnerId}:`, error.message);
       return null;
     }
-
-    console.log(`[DEBUG] Supabase query result for Business Owner ID ${businessOwnerId}:`, data);
 
     if (!data || data.length === 0) {
       console.error(`[ERROR] No user access token found for Business Owner ID ${businessOwnerId}`);
       return null;
     }
 
-    if (data.length > 1) {
-      console.error(`[ERROR] Multiple rows returned for Business Owner ID ${businessOwnerId}, expected one.`);
-      return null;
-    }
-
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data[0];
+
+    console.log(`[DEBUG] Retrieved user access token for Business Owner ID ${businessOwnerId}:`, userAccessToken);
 
     if (!userAccessToken || isExpired(updatedAt)) {
       console.log(`[INFO] User access token for Business Owner ID ${businessOwnerId} is expired. Refreshing...`);
