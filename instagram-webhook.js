@@ -210,47 +210,7 @@ await logMessage(
   userInfo?.email || null,
   userInfo?.phone_number || null
 );
-Testing and Validation
-Test the Webhook Flow:
 
-Send messages with an email or phone number in the text to validate parsing and logging.
-Ensure the username is fetched and logged correctly.
-Check Database Entries:
-
-Validate that the instagram_conversations and instagram_users tables are updated correctly.
-Role Assignment:
-
-Test role assignment logic to confirm the correct role is stored in instagram_users.
-Let me know if you'd like assistance testing these changes or if you encounter any issues!
-
-
-
-
-
-
-You said:
-also location 
-ChatGPT said:
-ChatGPT
-To incorporate location in the workflow, we need to ensure it is captured, processed, and logged appropriately in the instagram_conversations and instagram_users tables.
-
-Updated Plan to Incorporate Location:
-Fetch Location Information
-
-Instagram messages might not directly include location metadata. However, if the location is shared as part of the message, it can be parsed.
-Update the fetchInstagramUserInfo function to handle location metadata if available.
-Log Location in Conversations
-
-Modify the logMessage function to log the location data when available.
-Store Location in Instagram Users
-
-Add location information to the upsertInstagramUser function.
-Implementation
-1. Fetch Location from Message Content
-Update the parseUserMessage function to detect and extract location information:
-
-javascript
-Copy code
 export function parseUserMessage(userMessage) {
   if (typeof userMessage !== 'string' || userMessage.trim() === '') {
     console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
