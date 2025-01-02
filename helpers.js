@@ -160,30 +160,42 @@ export async function logMessage(
   username
 ) {
   try {
+    console.log('[DEBUG] Logging message with data:', {
+      business_id: businessId,
+      sender_id: senderId,
+      recipient_id: recipientId,
+      message,
+      message_type: type,
+      message_id: messageId,
+      is_business_message: isBusinessMessage,
+      ig_id: igId,
+      sender_name: username,
+    });
+
     const { data, error } = await supabase
-      .from('messages')
+      .from('instagram_conversations')
       .insert([{
-        business_id: businessId,
-        sender_id: senderId,
-        recipient_id: recipientId,
-        message,
-        type,
-        message_id: messageId,
-        is_business_message: isBusinessMessage,
-        ig_id: igId,
-        username,
+        business_id: businessId,           // Maps to the table's 'business_id'
+        sender_id: senderId,               // Maps to the table's 'sender_id'
+        recipient_id: recipientId,         // Maps to the table's 'recipient_id'
+        message,                           // Maps to the table's 'message'
+        message_type: type,                // Maps to the table's 'message_type'
+        message_id: messageId,             // Maps to the table's 'message_id'
+        ig_id: igId,                       // Maps to the table's 'ig_id'
+        sender_name: username,             // Maps to the table's 'sender_name'
       }]);
 
     if (error) {
-      console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message);
+      console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message || error);
       return;
     }
 
     console.log('[DEBUG] Message logged successfully:', data);
   } catch (err) {
-    console.error('[ERROR] Exception while logging message:', err.message);
+    console.error('[ERROR] Exception while logging message:', err.message || err);
   }
 }
+
 
 /**
  * Parse user messages to extract field-value pairs in the format "key: value".
