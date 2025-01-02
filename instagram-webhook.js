@@ -192,22 +192,210 @@ if (!businessDetails) {
     }
 
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
-    if (userInfo) {
-      console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
-      await upsertInstagramUser(senderId, userInfo, businessId);
+if (userInfo) {
+  console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
+  await upsertInstagramUser(senderId, userInfo, businessId, 'customer'); // Assign role
+}
+
+await logMessage(
+  businessId,
+  senderId,
+  recipientId,
+  userMessage,
+  'received',
+  messageId,
+  false, // isBusinessMessage
+  igId,
+  userInfo?.username || '',
+  userInfo?.email || null,
+  userInfo?.phone_number || null
+);
+Testing and Validation
+Test the Webhook Flow:
+
+Send messages with an email or phone number in the text to validate parsing and logging.
+Ensure the username is fetched and logged correctly.
+Check Database Entries:
+
+Validate that the instagram_conversations and instagram_users tables are updated correctly.
+Role Assignment:
+
+Test role assignment logic to confirm the correct role is stored in instagram_users.
+Let me know if you'd like assistance testing these changes or if you encounter any issues!
+
+
+
+
+
+
+You said:
+also location 
+ChatGPT said:
+ChatGPT
+To incorporate location in the workflow, we need to ensure it is captured, processed, and logged appropriately in the instagram_conversations and instagram_users tables.
+
+Updated Plan to Incorporate Location:
+Fetch Location Information
+
+Instagram messages might not directly include location metadata. However, if the location is shared as part of the message, it can be parsed.
+Update the fetchInstagramUserInfo function to handle location metadata if available.
+Log Location in Conversations
+
+Modify the logMessage function to log the location data when available.
+Store Location in Instagram Users
+
+Add location information to the upsertInstagramUser function.
+Implementation
+1. Fetch Location from Message Content
+Update the parseUserMessage function to detect and extract location information:
+
+javascript
+Copy code
+export function parseUserMessage(userMessage) {
+  if (typeof userMessage !== 'string' || userMessage.trim() === '') {
+    console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
+    return { field: null, value: null, location: null };
+  }
+
+  // Regex to match location-related keywords (e.g., "Location: New York")
+  const locationRegex = /location:\s*(.+)$/i;
+  const match = userMessage.match(locationRegex);
+
+  const location = match ? match[1].trim() : null;
+
+  return {
+    field: null, // Add logic for other fields if needed
+    value: null, // Add logic for other fields if needed
+    location,
+  };
+}
+2. Log Location in Conversations
+Update the logMessage function to include the location parameter:
+
+javascript
+Copy code
+export async function logMessage(
+  businessId,
+  senderId,
+  recipientId,
+  message,
+  type,
+  messageId,
+  isBusinessMessage,
+  igId,
+  username,
+  email = null,
+  phone_number = null,
+  location = null
+) {
+  try {
+    console.log('[DEBUG] Logging message with data:', {
+      business_id: businessId,
+      sender_id: senderId,
+      recipient_id: recipientId,
+      message,
+      message_type: type,
+      message_id: messageId,
+      is_business_message: isBusinessMessage,
+      ig_id: igId,
+      sender_name: username,
+      email,
+      phone_number,
+      location,
+    });
+
+    const { data, error } = await supabase
+      .from('instagram_conversations')
+      .insert([{
+        business_id: businessId,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        message,
+        message_type: type,
+        message_id: messageId,
+        is_business_message: isBusinessMessage,
+        ig_id: igId,
+        sender_name: username,
+        email,
+        phone_number,
+        location,
+      }]);
+
+    if (error) {
+      console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message || error);
+      return;
     }
 
-    await logMessage(
-      businessId,
-      senderId,
-      recipientId,
-      userMessage,
-      'received',
-      messageId,
-      false, // isBusinessMessage
-      igId,
-      userInfo?.username || ''
-    );
+    console.log('[DEBUG] Message logged successfully:', data);
+  } catch (err) {
+    console.error('[ERROR] Exception while logging message:', err.message || err);
+  }
+}
+3. Store Location in Instagram Users
+Update the upsertInstagramUser function to include location data:
+
+javascript
+Copy code
+export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null) {
+  try {
+    const { username, email, phone_number } = userInfo;
+
+    const { data, error } = await supabase
+      .from('instagram_users')
+      .upsert(
+        {
+          instagram_id: senderId,
+          username: username || null,
+          email: email || null,
+          phone_number: phone_number || null,
+          business_id: businessId,
+          role, // Assign role
+          location, // Store location
+        },
+        { onConflict: ['instagram_id', 'business_id'] }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[ERROR] Failed to upsert Instagram user:', error.message);
+      return null;
+    }
+
+    console.log('[INFO] Instagram user upserted successfully:', data);
+    return data;
+  } catch (err) {
+    console.error('[ERROR] Exception while upserting Instagram user:', err.message);
+    return null;
+  }
+}
+4. Update Webhook Processing
+Ensure that location is parsed and passed to logMessage and upsertInstagramUser:
+
+javascript
+Copy code
+const { field, value, location } = parseUserMessage(userMessage);
+
+const userInfo = await fetchInstagramUserInfo(senderId, businessId);
+if (userInfo) {
+  console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
+  await upsertInstagramUser(senderId, userInfo, businessId, 'customer'); // Assign role
+}
+
+await logMessage(
+  businessId,
+  senderId,
+  recipientId,
+  userMessage,
+  'received',
+  messageId,
+  false, // isBusinessMessage
+  igId,
+  userInfo?.username || '',
+  userInfo?.email || null,
+  userInfo?.phone_number || null
+);
+
 
     const { field, value } = parseUserMessage(userMessage);
     const assistantResponse = await assistantHandler({
