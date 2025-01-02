@@ -202,6 +202,14 @@ export async function getUserAccessToken(businessOwnerId) {
 export async function getPageAccessToken(businessId, pageId) {
   try {
     console.log(`[DEBUG] Fetching page access token for Page ID: ${pageId}`);
+    
+    // Fetch businessOwnerId dynamically
+    const businessOwnerId = await getBusinessOwnerId(businessId);
+    if (!businessOwnerId) {
+      console.error(`[ERROR] Could not resolve business owner ID for Business ID: ${businessId}`);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('pages')
       .select('access_token, updated_at')
@@ -210,7 +218,7 @@ export async function getPageAccessToken(businessId, pageId) {
 
     if (error || !data) {
       console.warn(`[WARN] Page access token not found for Page ID ${pageId}. Fetching dynamically...`);
-      const userAccessToken = await getUserAccessToken(businessId);
+      const userAccessToken = await getUserAccessToken(businessOwnerId); // Use businessOwnerId here
       return await refreshPageAccessToken(pageId, userAccessToken);
     }
 
@@ -218,7 +226,7 @@ export async function getPageAccessToken(businessId, pageId) {
 
     if (!pageAccessToken || isExpired(updatedAt)) {
       console.log(`[INFO] Page access token for Page ID ${pageId} is expired. Refreshing...`);
-      const userAccessToken = await getUserAccessToken(businessId);
+      const userAccessToken = await getUserAccessToken(businessOwnerId); // Use businessOwnerId here
       return await refreshPageAccessToken(pageId, userAccessToken);
     }
 
@@ -228,6 +236,7 @@ export async function getPageAccessToken(businessId, pageId) {
     return null;
   }
 }
+
 
 /**
  * Scheduled task to refresh tokens for all pages.
