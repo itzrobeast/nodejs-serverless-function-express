@@ -19,7 +19,7 @@ import {
   getPageAccessToken,
   getUserAccessToken,
   refreshUserAccessToken,
-  refreshPageAccessToken,
+  ensurePageAccessToken,
   getBusinessOwnerId,
   isExpired,
 } from './auth/refresh-token.js';
