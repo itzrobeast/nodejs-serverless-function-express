@@ -143,10 +143,24 @@ async function processMessagingEvent(messageEvent) {
     console.log(`[DEBUG] Using Instagram ID: ${igId}`);
 
     const businessId = await fetchBusinessIdFromInstagramId(igId);
-    if (!businessId) {
-      console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
-      return;
-    }
+if (!businessId) {
+  console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
+  return;
+}
+
+const businessOwnerId = await getBusinessOwnerId(businessId);
+if (!businessOwnerId) {
+  console.error(`[ERROR] Could not resolve business owner ID for Business ID: ${businessId}`);
+  return;
+}
+
+// Use businessOwnerId for token-related operations
+const userAccessToken = await getUserAccessToken(businessOwnerId);
+if (!userAccessToken) {
+  console.error(`[ERROR] Could not fetch user access token for Business Owner ID: ${businessOwnerId}`);
+  return;
+}
+
 
     
 const businessDetails = await fetchBusinessDetails(businessId);
