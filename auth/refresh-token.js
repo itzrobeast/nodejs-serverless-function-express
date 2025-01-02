@@ -22,7 +22,7 @@ const isExpired = (updatedAt, expiryDays = 1) => {
     console.error('[ERROR] Failed to calculate token expiration:', err.message);
     return true;
   }
-};
+
 
 /**
  * Refresh the user access token using Facebook API.
