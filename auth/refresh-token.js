@@ -19,7 +19,7 @@ export const isExpired = (updatedAt, tokenType = 'general') => {
 
     switch (tokenType) {
       case 'user':
-        expiryDays = 60; // Long-lived user tokens last up to 60 days
+        expiryDays = 60; // Long-lived user tokens typically last 60 days
         break;
       case 'page':
         expiryDays = 1; // Short-lived page tokens last 1 day
@@ -38,30 +38,86 @@ export const isExpired = (updatedAt, tokenType = 'general') => {
 };
 
 /**
- * Validate a user access token.
- * @param {string} userToken - The user access token to validate.
- * @returns {Promise<boolean>} True if the token is valid, otherwise false.
+ * Exchange a short-lived user token for a long-lived token.
+ * @param {string} shortLivedToken - The short-lived user token.
+ * @returns {Promise<string|null>} The long-lived token or null if the refresh fails.
  */
- async function validateUserAccessToken(userToken) {
+export async function getLongLivedUserAccessToken(shortLivedToken) {
   const appId = process.env.FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
 
-  if (!appId || !appSecret) {
-    console.error('[ERROR] Missing Facebook App ID or Secret for user token validation');
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`
+    );
+    const data = await response.json();
+
+    if (response.ok && data.access_token) {
+      console.log('[INFO] Long-lived user access token retrieved:', data.access_token);
+      return data.access_token;
+    }
+
+    console.error('[ERROR] Failed to get long-lived user access token:', data.error?.message || 'Unknown error');
+    return null;
+  } catch (err) {
+    console.error('[ERROR] Exception while exchanging for long-lived token:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Refresh a long-lived user access token before expiry.
+ * @param {string} longLivedToken - The current long-lived user access token.
+ * @returns {Promise<string|null>} The refreshed token or null if the refresh fails.
+ */
+export async function refreshLongLivedUserAccessToken(longLivedToken) {
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${longLivedToken}`
+    );
+    const data = await response.json();
+
+    if (response.ok && data.access_token) {
+      console.log('[INFO] Refreshed long-lived user access token:', data.access_token);
+      return data.access_token;
+    }
+
+    console.error('[ERROR] Failed to refresh long-lived user access token:', data.error?.message || 'Unknown error');
+    return null;
+  } catch (err) {
+    console.error('[ERROR] Exception while refreshing long-lived token:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Validate if the user access token is still valid.
+ * @param {string} userAccessToken - The user access token to validate.
+ * @returns {Promise<boolean>} True if valid, false otherwise.
+ */
+export async function validateUserAccessToken(userAccessToken) {
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+
+  try {
+    const debugTokenUrl = `https://graph.facebook.com/debug_token?input_token=${userAccessToken}&access_token=${appId}|${appSecret}`;
+    const response = await fetch(debugTokenUrl);
+    const data = await response.json();
+
+    if (response.ok && data?.data?.is_valid) {
+      console.log('[DEBUG] User access token is valid.');
+      return true;
+    }
+
+    console.error('[ERROR] User access token validation failed:', data.error || 'Unknown error');
+    return false;
+  } catch (err) {
+    console.error('[ERROR] Exception while validating user access token:', err.message);
     return false;
   }
-
-  const debugTokenUrl = `https://graph.facebook.com/debug_token?input_token=${userToken}&access_token=${appId}|${appSecret}`;
-  const response = await fetch(debugTokenUrl);
-  const data = await response.json();
-
-  if (response.ok && data?.data?.is_valid) {
-    console.log('[DEBUG] User access token is valid.');
-    return true;
-  }
-
-  console.error('[ERROR] User access token validation failed:', data.error || 'Unknown error');
-  return false;
 }
 
 /**
@@ -117,37 +173,19 @@ export async function getBusinessOwnerId(businessId) {
 
 
 
-
 /**
- * Refresh a user access token.
- * @param {number} businessOwnerId - The business owner ID.
- * @param {string} shortLivedToken - The short-lived user access token.
- * @returns {Promise<string|null>} The refreshed user access token or null if failed.
+ * Refresh and update the user access token in the database.
+ * @param {number} businessOwnerId - The business owner ID in the database.
+ * @param {string} shortLivedToken - The short-lived user token to exchange.
+ * @returns {Promise<string|null>} The refreshed user access token or null if the refresh fails.
  */
 export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
-  const appId = process.env.FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  const longLivedToken = await getLongLivedUserAccessToken(shortLivedToken);
 
-  if (!appId || !appSecret) {
-    console.error('[ERROR] Missing Facebook App ID or Secret');
-    return null;
-  }
-
-  try {
-    console.log(`[INFO] Refreshing user access token for Business Owner ID: ${businessOwnerId}`);
-    const response = await fetch(
-      `https://graph.facebook.com/v15.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`
-    );
-    const data = await response.json();
-
-    if (!data.access_token) {
-      console.error('[ERROR] Failed to refresh user access token:', data.error?.message || 'Unknown error');
-      return null;
-    }
-
+  if (longLivedToken) {
     const { error } = await supabase
       .from('business_owners')
-      .update({ user_access_token: data.access_token, updated_at: new Date().toISOString() })
+      .update({ user_access_token: longLivedToken, updated_at: new Date().toISOString() })
       .eq('id', businessOwnerId);
 
     if (error) {
@@ -155,13 +193,17 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
       return null;
     }
 
-    console.log('[INFO] User access token refreshed successfully for Business Owner ID:', businessOwnerId);
-    return data.access_token;
-  } catch (err) {
-    console.error('[ERROR] Exception while refreshing user access token:', err.message);
-    return null;
+    console.log('[INFO] User access token refreshed and updated in database for Business Owner ID:', businessOwnerId);
+    return longLivedToken;
   }
+
+  return null;
 }
+
+
+
+
+
 
 /**
  * Refresh a page access token.
