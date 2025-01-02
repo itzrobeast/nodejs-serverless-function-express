@@ -37,6 +37,119 @@ export const isExpired = (updatedAt, tokenType = 'general') => {
   }
 };
 
+
+export async function getBusinessOwnerId(businessId) {
+  try {
+    console.log(`[DEBUG] Fetching business owner ID for Business ID: ${businessId}`);
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('business_owner_id')
+      .eq('id', businessId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[ERROR] Failed to fetch business owner ID for Business ID ${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+
+    console.log(`[DEBUG] Retrieved business owner ID: ${data.business_owner_id}`);
+    return data.business_owner_id;
+  } catch (err) {
+    console.error(`[ERROR] Exception while fetching business owner ID for Business ID ${businessId}:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Validate if the user access token is still valid.
+ * @param {string} userAccessToken - The user access token to validate.
+ * @returns {Promise<boolean>} True if valid, false otherwise.
+ */
+export async function validateUserAccessToken(userAccessToken) {
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+
+  try {
+    const debugTokenUrl = `https://graph.facebook.com/debug_token?input_token=${userAccessToken}&access_token=${appId}|${appSecret}`;
+    const response = await fetch(debugTokenUrl);
+    const data = await response.json();
+
+    if (response.ok && data?.data?.is_valid) {
+      console.log('[DEBUG] User access token is valid.');
+      return true;
+    }
+
+    console.error('[ERROR] User access token validation failed:', data.error || 'Unknown error');
+    return false;
+  } catch (err) {
+    console.error('[ERROR] Exception while validating user access token:', err.message);
+    return false;
+  }
+}
+
+
+/**
+ * Ensure the user access token is valid and refresh if necessary.
+ * @param {number} businessOwnerId - The business owner ID.
+ * @returns {Promise<string|null>} The valid user access token or null if failed.
+ */
+export async function getUserAccessToken(businessOwnerId) {
+  try {
+    console.log(`[DEBUG] Fetching user access token for Business Owner ID: ${businessOwnerId}`);
+    const { data, error } = await supabase
+      .from('business_owners')
+      .select('user_access_token, updated_at')
+      .eq('id', businessOwnerId);
+
+    if (error || !data || data.length === 0) {
+      console.error(`[ERROR] No user access token found for Business Owner ID ${businessOwnerId}`);
+      return null;
+    }
+
+    const { user_access_token: userAccessToken, updated_at: updatedAt } = data[0];
+    const isTokenValid = await validateUserAccessToken(userAccessToken);
+
+    if (!isTokenValid || isExpired(updatedAt, 'user')) {
+      return await refreshUserAccessToken(businessOwnerId, userAccessToken);
+    }
+
+    return userAccessToken;
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch user access token:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Refresh and update the user access token in the database.
+ * @param {number} businessOwnerId - The business owner ID in the database.
+ * @param {string} shortLivedToken - The short-lived user token to exchange.
+ * @returns {Promise<string|null>} The refreshed user access token or null if the refresh fails.
+ */
+export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
+  const longLivedToken = await getLongLivedUserAccessToken(shortLivedToken);
+
+  if (longLivedToken) {
+    const { error } = await supabase
+      .from('business_owners')
+      .update({ user_access_token: longLivedToken, updated_at: new Date().toISOString() })
+      .eq('id', businessOwnerId);
+
+    if (error) {
+      console.error('[ERROR] Failed to update user access token in database:', error.message);
+      return null;
+    }
+
+    console.log('[INFO] User access token refreshed and updated in database for Business Owner ID:', businessOwnerId);
+    return longLivedToken;
+  }
+
+  return null;
+}
+
+
+
+
 /**
  * Exchange a short-lived user token for a long-lived token.
  * @param {string} shortLivedToken - The short-lived user token.
@@ -93,191 +206,33 @@ export async function refreshLongLivedUserAccessToken(longLivedToken) {
   }
 }
 
-/**
- * Validate if the user access token is still valid.
- * @param {string} userAccessToken - The user access token to validate.
- * @returns {Promise<boolean>} True if valid, false otherwise.
- */
-export async function validateUserAccessToken(userAccessToken) {
-  const appId = process.env.FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
-
-  try {
-    const debugTokenUrl = `https://graph.facebook.com/debug_token?input_token=${userAccessToken}&access_token=${appId}|${appSecret}`;
-    const response = await fetch(debugTokenUrl);
-    const data = await response.json();
-
-    if (response.ok && data?.data?.is_valid) {
-      console.log('[DEBUG] User access token is valid.');
-      return true;
-    }
-
-    console.error('[ERROR] User access token validation failed:', data.error || 'Unknown error');
-    return false;
-  } catch (err) {
-    console.error('[ERROR] Exception while validating user access token:', err.message);
-    return false;
-  }
-}
 
 /**
- * Validate a page access token.
- * @param {string} pageToken - The page access token to validate.
- * @returns {Promise<boolean>} True if the token is valid, otherwise false.
- */
- async function validatePageAccessToken(pageToken) {
-  const appId = process.env.FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
-
-  if (!appId || !appSecret) {
-    console.error('[ERROR] Missing Facebook App ID or Secret for page token validation');
-    return false;
-  }
-
-  const debugTokenUrl = `https://graph.facebook.com/debug_token?input_token=${pageToken}&access_token=${appId}|${appSecret}`;
-  const response = await fetch(debugTokenUrl);
-  const data = await response.json();
-
-  if (response.ok && data?.data?.is_valid) {
-    console.log('[DEBUG] Page access token is valid.');
-    return true;
-  }
-
-  console.error('[ERROR] Page access token validation failed:', data.error || 'Unknown error');
-  return false;
-}
-
-
-
-export async function getBusinessOwnerId(businessId) {
-  try {
-    console.log(`[DEBUG] Fetching business owner ID for Business ID: ${businessId}`);
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('business_owner_id')
-      .eq('id', businessId)
-      .single();
-
-    if (error || !data) {
-      console.error(`[ERROR] Failed to fetch business owner ID for Business ID ${businessId}:`, error?.message || 'No data found');
-      return null;
-    }
-
-    console.log(`[DEBUG] Retrieved business owner ID: ${data.business_owner_id}`);
-    return data.business_owner_id;
-  } catch (err) {
-    console.error(`[ERROR] Exception while fetching business owner ID for Business ID ${businessId}:`, err.message);
-    return null;
-  }
-}
-
-
-
-/**
- * Refresh and update the user access token in the database.
- * @param {number} businessOwnerId - The business owner ID in the database.
- * @param {string} shortLivedToken - The short-lived user token to exchange.
- * @returns {Promise<string|null>} The refreshed user access token or null if the refresh fails.
- */
-export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
-  const longLivedToken = await getLongLivedUserAccessToken(shortLivedToken);
-
-  if (longLivedToken) {
-    const { error } = await supabase
-      .from('business_owners')
-      .update({ user_access_token: longLivedToken, updated_at: new Date().toISOString() })
-      .eq('id', businessOwnerId);
-
-    if (error) {
-      console.error('[ERROR] Failed to update user access token in database:', error.message);
-      return null;
-    }
-
-    console.log('[INFO] User access token refreshed and updated in database for Business Owner ID:', businessOwnerId);
-    return longLivedToken;
-  }
-
-  return null;
-}
-
-
-
-
-
-
-/**
- * Refresh a page access token.
+ * Ensure a valid page access token.
  * @param {string} pageId - The Facebook Page ID.
  * @param {string} userAccessToken - The user access token with permissions for the page.
- * @returns {Promise<string|null>} The refreshed page access token or null if failed.
+ * @param {string} currentPageToken - The current page access token.
+ * @returns {Promise<string|null>} The valid page access token or null if failed.
  */
-export async function refreshPageAccessToken(pageId, userAccessToken) {
+export async function ensurePageAccessToken(pageId, userAccessToken, currentPageToken) {
   try {
-    console.log(`[INFO] Refreshing page access token for Page ID: ${pageId}`);
-    const response = await fetch(`https://graph.facebook.com/v15.0/me/accounts?access_token=${userAccessToken}`);
-    const data = await response.json();
+    console.log(`[INFO] Validating page access token for Page ID: ${pageId}`);
+    const isValid = await validatePageAccessToken(currentPageToken);
 
-    if (!data || !data.data) {
-      console.error(`[ERROR] Failed to fetch accounts for Page ID ${pageId}:`, data.error?.message);
-      return null;
+    if (isValid) {
+      console.log('[INFO] Existing page access token is valid.');
+      return currentPageToken;
     }
 
-    const pageData = data.data.find((page) => page.id === pageId);
-    if (!pageData) {
-      console.warn(`[WARN] Page ID ${pageId} not found in accounts response.`);
-      return null;
-    }
-
-    const newPageAccessToken = pageData.access_token;
-    const { error } = await supabase
-      .from('pages')
-      .update({ access_token: newPageAccessToken, updated_at: new Date().toISOString() })
-      .eq('page_id', pageId);
-
-    if (error) {
-      console.error(`[ERROR] Failed to update page access token in database for Page ID ${pageId}:`, error.message);
-      return null;
-    }
-
-    console.log('[INFO] Page access token refreshed successfully for Page ID:', pageId);
-    return newPageAccessToken;
+    console.log('[INFO] Page access token is invalid or expired. Refreshing...');
+    const refreshedToken = await refreshPageAccessToken(pageId, userAccessToken);
+    return refreshedToken;
   } catch (err) {
-    console.error('[ERROR] Exception while refreshing page access token:', err.message);
+    console.error('[ERROR] Failed to ensure page access token:', err.message);
     return null;
   }
 }
 
-/**
- * Ensure the user access token is valid and refresh if necessary.
- * @param {number} businessOwnerId - The business owner ID.
- * @returns {Promise<string|null>} The valid user access token or null if failed.
- */
-export async function getUserAccessToken(businessOwnerId) {
-  try {
-    console.log(`[DEBUG] Fetching user access token for Business Owner ID: ${businessOwnerId}`);
-    const { data, error } = await supabase
-      .from('business_owners')
-      .select('user_access_token, updated_at')
-      .eq('id', businessOwnerId);
-
-    if (error || !data || data.length === 0) {
-      console.error(`[ERROR] No user access token found for Business Owner ID ${businessOwnerId}`);
-      return null;
-    }
-
-    const { user_access_token: userAccessToken, updated_at: updatedAt } = data[0];
-    const isTokenValid = await validateUserAccessToken(userAccessToken);
-
-    if (!isTokenValid || isExpired(updatedAt, 'user')) {
-      return await refreshUserAccessToken(businessOwnerId, userAccessToken);
-    }
-
-    return userAccessToken;
-  } catch (err) {
-    console.error('[ERROR] Failed to fetch user access token:', err.message);
-    return null;
-  }
-}
 
 /**
  * Ensure the page access token is valid and refresh if necessary.
