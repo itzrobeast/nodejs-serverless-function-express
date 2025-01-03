@@ -160,8 +160,7 @@ export async function logMessage(
   recipientId,
   message,
   type,
-  messageId,
-  isBusinessMessage, // Boolean indicating if the message is from the business
+  isBusinessMessage, // Determine if the message is from the business
   igId,
   username,
   email = null,
@@ -169,8 +168,13 @@ export async function logMessage(
   location = null
 ) {
   try {
-    // Determine the role based on whether it's a business message
     const role = isBusinessMessage ? 'business' : 'customer';
+
+    // Ensure `ig_id` is numeric or null if unavailable
+    const validIgId = isBusinessMessage ? parseInt(igId, 10) : igId;
+    if (isNaN(validIgId) && !isBusinessMessage) {
+      console.warn('[WARN] Invalid ig_id detected, defaulting to null:', igId);
+    }
 
     console.log('[DEBUG] Logging message with data:', {
       business_id: businessId,
@@ -178,9 +182,8 @@ export async function logMessage(
       recipient_id: recipientId,
       message,
       message_type: type,
-      message_id: messageId,
       role,
-      ig_id: igId,
+      ig_id: validIgId || null,
       sender_name: username,
       email,
       phone_number,
@@ -195,9 +198,8 @@ export async function logMessage(
         recipient_id: recipientId,
         message,
         message_type: type,
-        message_id: messageId,
-        role, // Use the 'role' column instead of 'is_business_message'
-        ig_id: igId,
+        role,
+        ig_id: validIgId || null, // Ensure valid bigint or null
         sender_name: username,
         email,
         phone_number,
@@ -214,6 +216,7 @@ export async function logMessage(
     console.error('[ERROR] Exception while logging message:', err.message || err);
   }
 }
+
 
 
 
