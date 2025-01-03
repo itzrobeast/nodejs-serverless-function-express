@@ -62,6 +62,12 @@ router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }
 
 // Helper to fetch business ID from Instagram ID
 async function fetchBusinessIdFromInstagramId(igId) {
+  // Validate igId before proceeding
+  if (!igId || isNaN(Number(igId))) {
+    console.error('[ERROR] Invalid or missing ig_id:', igId);
+    return null;
+  }
+  
   try {
     const { data, error } = await supabase
       .from('businesses')
@@ -91,6 +97,11 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
       return;
     }
 
+
+    if (!businessDetails || !businessDetails.ig_id) {
+  console.error('[ERROR] Missing businessDetails or ig_id. Cannot log the message.');
+  return null;
+}
     // Send the message via Instagram API
     await sendInstagramMessage(senderId, messageText, pageAccessToken);
 
