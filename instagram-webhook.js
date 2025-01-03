@@ -153,7 +153,7 @@ async function processMessagingEvent(messageEvent) {
     const isDeleted = messageEvent.message?.is_deleted || false;
     const isEcho = messageEvent.message?.is_echo || false;
     const userMessage = messageEvent.message?.text || '';
-    const messageId = messageEvent.message?.mid;
+    const messageId = messageEvent.message?.mid?.trim();
 
     const igId = isEcho ? senderId : recipientId;
     console.log(`[DEBUG] Using Instagram ID: ${igId}`);
