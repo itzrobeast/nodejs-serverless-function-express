@@ -27,8 +27,6 @@ router.post('/', loginLimiter, async (req, res) => {
     if (error) return res.status(400).json({ error: error.details[0].message });
 
     const { accessToken } = value;
-    
-
 
     // Step 1: Validate Facebook Token
     const tokenValidationResponse = await validateFacebookToken(accessToken);
@@ -37,12 +35,15 @@ router.post('/', loginLimiter, async (req, res) => {
     }
     console.log('[DEBUG] Facebook Token Validated:', tokenValidationResponse);
 
+    const { userId: fb_id, scopes } = tokenValidationResponse;
+
     // Step 2: Fetch Facebook User Data
-    const fbResponse = await validateFacebookToken(accessToken);
-    console.log('[DEBUG] Token details:', fbResponse);
-    if (!fbResponse.ok) throw new Error('Invalid Facebook Access Token');
-    const fbUser = await fbResponse.json();
-    const { id: fb_id, name, email } = fbUser;
+    const fbUserResponse = await fetch(
+      `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
+    );
+    if (!fbUserResponse.ok) throw new Error('Failed to fetch Facebook user data.');
+    const fbUser = await fbUserResponse.json();
+    const { name, email } = fbUser;
     console.log('[DEBUG] Facebook User Data:', fbUser);
 
     // Step 3: Fetch Facebook Pages
@@ -61,9 +62,10 @@ router.post('/', loginLimiter, async (req, res) => {
     // Step 5: Fetch Instagram Business ID for the Page
     const fetchedIgId = await fetchInstagramIdFromFacebook(firstPage.id, firstPage.access_token);
     if (!fetchedIgId) {
-      console.error('[ERROR] Failed to fetch Instagram Business ID (ig_id) from Facebook');
+      console.warn('[WARN] Failed to fetch Instagram Business ID (ig_id) from Facebook. Proceeding without it.');
+    } else {
+      console.log(`[DEBUG] Fetched and mapped Instagram Business ID (ig_id): ${fetchedIgId}`);
     }
-    console.log(`[DEBUG] Fetched and mapped Instagram Business ID (ig_id): ${fetchedIgId}`);
 
     // Step 6: Upsert Business Owner in Supabase
     const { data: user, error: userError } = await supabase
@@ -142,6 +144,7 @@ router.post('/', loginLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Login failed', details: err.message });
   }
 });
+
 
  
 export default router;
