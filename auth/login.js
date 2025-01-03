@@ -3,7 +3,7 @@ import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
 import Joi from 'joi';
 import rateLimit from 'express-rate-limit';
-import { fetchInstagramIdFromFacebook } from '../helpers.js';
+import { fetchInstagramIdFromFacebook, validateFacebookToken  } from '../helpers.js';
 
 const router = express.Router();
 
@@ -27,6 +27,9 @@ router.post('/', loginLimiter, async (req, res) => {
     if (error) return res.status(400).json({ error: error.details[0].message });
 
     const { accessToken } = value;
+    
+const fbResponse = await validateFacebookToken(accessToken);
+console.log('[DEBUG] Token details:', fbResponse);
 
     // Step 1: Validate Facebook Token
     const tokenValidationResponse = await validateFacebookToken(accessToken);
