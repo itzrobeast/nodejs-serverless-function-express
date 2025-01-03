@@ -111,6 +111,7 @@ export async function fetchInstagramIdFromDatabase(businessId) {
       return null;
     }
 
+    console.log('[DEBUG] Retrieved ig_id:', data.ig_id);
     return data.ig_id;
   } catch (err) {
     console.error('[ERROR] Exception while fetching Instagram ID:', err.message);
