@@ -15,7 +15,6 @@ import {
 
 
 
-import axios from 'axios';
 
 /**
  * Validate a Facebook access token.
