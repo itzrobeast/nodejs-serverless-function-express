@@ -96,21 +96,18 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
 
     // Log the sent message
     await logMessage(
-      businessId,
-      senderId,
-      recipientId,
-      messageText,
-      'sent',
-      null,
-      true, // isBusinessMessage
-      igId,
-      username
-    );
-  } catch (err) {
-    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
-  }
-}
-
+  businessId,
+  recipientId,
+  senderId,
+  assistantResponse.message,
+  'sent',
+  true, // isBusinessMessage is true for business messages
+  igId,
+  'Your Business',
+  null,
+  null,
+  null
+);
 
 
 
@@ -205,14 +202,14 @@ await logMessage(
   recipientId,
   userMessage,
   'received',
-  messageId,
-  false, // isBusinessMessage
+  false, // isBusinessMessage is false for customer messages
   igId,
   userInfo?.username || '',
   userInfo?.email || null,
   userInfo?.phone_number || null,
-  location // Log location
+  location || null
 );
+
 
 
 
