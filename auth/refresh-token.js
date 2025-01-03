@@ -144,6 +144,8 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
 
     console.log('[INFO] User access token refreshed and updated in database for Business Owner ID:', businessOwnerId);
     return longLivedToken;
+  } else {
+    console.error('[ERROR] Failed to generate long-lived token for Business Owner ID:', businessOwnerId);
   }
 
   return null;
@@ -310,56 +312,37 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
  * Refresh tokens for all pages at scheduled intervals.
  */
 async function refreshAllTokens() {
-  try {
-    console.log('[INFO] Starting scheduled token refresh...');
-    
-    // Refresh user tokens
-    const { data: businessOwners, error: ownerError } = await supabase
-      .from('business_owners')
-      .select('id, user_access_token, updated_at');
-    
-    if (ownerError || !businessOwners) {
-      console.error('[ERROR] Failed to fetch business owners for token refresh:', ownerError?.message || 'No data');
-      return;
-    }
+  console.log('[INFO] Starting scheduled token refresh...');
+  
+  const { data: businessOwners, error: ownerError } = await supabase
+    .from('business_owners')
+    .select('id, user_access_token, updated_at');
 
-    for (const { id: businessOwnerId, user_access_token: userAccessToken, updated_at: updatedAt } of businessOwners) {
-      try {
-        if (!userAccessToken || isExpired(updatedAt, 'user')) {
-          console.log(`[INFO] Refreshing user token for Business Owner ID: ${businessOwnerId}`);
-          await refreshUserAccessToken(businessOwnerId, userAccessToken);
-        }
-      } catch (err) {
-        console.error(`[ERROR] Failed to refresh user token for Business Owner ID: ${businessOwnerId}`, err.message);
-      }
-    }
-
-    // Refresh page tokens
-    const { data: pages, error: pageError } = await supabase.from('pages').select('page_id, business_id');
-
-    if (pageError || !pages) {
-      console.error('[ERROR] Failed to fetch pages for token refresh:', pageError?.message || 'No data');
-      return;
-    }
-
-    for (const { page_id: pageId, business_id: businessId } of pages) {
-      try {
-        const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
-        if (userAccessToken) {
-          await refreshPageAccessToken(pageId, userAccessToken);
-        } else {
-          console.warn(`[WARN] Skipping refresh for Page ID: ${pageId} due to missing user token.`);
-        }
-      } catch (err) {
-        console.error(`[ERROR] Failed to refresh token for Page ID: ${pageId}`, err.message);
-      }
-    }
-
-    console.log('[INFO] Token refresh completed.');
-  } catch (err) {
-    console.error('[ERROR] Scheduled token refresh failed:', err.message);
+  if (ownerError || !businessOwners) {
+    console.error('[ERROR] Failed to fetch business owners:', ownerError?.message || 'No data');
+    return;
   }
+
+  for (const { id: businessOwnerId, user_access_token: userAccessToken, updated_at: updatedAt } of businessOwners) {
+    try {
+      if (isExpired(updatedAt, 'user')) {
+        console.log(`[INFO] Refreshing user token for Business Owner ID: ${businessOwnerId}`);
+        const refreshedToken = await refreshUserAccessToken(businessOwnerId, userAccessToken);
+
+        if (refreshedToken) {
+          console.log(`[INFO] User token successfully refreshed for Business Owner ID: ${businessOwnerId}`);
+        }
+      } else {
+        console.log(`[DEBUG] User token for Business Owner ID: ${businessOwnerId} is still valid.`);
+      }
+    } catch (err) {
+      console.error(`[ERROR] Failed to refresh user token for Business Owner ID: ${businessOwnerId}`, err.message);
+    }
+  }
+
+  console.log('[INFO] Scheduled token refresh completed.');
 }
+
 
 cron.schedule('*/15 * * * *', refreshAllTokens); // Runs every 15 minutes
 console.log('[INFO] Token refresh scheduler initialized.');
