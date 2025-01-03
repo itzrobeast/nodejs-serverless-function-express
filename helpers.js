@@ -1,4 +1,5 @@
 // Import necessary modules
+import axios from 'axios';
 import fetch from 'node-fetch';
 import supabase from './supabaseClient.js';
 import {
@@ -11,6 +12,52 @@ import {
   refreshLongLivedUserAccessToken,
   isExpired
 } from './auth/refresh-token.js';
+
+
+
+import axios from 'axios';
+
+/**
+ * Validate a Facebook access token.
+ * @param {string} token - The access token to validate.
+ * @returns {Promise<object>} - Token validation details.
+ * @throws {Error} - If the token is invalid or the validation fails.
+ */
+export const validateFacebookToken = async (token) => {
+  try {
+    console.log(`[DEBUG] Validating Facebook token: ${token}`);
+    const appAccessToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
+    const response = await axios.get('https://graph.facebook.com/debug_token', {
+      params: {
+        input_token: token,
+        access_token: appAccessToken,
+      },
+    });
+
+    const { data } = response;
+    if (!data || !data.data || !data.data.is_valid) {
+      const errorMessage = data?.data?.error?.message || 'Invalid token';
+      console.error('[ERROR] Token validation failed:', errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    console.log('[DEBUG] Facebook Token Validated:', data.data);
+    return {
+      isValid: data.data.is_valid,
+      appId: data.data.app_id,
+      userId: data.data.user_id,
+      scopes: data.data.scopes,
+    };
+  } catch (error) {
+    console.error('[ERROR] Facebook token validation failed:', error.message);
+    throw new Error('Your session has expired. Please log in again.');
+  }
+};
+
+
+
+
+
 
 /**
  * Fetch Instagram user info from the Facebook Graph API.
