@@ -4,7 +4,7 @@ import fetch from 'node-fetch';
 import Joi from 'joi';
 import rateLimit from 'express-rate-limit';
 import { fetchInstagramIdFromFacebook, validateFacebookToken  } from '../helpers.js';
-
+import { refreshUserAccessToken } from './refresh-token.js'; 
 const router = express.Router();
 
 // Rate Limiter to prevent abuse
@@ -26,16 +26,26 @@ router.post('/', loginLimiter, async (req, res) => {
     const { error, value } = loginSchema.validate(req.body);
     if (error) return res.status(400).json({ error: error.details[0].message });
 
-    const { accessToken } = value;
+
+    
+router.post('/', loginLimiter, async (req, res) => {
+  try {
+    const { accessToken } = req.body;
 
     // Step 1: Validate Facebook Token
-    const tokenValidationResponse = await validateFacebookToken(accessToken);
-    if (!tokenValidationResponse.isValid) {
+    const tokenDetails = await validateFacebookToken(accessToken);
+    if (!tokenDetails.isValid) {
       throw new Error('Invalid or expired Facebook token. Please log in again.');
     }
-    console.log('[DEBUG] Facebook Token Validated:', tokenValidationResponse);
 
-    const { userId: fb_id, scopes } = tokenValidationResponse;
+    // Step 2: Refresh Token if Necessary
+    const refreshedToken = await refreshUserAccessToken(tokenDetails.userId, accessToken);
+    const finalAccessToken = refreshedToken || accessToken;
+
+    console.log('[DEBUG] Final Access Token:', finalAccessToken);
+
+
+   
 
     // Step 2: Fetch Facebook User Data
     const fbUserResponse = await fetch(
