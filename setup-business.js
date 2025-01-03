@@ -82,8 +82,18 @@ router.post('/', async (req, res) => {
       const { id: pageId, access_token: pageAccessToken, name: pageName } = page;
 
       // Fetch Instagram Business Account ID
+
+
+
       
       const igId = await fetchInstagramIdFromFacebook(pageId, pageAccessToken);
+
+      
+      // Validate igId
+if (!igId || typeof igId !== 'string') {
+  console.error('[ERROR] Invalid ig_id detected during business setup:', igId);
+  return null;
+}
 
 
       // Upsert Business in Supabase
