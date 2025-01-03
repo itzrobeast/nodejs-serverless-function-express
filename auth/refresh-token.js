@@ -99,17 +99,18 @@ export async function getUserAccessToken(businessOwnerId) {
     const { data, error } = await supabase
       .from('business_owners')
       .select('user_access_token, updated_at')
-      .eq('id', businessOwnerId);
+      .eq('id', businessOwnerId)
+      .single();
 
-    if (error || !data || data.length === 0) {
+    if (error || !data) {
       console.error(`[ERROR] No user access token found for Business Owner ID ${businessOwnerId}`);
       return null;
     }
 
-    const { user_access_token: userAccessToken, updated_at: updatedAt } = data[0];
-    const isTokenValid = await validateUserAccessToken(userAccessToken);
+    const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
 
-    if (!isTokenValid || isExpired(updatedAt, 'user')) {
+    if (!userAccessToken || isExpired(updatedAt, 'user')) {
+      console.log('[INFO] User access token is expired or invalid. Attempting to refresh...');
       return await refreshUserAccessToken(businessOwnerId, userAccessToken);
     }
 
@@ -119,6 +120,7 @@ export async function getUserAccessToken(businessOwnerId) {
     return null;
   }
 }
+
 
 /**
  * Refresh and update the user access token in the database.
@@ -310,14 +312,37 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
 async function refreshAllTokens() {
   try {
     console.log('[INFO] Starting scheduled token refresh...');
-    const { data, error } = await supabase.from('pages').select('page_id, business_id');
-
-    if (error || !data) {
-      console.error('[ERROR] Failed to fetch pages for token refresh:', error?.message);
+    
+    // Refresh user tokens
+    const { data: businessOwners, error: ownerError } = await supabase
+      .from('business_owners')
+      .select('id, user_access_token, updated_at');
+    
+    if (ownerError || !businessOwners) {
+      console.error('[ERROR] Failed to fetch business owners for token refresh:', ownerError?.message || 'No data');
       return;
     }
 
-    for (const { page_id: pageId, business_id: businessId } of data) {
+    for (const { id: businessOwnerId, user_access_token: userAccessToken, updated_at: updatedAt } of businessOwners) {
+      try {
+        if (!userAccessToken || isExpired(updatedAt, 'user')) {
+          console.log(`[INFO] Refreshing user token for Business Owner ID: ${businessOwnerId}`);
+          await refreshUserAccessToken(businessOwnerId, userAccessToken);
+        }
+      } catch (err) {
+        console.error(`[ERROR] Failed to refresh user token for Business Owner ID: ${businessOwnerId}`, err.message);
+      }
+    }
+
+    // Refresh page tokens
+    const { data: pages, error: pageError } = await supabase.from('pages').select('page_id, business_id');
+
+    if (pageError || !pages) {
+      console.error('[ERROR] Failed to fetch pages for token refresh:', pageError?.message || 'No data');
+      return;
+    }
+
+    for (const { page_id: pageId, business_id: businessId } of pages) {
       try {
         const userAccessToken = await getUserAccessToken(await getBusinessOwnerId(businessId));
         if (userAccessToken) {
@@ -336,8 +361,9 @@ async function refreshAllTokens() {
   }
 }
 
-cron.schedule('0 0 * * *', refreshAllTokens);
+cron.schedule('*/15 * * * *', refreshAllTokens); // Runs every 15 minutes
 console.log('[INFO] Token refresh scheduler initialized.');
+
 
 
 export default router;
