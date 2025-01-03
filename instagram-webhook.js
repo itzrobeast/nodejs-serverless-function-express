@@ -94,25 +94,19 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
     // Send the message via Instagram API
     await sendInstagramMessage(senderId, messageText, pageAccessToken);
 
-    // Log the sent message
-    // Log the sent message
-    await logMessage(
-      businessId,
-      recipientId,
-      senderId,
-      messageText, // Pass the actual message text
-      'sent',
-      true, // isBusinessMessage is true for business messages
-      igId,
-      'Business', // Username for the business
-      null,
-      null,
-      null
-    );
-  } catch (err) {
-    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
-  }
-}
+   await logMessage(
+  businessId,
+  recipientId,
+  senderId,
+  messageText,
+  'sent',
+  true, // isBusinessMessage is true for business messages
+  businessDetails.ig_id, // Pass valid business ig_id
+  'Business', // Username for the business
+  null,
+  null,
+  null
+);
 
 
 
@@ -208,12 +202,13 @@ await logMessage(
   userMessage,
   'received',
   false, // isBusinessMessage is false for customer messages
-  igId,
+  igId, // Pass valid ig_id from sender/recipient
   userInfo?.username || '',
   userInfo?.email || null,
   userInfo?.phone_number || null,
   location || null
 );
+
 
 
 
