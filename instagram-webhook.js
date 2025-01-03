@@ -108,7 +108,10 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
   null
 );
 
-
+ } catch (err) {
+    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
+  }
+}
 
 
 // Core function to process incoming messages
