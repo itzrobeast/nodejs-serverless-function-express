@@ -161,7 +161,7 @@ export async function logMessage(
   message,
   type,
   messageId,
-  isBusinessMessage,
+  isBusinessMessage, // Boolean indicating if the message is from the business
   igId,
   username,
   email = null,
@@ -169,6 +169,9 @@ export async function logMessage(
   location = null
 ) {
   try {
+    // Determine the role based on whether it's a business message
+    const role = isBusinessMessage ? 'business' : 'customer';
+
     console.log('[DEBUG] Logging message with data:', {
       business_id: businessId,
       sender_id: senderId,
@@ -176,7 +179,7 @@ export async function logMessage(
       message,
       message_type: type,
       message_id: messageId,
-      is_business_message: isBusinessMessage,
+      role,
       ig_id: igId,
       sender_name: username,
       email,
@@ -193,7 +196,7 @@ export async function logMessage(
         message,
         message_type: type,
         message_id: messageId,
-        is_business_message: isBusinessMessage,
+        role, // Use the 'role' column instead of 'is_business_message'
         ig_id: igId,
         sender_name: username,
         email,
