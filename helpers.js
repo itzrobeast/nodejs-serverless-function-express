@@ -135,6 +135,7 @@ export async function fetchBusinessDetails(businessId) {
       throw new Error(`[ERROR] Failed to fetch business details: ${error?.message || 'No data found'}`);
     }
 
+    console.log('[DEBUG] Fetched business details:', data);
     return data;
   } catch (err) {
     console.error('[ERROR] Exception while fetching business details:', err.message);
