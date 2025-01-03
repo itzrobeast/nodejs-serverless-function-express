@@ -41,9 +41,6 @@ const validateFacebookToken = async (token) => {
 
 
 
-
-
-
 export default async function handler(req, res) {
   try {
     console.log('[DEBUG] Incoming request to /auth/verify-session');
@@ -67,25 +64,38 @@ export default async function handler(req, res) {
       });
     }
 
-    // Validate Facebook token
+    // Validate token
     console.log('[DEBUG] Sending request to Facebook for token validation');
     const tokenDetails = await validateFacebookToken(authToken);
 
-    // Extract businessOwnerId details from token validation
-    const businessOwner = {
-      fb_id: tokenDetails.userId,
-      scopes: tokenDetails.scopes,
-    };
+    if (!tokenDetails.isValid) {
+      console.warn('[WARN] Token expired or invalid. Attempting to refresh...');
+      const refreshedToken = await refreshUserAccessToken(businessOwnerId, authToken);
+      if (!refreshedToken) {
+        console.error('[ERROR] Failed to refresh token for businessOwnerId:', businessOwnerId);
+        return res.status(401).json({
+          error: 'Unauthorized: Token expired and could not be refreshed.',
+        });
+      }
 
-    console.log('[DEBUG] Session verified successfully:', businessOwner);
+      console.log('[INFO] Token refreshed successfully:', refreshedToken);
+      return res.status(200).json({
+        message: 'Session verified and token refreshed successfully',
+        businessOwner: { fb_id: tokenDetails.userId, scopes: tokenDetails.scopes },
+      });
+    }
 
-    // Send success response
+    console.log('[DEBUG] Session verified successfully:', tokenDetails);
+
     return res.status(200).json({
       message: 'Session verified successfully',
-      businessOwner,
+      businessOwner: { fb_id: tokenDetails.userId, scopes: tokenDetails.scopes },
     });
   } catch (error) {
     console.error('[ERROR] Unexpected error during session verification:', error.message);
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 }
+
+
+
