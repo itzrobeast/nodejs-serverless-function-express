@@ -331,22 +331,21 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
  */
 export async function handleUnsentMessage(messageId, businessId) {
   try {
-    console.log(`[INFO] Attempting to delete message with ID: ${messageId} for business ID: ${businessId}`);
+    console.log(`[INFO] Deleting message ID: ${messageId} for business ID: ${businessId}`);
 
-    // Assuming messages are stored in the 'instagram_conversations' table
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('instagram_conversations')
       .delete()
       .match({ business_id: businessId, message_id: messageId });
 
     if (error) {
-      console.error(`[ERROR] Failed to delete message with ID: ${messageId}`, error.message);
+      console.error('[ERROR] Failed to delete message:', error.message);
       return;
     }
 
-    console.log(`[INFO] Successfully deleted message with ID: ${messageId}`);
+    console.log(`[INFO] Message ID: ${messageId} deleted successfully.`);
   } catch (err) {
-    console.error(`[ERROR] Exception while handling deleted message with ID: ${messageId}:`, err.message);
+    console.error('[ERROR] Exception during message deletion:', err.message);
   }
 }
 
