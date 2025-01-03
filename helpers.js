@@ -321,3 +321,38 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
   }
 }
 
+
+
+
+/**
+ * Handle unsent (deleted) messages.
+ * @param {string} messageId - The ID of the deleted message.
+ * @param {number} businessId - The ID of the business associated with the message.
+ */
+export async function handleUnsentMessage(messageId, businessId) {
+  try {
+    console.log(`[INFO] Attempting to delete message with ID: ${messageId} for business ID: ${businessId}`);
+
+    // Assuming messages are stored in the 'instagram_conversations' table
+    const { data, error } = await supabase
+      .from('instagram_conversations')
+      .delete()
+      .match({ business_id: businessId, message_id: messageId });
+
+    if (error) {
+      console.error(`[ERROR] Failed to delete message with ID: ${messageId}`, error.message);
+      return;
+    }
+
+    console.log(`[INFO] Successfully deleted message with ID: ${messageId}`);
+  } catch (err) {
+    console.error(`[ERROR] Exception while handling deleted message with ID: ${messageId}:`, err.message);
+  }
+}
+
+
+
+
+
+
+
