@@ -28,8 +28,7 @@ router.post('/', loginLimiter, async (req, res) => {
 
     const { accessToken } = value;
     
-const fbResponse = await validateFacebookToken(accessToken);
-console.log('[DEBUG] Token details:', fbResponse);
+
 
     // Step 1: Validate Facebook Token
     const tokenValidationResponse = await validateFacebookToken(accessToken);
@@ -39,7 +38,8 @@ console.log('[DEBUG] Token details:', fbResponse);
     console.log('[DEBUG] Facebook Token Validated:', tokenValidationResponse);
 
     // Step 2: Fetch Facebook User Data
-    const fbResponse = await fetch(`https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`);
+    const fbResponse = await validateFacebookToken(accessToken);
+    console.log('[DEBUG] Token details:', fbResponse);
     if (!fbResponse.ok) throw new Error('Invalid Facebook Access Token');
     const fbUser = await fbResponse.json();
     const { id: fb_id, name, email } = fbUser;
