@@ -103,7 +103,7 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
   'sent',
   true, // isBusinessMessage is true for business messages
   igId,
-  'Your Business',
+  'Business',
   null,
   null,
   null
