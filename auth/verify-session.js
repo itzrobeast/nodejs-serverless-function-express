@@ -1,5 +1,5 @@
 import { refreshUserAccessToken } from './refresh-token.js';
-import { validateFacebookToken } from './helpers.js';
+import { validateFacebookToken } from '../helpers.js';
 import cookie from 'cookie';
 
 export default async function handler(req, res) {
