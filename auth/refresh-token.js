@@ -124,7 +124,7 @@ export async function getUserAccessToken(businessOwnerId) {
 
 /**
  * Refresh and update the user access token in the database.
- * @param {number} businessOwnerId - The business owner ID in the database.
+ * @param {number} businessOwnerId - The business owner ID.
  * @param {string} shortLivedToken - The short-lived user token to exchange.
  * @returns {Promise<string|null>} The refreshed user access token or null if the refresh fails.
  */
@@ -150,9 +150,6 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
 
   return null;
 }
-
-
-
 
 /**
  * Exchange a short-lived user token for a long-lived token.
@@ -181,6 +178,10 @@ export async function getLongLivedUserAccessToken(shortLivedToken) {
     return null;
   }
 }
+
+
+
+
 
 /**
  * Refresh a long-lived user access token before expiry.
