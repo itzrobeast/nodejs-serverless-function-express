@@ -101,7 +101,7 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
   senderId,
   assistantResponse.message,
   'sent',
-  true, // isBusinessMessage is true for business messages
+  true, 
   igId,
   'Business',
   null,
