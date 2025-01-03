@@ -265,6 +265,35 @@ router.post('/', async (req, res) => {
   }
 });
 
+
+router.get('/fetch-conversations', async (req, res) => {
+  try {
+    const { business_id } = req.query;
+
+    if (!business_id) {
+      return res.status(400).json({ error: 'Missing required parameter: business_id' });
+    }
+
+    console.log(`[INFO] Fetching conversations for business_id=${business_id}`);
+
+    const { data, error } = await supabase
+      .from('instagram_conversations')
+      .select('*')
+      .eq('business_id', business_id);
+
+    if (error) {
+      console.error(`[ERROR] Failed to fetch conversations for business_id=${business_id}:`, error.message);
+      return res.status(500).json({ error: 'Failed to fetch conversations' });
+    }
+
+    return res.status(200).json(data);
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching conversations:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 // GET route for verification
 router.get('/', (req, res) => {
   if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
