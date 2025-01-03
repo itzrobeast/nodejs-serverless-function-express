@@ -46,7 +46,13 @@ router.post('/', loginLimiter, async (req, res) => {
 
     // Step 3: Fetch Instagram Business ID for the Page
     const fetchedIgId = await fetchInstagramIdFromFacebook(firstPage.id, firstPage.access_token);
-    const igId = fetchedIgId; // Map Instagram Business Account ID to ig_id
+if (!fetchedIgId) {
+  console.error('[ERROR] Failed to fetch Instagram Business ID (ig_id) from Facebook');
+  return null;
+}
+console.log(`[DEBUG] Fetched and mapped Instagram Business ID (ig_id): ${fetchedIgId}`);
+const igId = fetchedIgId;
+
 
     if (!igId) {
       console.warn('[WARN] Instagram Business ID not found for the page. Skipping Instagram linkage.');
