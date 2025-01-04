@@ -165,6 +165,28 @@ export async function fetchInstagramIdFromDatabase(businessId) {
   }
 }
 
+
+
+/**
+ * Validate and standardize an Instagram ID (ig_id).
+ * @param {string|number} igId - The Instagram ID to validate.
+ * @returns {string|null} - The validated ig_id as a string, or null if invalid.
+ */
+export function validateIgId(igId) {
+  // Convert to string if it's a number
+  const igIdStr = typeof igId === 'number' ? igId.toString() : igId;
+
+  // Check if it's a valid numeric string
+  if (!igIdStr || !/^\d+$/.test(igIdStr)) {
+    console.warn('[WARN] Invalid ig_id detected:', igId);
+    return null;
+  }
+
+  return igIdStr; // Return as a string
+}
+
+
+
 /**
  * Fetch business details from the database.
  * @param {number} businessId - The business ID.
