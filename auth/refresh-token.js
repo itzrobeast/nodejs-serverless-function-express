@@ -260,8 +260,12 @@ export async function getPageAccessToken(businessId, pageId) {
       console.warn(`[WARN] Error fetching page access token from database: ${error.message}`);
     }
 
-    // Check if token is valid
     if (data?.page_access_token) {
+      if (!data.expires_at) {
+        console.log(`[INFO] Valid long-lived page access token found for pageId=${pageId}`);
+        return data.page_access_token;
+      }
+
       const tokenExpiration = new Date(data.expires_at);
       const now = new Date();
 
@@ -292,22 +296,16 @@ export async function getPageAccessToken(businessId, pageId) {
 async function fetchAndStorePageAccessToken(businessId, pageId) {
   try {
     console.log(`[INFO] Fetching new page access token for businessId=${businessId}, pageId=${pageId}`);
-    
-    const businessOwnerId = await getBusinessOwnerId(businessId); // Fetch the business owner ID
-    if (!businessOwnerId) {
-      console.error(`[ERROR] Could not fetch business owner ID for businessId=${businessId}`);
-      return null;
-    }
 
-    const userAccessToken = await getUserAccessToken(businessOwnerId); // Use getUserAccessToken
+    const userAccessToken = await getUserAccessToken(businessId);
     if (!userAccessToken) {
-      console.error(`[ERROR] Could not fetch user access token for businessId=${businessId}`);
+      console.error(`[ERROR] User access token not available for businessId=${businessId}`);
       return null;
     }
 
-    // Fetch the new page access token from Facebook API
+    // Call Facebook API to fetch a new page access token
     const response = await fetch(
-      `https://graph.facebook.com/v17.0/${pageId}?fields=access_token,expires_at&access_token=${userAccessToken}`
+      `https://graph.facebook.com/v17.0/${pageId}?fields=access_token&access_token=${userAccessToken}`
     );
     const pageData = await response.json();
 
@@ -316,7 +314,7 @@ async function fetchAndStorePageAccessToken(businessId, pageId) {
       return null;
     }
 
-    const { access_token, expires_at } = pageData;
+    const { access_token } = pageData;
 
     // Update the token in the database
     const { error } = await supabase
@@ -325,7 +323,7 @@ async function fetchAndStorePageAccessToken(businessId, pageId) {
         business_id: businessId,
         page_id: pageId,
         page_access_token: access_token,
-        expires_at: expires_at ? new Date(expires_at * 1000).toISOString() : null,
+        expires_at: null, // Explicitly set to null as `expires_at` is not available
       }, { onConflict: ['business_id', 'page_id'] });
 
     if (error) {
