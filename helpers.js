@@ -285,30 +285,46 @@ export async function handleUnsentMessage(messageId, businessId) {
  * @param {string} messageText - Message content to be sent.
  * @param {string} accessToken - Facebook page access token.
  */
-export async function sendInstagramMessage(recipientId, messageText, accessToken) {
+export async function sendInstagramMessage(senderId, messageText, pageAccessToken) {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v17.0/me/messages?access_token=${accessToken}`,
+      `https://graph.facebook.com/v17.0/me/messages`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          recipient: { id: recipientId },
+          recipient: { id: senderId },
           message: { text: messageText },
+          access_token: pageAccessToken,
         }),
       }
     );
+
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorResponse = await response.json();
-      console.error('[ERROR] Failed to send Instagram message:', errorResponse);
-      throw new Error(errorResponse.error?.message || 'Unknown error');
+      throw new Error(data.error?.message || 'Unknown error occurred while sending message');
     }
+
     console.log('[INFO] Instagram message sent successfully.');
+    return data;
   } catch (err) {
-    console.error('[ERROR] Exception while sending Instagram message:', err.message);
-    throw err;
+    console.error('[ERROR] Failed to send Instagram message:', err.message);
+
+    if (err.message.includes('Error validating access token')) {
+      console.log('[INFO] Attempting to refresh tokens and retry...');
+
+      // Refresh tokens and retry
+      const refreshedToken = await getPageAccessToken(/* params */);
+      if (refreshedToken) {
+        return sendInstagramMessage(senderId, messageText, refreshedToken); // Retry with new token
+      }
+    }
+
+    return null;
   }
 }
+
 
 /**
  * Upsert Instagram user into the database.
