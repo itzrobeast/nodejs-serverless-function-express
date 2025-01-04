@@ -1,10 +1,10 @@
 /*****************************************************************
  * instagram-webhook.js
- * 
- * A complete version that handles:
- * - Deduplicating repeated events (avoid multiple logs/responses)
- * - Properly deleting messages when is_deleted = true
- * - Maintaining all existing logic
+ *
+ * A version that removes the in-memory deduplication logic.
+ * It still:
+ * - Properly deletes messages when is_deleted = true
+ * - Maintains all existing logic (logging, DB checks, assistantHandler, etc.)
  *****************************************************************/
 import express from 'express';
 import fetch from 'node-fetch';
@@ -83,16 +83,8 @@ function verifyFacebookSignature(req, res, buf) {
 const router = express.Router();
 router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
 
-/*****************************************************************
- * In-Memory Deduplication
- * 
- * Instagram can send duplicate events, so we track message IDs
- * for a short window to avoid double-logging or double-responding.
- *****************************************************************/
-
-
 /**
- * Helper: fetchBusinessIdFromInstagramId
+ * Helper to fetch business ID from an Instagram ID.
  */
 async function fetchBusinessIdFromInstagramId(igId) {
   // Validate igId before proceeding
@@ -124,8 +116,8 @@ async function fetchBusinessIdFromInstagramId(igId) {
 }
 
 /**
- * respondAndLog
- * (Copied verbatim from your code, plus a check for duplicates before sending.)
+ * Send a response message to the user and log it as "sent" by the business.
+ * Includes a DB check for duplicate "sent" messages.
  */
 async function respondAndLog(
   businessId,
@@ -157,7 +149,7 @@ async function respondAndLog(
       return;
     }
 
-    // Send and log the response
+    // Fetch page access token
     let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
       console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
@@ -169,6 +161,7 @@ async function respondAndLog(
       }
     }
 
+    // Send the message using the valid token
     await sendInstagramMessage(
       senderId,
       messageText,
@@ -177,9 +170,10 @@ async function respondAndLog(
       businessDetails.page_id
     );
 
+    // Log the "sent" message in DB
     await logMessage({
       businessId,
-      senderId: recipientId, // The "business" is effectively the sender
+      senderId: recipientId, // The "business" is effectively the sender now
       recipientId: senderId,
       message: messageText,
       type: 'sent',
@@ -192,15 +186,14 @@ async function respondAndLog(
   }
 }
 
-/*****************************************************************
- * processMessagingEvent
- * Core function to process incoming webhook events:
- * - Dedup check
- * - Handle deleted messages
- * - Handle echoes, empty text
- * - Log messages to DB
- * - Possibly respond via assistantHandler
- *****************************************************************/
+/**
+ * Main function to process incoming messages:
+ * - Checks for deleted messages
+ * - Ignores echo or empty
+ * - Logs to DB
+ * - Possibly calls assistantHandler
+ * - Sends the response
+ */
 async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
@@ -219,13 +212,6 @@ async function processMessagingEvent(messageEvent) {
 
     console.log(`[DEBUG] Sender Instagram ID: ${senderId}, Recipient Instagram ID: ${recipientId}`);
 
-    // Deduplication check
-    if (messageId && processedMessageIds.has(messageId)) {
-      console.log('[INFO] Duplicate event detected. Ignoring message ID:', messageId);
-      return;
-    }
-    markMessageIdAsProcessed(messageId);
-
     // Handle deleted messages
     if (isDeleted) {
       if (!messageId) {
@@ -242,7 +228,7 @@ async function processMessagingEvent(messageEvent) {
       return; // stop further processing
     }
 
-    // Handle echo or empty messages
+    // Ignore echo or empty messages
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
       return;
@@ -256,9 +242,9 @@ async function processMessagingEvent(messageEvent) {
     // Check if the recipient ID (igId) belongs to a known business
     const businessId = await fetchBusinessIdFromInstagramId(recipientId);
 
-    // If no matching business, treat it as a purely "customer" context
+    // If not found, treat as "customer" context with no further business logic
     if (!businessId) {
-      console.log('[INFO] Message is from a customer; processing as a customer message.');
+      console.log('[INFO] Message is from a customer; logging as a customer message.');
       await logMessage({
         businessId: null, // No associated business
         senderId,
@@ -279,9 +265,9 @@ async function processMessagingEvent(messageEvent) {
       console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
       return;
     }
-    console.log(`[DEBUG] Business details fetched: ${JSON.stringify(businessDetails)}`);
+    console.log('[DEBUG] Business details fetched:', JSON.stringify(businessDetails));
 
-    // Validate page access token (optional)
+    // Validate page access token (if desired)
     let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
       console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
@@ -292,14 +278,14 @@ async function processMessagingEvent(messageEvent) {
       }
     }
 
-    // (Optional) Fetch Instagram user info
+    // (Optional) fetch Instagram user info
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
       console.log('[DEBUG] Fetched user info:', JSON.stringify(userInfo));
       await upsertInstagramUser(senderId, userInfo, businessId, 'customer', null, recipientId);
     }
 
-    // Log the incoming message in DB
+    // Log the incoming "received" message
     await logMessage({
       businessId,
       senderId,
@@ -311,17 +297,14 @@ async function processMessagingEvent(messageEvent) {
       username: userInfo?.username || '',
     });
 
-    // Generate a response from your assistant
+    // Generate a response via the assistant
     console.log('[DEBUG] Invoking assistantHandler with:', { userMessage, businessId });
-    const assistantResponse = await assistantHandler({
-      userMessage,
-      businessId,
-    });
+    const assistantResponse = await assistantHandler({ userMessage, businessId });
     console.log('[DEBUG] Assistant response:', assistantResponse);
 
     // If there's a response, log + respond
     if (assistantResponse && assistantResponse.message) {
-      // 1) Log the assistant's outgoing message
+      // 1) Log the outgoing message
       await logMessage({
         businessId,
         senderId: recipientId, // The business is the sender in logs
@@ -349,9 +332,7 @@ async function processMessagingEvent(messageEvent) {
   }
 }
 
-// ---------------------------------------------------
 // POST route for the incoming Instagram Webhook
-// ---------------------------------------------------
 router.post('/', async (req, res) => {
   try {
     const { object, entry } = req.body;
@@ -372,9 +353,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------
 // GET route for webhook verification
-// ---------------------------------------------------
 router.get('/', (req, res) => {
   if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
     return res.status(200).send(req.query['hub.challenge']);
@@ -382,9 +361,7 @@ router.get('/', (req, res) => {
   return res.status(403).send('Verification failed');
 });
 
-// ---------------------------------------------------
 // Optional route to fetch conversation logs
-// ---------------------------------------------------
 router.get('/fetch-conversations', async (req, res) => {
   try {
     const { business_id } = req.query;
