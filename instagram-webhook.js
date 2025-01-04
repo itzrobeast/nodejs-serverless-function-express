@@ -188,6 +188,12 @@ async function processMessagingEvent(messageEvent) {
     console.log(`[DEBUG] Sender Instagram ID: ${senderId}, Recipient Instagram ID: ${recipientId}`);
 
 
+    
+if (!userMessage.trim()) {
+  console.log('[INFO] Ignoring empty message.');
+  return; // Skip processing empty messages
+}
+    
  // Ignore echo messages
     if (isEcho) {
       console.log('[INFO] Ignoring echo message.');
