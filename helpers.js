@@ -405,7 +405,8 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
         username: userInfo?.username || null,
         role,
         location: location || null,
-      }, { onConflict: ['ig_id', 'business_id'] });
+        updated_at: new Date().toISOString(), 
+      }, { onConflict: ['sender_id', 'business_id'] });
 
     if (error) {
       console.error('[ERROR] Failed to upsert Instagram user:', error.message);
