@@ -102,14 +102,14 @@ export async function getUserAccessToken(businessOwnerId) {
       .eq('id', businessOwnerId)
       .single();
 
-    console.log('[DEBUG] Database response for user access token:', data);
-
     if (error || !data || !data.user_access_token) {
       console.error(`[ERROR] No user access token found for Business Owner ID ${businessOwnerId}`);
       return null;
     }
 
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
+
+    console.log('[DEBUG] Retrieved user access token:', userAccessToken); // Log the token
 
     if (!userAccessToken) {
       console.error('[ERROR] Retrieved user access token is null or invalid.');
@@ -127,6 +127,7 @@ export async function getUserAccessToken(businessOwnerId) {
     return null;
   }
 }
+
 
 
 
@@ -266,31 +267,28 @@ export async function getPageAccessToken(businessId, pageId) {
       .eq('page_id', pageId)
       .single();
 
-    if (error) {
-      console.warn(`[WARN] Error fetching page access token from database: ${error.message}`);
+    if (error || !data || !data.page_access_token) {
+      console.warn(`[WARN] No page access token found for businessId=${businessId}, pageId=${pageId}`);
+      return null;
     }
 
-    if (data?.page_access_token) {
-      const tokenExpiration = new Date(data.expires_at);
-      const now = new Date();
+    const { page_access_token: pageAccessToken, expires_at: expiresAt } = data;
 
-      if (!data.expires_at || tokenExpiration > now) {
-        console.log(`[INFO] Valid page access token found for pageId=${pageId}`);
-        return data.page_access_token;
-      }
+    console.log('[DEBUG] Retrieved page access token:', pageAccessToken); // Log the token
 
-      console.warn(`[WARN] Page access token expired for pageId=${pageId}`);
-    } else {
-      console.warn(`[WARN] No page access token found for pageId=${pageId}`);
+    if (!expiresAt || new Date(expiresAt) > new Date()) {
+      console.log('[INFO] Valid page access token found.');
+      return pageAccessToken;
     }
 
-    // Fetch and store a new token if the current one is missing or expired
+    console.warn('[WARN] Page access token expired. Attempting to refresh...');
     return await fetchAndStorePageAccessToken(businessId, pageId);
   } catch (err) {
     console.error('[ERROR] Exception while fetching page access token:', err.message);
     return null;
   }
 }
+
 
 
 /**
@@ -302,48 +300,34 @@ export async function getPageAccessToken(businessId, pageId) {
 async function fetchAndStorePageAccessToken(businessId, pageId) {
   try {
     console.log(`[INFO] Fetching new page access token for businessId=${businessId}, pageId=${pageId}`);
-
     const userAccessToken = await getUserAccessToken(businessId);
+
+    console.log('[DEBUG] Using user access token for fetching page token:', userAccessToken); // Log the token
+
     if (!userAccessToken) {
       console.error(`[ERROR] User access token not available for businessId=${businessId}`);
       return null;
     }
 
-    // Call Facebook API to fetch a new page access token
     const response = await fetch(
       `https://graph.facebook.com/v17.0/${pageId}?fields=access_token&access_token=${userAccessToken}`
     );
-    const pageData = await response.json();
 
+    const pageData = await response.json();
     if (!response.ok || !pageData.access_token) {
       console.error(`[ERROR] Failed to fetch page access token for pageId=${pageId}:`, pageData.error?.message || 'Unknown error');
       return null;
     }
 
-    const { access_token } = pageData;
+    console.log('[DEBUG] Retrieved new page access token:', pageData.access_token); // Log the token
 
-    // Update the token in the database
-    const { error } = await supabase
-      .from('pages')
-      .upsert({
-        business_id: businessId,
-        page_id: pageId,
-        page_access_token: access_token,
-        expires_at: null, // Explicitly set to null as `expires_at` is not available
-      }, { onConflict: ['business_id', 'page_id'] });
-
-    if (error) {
-      console.error(`[ERROR] Failed to update page access token in database for pageId=${pageId}:`, error.message);
-      return null;
-    }
-
-    console.log(`[INFO] Page access token updated successfully for pageId=${pageId}`);
-    return access_token;
+    return pageData.access_token;
   } catch (err) {
     console.error('[ERROR] Exception while fetching and storing page access token:', err.message);
     return null;
   }
 }
+
 
 
 
