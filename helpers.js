@@ -391,6 +391,7 @@ export async function upsertInstagramUser(igId, userInfo, businessId, role = 'cu
     const { error } = await supabase
       .from('instagram_users')
       .upsert({
+        sender_id: senderId,
         ig_id: igId,
         business_id: businessId, // Associate the customer with the messaging business
         username: userInfo?.username || null,
