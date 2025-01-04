@@ -310,6 +310,25 @@ export async function sendInstagramMessage(
   }
 }
 
+
+
+export async function fetchInstagramIdFromDatabase(igId) {
+  try {
+    const { data, error } = await supabase
+      .from('instagram_ids')
+      .select('*')
+      .eq('ig_id', igId);
+
+    if (error) throw new Error(error.message);
+    return data;
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch Instagram ID from database:', err.message);
+    return null;
+  }
+}
+
+
+
 /**
  * Upsert Instagram user into the DB.
  */
