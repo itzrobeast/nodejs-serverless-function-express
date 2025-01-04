@@ -382,7 +382,7 @@ export async function sendInstagramMessage(
  * @param {object} userInfo - Instagram user information (e.g., username).
  * @param {number} businessId - Associated business ID.
  */
-export async function upsertInstagramUser(senderId, igId, userInfo, businessId, role = 'customer', location = null) {
+export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null, igId) {
   try {
     if (!businessId) {
       console.error('[ERROR] Business ID is required to associate the customer with a business.');
