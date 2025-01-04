@@ -149,18 +149,27 @@ async function respondAndLog(
   businessDetails
 ) {
   try {
-    if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
-      console.warn('[WARN] Missing required fields for respondAndLog:', {
-        businessId,
-        senderId,
-        recipientId,
-        messageText,
-        businessDetails,
-      });
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from('instagram_conversations')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('sender_id', recipientId) // The "business" is effectively the sender
+      .eq('recipient_id', senderId)
+      .eq('message', messageText)
+      .eq('message_type', 'sent')
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('[ERROR] Failed to check for duplicate response:', fetchError.message);
       return;
     }
 
-    // Fetch the page access token
+    if (existingMessage) {
+      console.log('[INFO] Duplicate response detected. Skipping send.');
+      return;
+    }
+
+    // Send and log the response
     let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
       console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
@@ -172,7 +181,6 @@ async function respondAndLog(
       }
     }
 
-    // Send the message using the valid token
     await sendInstagramMessage(
       senderId,
       messageText,
@@ -181,10 +189,9 @@ async function respondAndLog(
       businessDetails.page_id
     );
 
-    // Log the "sent" message in the database
     await logMessage({
       businessId,
-      senderId: recipientId, // The "business" is effectively the sender now
+      senderId: recipientId, // The "business" is effectively the sender
       recipientId: senderId,
       message: messageText,
       type: 'sent',
@@ -193,12 +200,10 @@ async function respondAndLog(
       username: 'Business',
     });
   } catch (err) {
-    console.error(
-      `[ERROR] Failed to respond and log message for businessId=${businessId}:`,
-      err.message
-    );
+    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
   }
 }
+
 
 /*****************************************************************
  * processMessagingEvent
