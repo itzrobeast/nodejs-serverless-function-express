@@ -205,34 +205,37 @@ export async function logMessage({
   recipientId,
   message,
   type,
-  role = 'customer',
-  igId = null,
+  role,
+  igId,
   username = null,
   email = null,
   phone_number = null,
   location = null,
 }) {
   try {
-    // Validate required fields
-    if (!businessId || !senderId || !recipientId || !message || !type) {
-      console.warn('[WARN] Missing required fields for logging message:', { businessId, senderId, recipientId, message, type });
+    // Check if the message already exists
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from('instagram_conversations')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('sender_id', senderId)
+      .eq('recipient_id', recipientId)
+      .eq('message', message)
+      .eq('message_type', type)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // Ignore "not found" error; only handle real issues
+      console.error('[ERROR] Failed to check for duplicate message:', fetchError.message);
       return;
     }
 
-    console.log('[DEBUG] Logging message with data:', {
-      business_id: businessId,
-      sender_id: senderId,
-      recipient_id: recipientId,
-      message,
-      message_type: type,
-      role,
-      ig_id: igId,
-      sender_name: username,
-      email,
-      phone_number,
-      location,
-    });
+    if (existingMessage) {
+      console.log('[INFO] Duplicate message detected. Skipping log.');
+      return; // Skip logging duplicates
+    }
 
+    // Insert new message if it's not a duplicate
     const { error } = await supabase
       .from('instagram_conversations')
       .insert([{
@@ -242,11 +245,11 @@ export async function logMessage({
         message,
         message_type: type,
         role,
-        ig_id: igId || null,
-        sender_name: username || null,
-        email: email || null,
-        phone_number: phone_number || null,
-        location: location || null,
+        ig_id: igId,
+        sender_name: username,
+        email,
+        phone_number,
+        location,
       }]);
 
     if (error) {
@@ -258,6 +261,7 @@ export async function logMessage({
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
+
 
 /**
  * Handle unsent (deleted) messages.
