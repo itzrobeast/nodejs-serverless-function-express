@@ -94,36 +94,57 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
  */
 export async function fetchInstagramUserInfo(senderId, businessId) {
   try {
+    // Fetch business details to get the page_id
     const { data: businessDetails, error } = await supabase
       .from('businesses')
       .select('page_id')
       .eq('id', businessId)
       .single();
+
     if (error || !businessDetails) {
       console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
       return null;
     }
+
     const { page_id: pageId } = businessDetails;
+
+    // Fetch page access token
     const accessToken = await getPageAccessToken(businessId, pageId);
-    const response = await fetch(
-      `https://graph.facebook.com/v17.0/${senderId}?fields=id,username,email,phone_number&access_token=${accessToken}`
-    );
-    const userInfo = await response.json();
-    if (!response.ok || !userInfo.id) {
-      console.error(`[ERROR] Failed to fetch Instagram user info for senderId=${senderId}:`, userInfo.error?.message || 'No data found');
+    if (!accessToken) {
+      console.error('[ERROR] No access token available for Page ID:', pageId);
       return null;
     }
+
+    // Fetch user info from Graph API
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${senderId}?fields=id,username&access_token=${accessToken}`
+    );
+
+    // Check for response status
+    if (!response.ok) {
+      const errorResponse = await response.json();
+      console.error(`[ERROR] Failed to fetch Instagram user info for senderId=${senderId}:`, errorResponse.error?.message || 'Unknown error');
+      return null;
+    }
+
+    const userInfo = await response.json();
+
+    // Validate userInfo
+    if (!userInfo.id) {
+      console.warn(`[WARN] Could not retrieve valid user info for senderId=${senderId}.`);
+      return null;
+    }
+
     return {
       id: userInfo.id,
       username: userInfo.username || null,
-      email: userInfo.email || null,
-      phone_number: userInfo.phone_number || null,
     };
   } catch (err) {
     console.error('[ERROR] Exception while fetching Instagram user info:', err.message);
     return null;
   }
 }
+
 
 /**
  * Fetch Instagram ID from the database using a business ID.
