@@ -292,14 +292,20 @@ export async function getPageAccessToken(businessId, pageId) {
 async function fetchAndStorePageAccessToken(businessId, pageId) {
   try {
     console.log(`[INFO] Fetching new page access token for businessId=${businessId}, pageId=${pageId}`);
-
-    const userAccessToken = await getUserAccessTokenForBusiness(businessId);
-    if (!userAccessToken) {
-      console.error(`[ERROR] User access token not available for businessId=${businessId}`);
+    
+    const businessOwnerId = await getBusinessOwnerId(businessId); // Fetch the business owner ID
+    if (!businessOwnerId) {
+      console.error(`[ERROR] Could not fetch business owner ID for businessId=${businessId}`);
       return null;
     }
 
-    // Call Facebook API to fetch a new page access token
+    const userAccessToken = await getUserAccessToken(businessOwnerId); // Use getUserAccessToken
+    if (!userAccessToken) {
+      console.error(`[ERROR] Could not fetch user access token for businessId=${businessId}`);
+      return null;
+    }
+
+    // Fetch the new page access token from Facebook API
     const response = await fetch(
       `https://graph.facebook.com/v17.0/${pageId}?fields=access_token,expires_at&access_token=${userAccessToken}`
     );
@@ -319,7 +325,7 @@ async function fetchAndStorePageAccessToken(businessId, pageId) {
         business_id: businessId,
         page_id: pageId,
         page_access_token: access_token,
-        expires_at: expires_at ? new Date(expires_at * 1000).toISOString() : null, // Handle potential missing expires_at
+        expires_at: expires_at ? new Date(expires_at * 1000).toISOString() : null,
       }, { onConflict: ['business_id', 'page_id'] });
 
     if (error) {
@@ -334,6 +340,7 @@ async function fetchAndStorePageAccessToken(businessId, pageId) {
     return null;
   }
 }
+
 
 
 
