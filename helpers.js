@@ -200,6 +200,7 @@ export async function fetchBusinessDetails(businessId) {
  * @param {object} params - Parameters for logging the message.
  */
 export async function logMessage({
+  console.log('[DEBUG] Checking for existing message:', {
   businessId,
   senderId,
   recipientId,
@@ -230,6 +231,8 @@ export async function logMessage({
       return;
     }
 
+    console.log('[DEBUG] Existing message check result:', existingMessage);
+
     if (existingMessage) {
       console.log('[INFO] Duplicate message detected. Skipping log.');
       return; // Skip logging duplicates
@@ -239,6 +242,7 @@ export async function logMessage({
     const { error } = await supabase
       .from('instagram_conversations')
       .insert([{
+        console.log('[DEBUG] Attempting to insert new message:', {
         business_id: businessId,
         sender_id: senderId,
         recipient_id: recipientId,
