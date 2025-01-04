@@ -412,7 +412,7 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
 
     if (error) {
       if (error.code === '23505') { // Unique violation error
-        console.warn('[WARN] Instagram user already exists:', { senderId, businessId });
+        console.warn('[INFO] Instagram user already exists:', { senderId, businessId });
         return null; // Optionally fetch and return the existing user
       }
       throw error;
