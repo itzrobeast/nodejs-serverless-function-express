@@ -410,7 +410,7 @@ export async function upsertInstagramUser(igId, userInfo, businessId, role = 'cu
   }
 }
 
-const location = messageEvent.message?.location || null; // Adjust based on the actual structure of the event
+
 
 /**
  * Parse user messages to extract field-value pairs in the format "key: value".
