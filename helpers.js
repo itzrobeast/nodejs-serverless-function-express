@@ -212,6 +212,7 @@ export async function logMessage({
   location = null,
 }) {
   try {
+    // Validate required fields
     if (!businessId || !senderId || !recipientId || !message || !type) {
       console.warn('[WARN] Missing required fields for logging message:', { businessId, senderId, recipientId, message, type });
       return;
@@ -256,6 +257,7 @@ export async function logMessage({
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
+
 
 
 /**
@@ -316,24 +318,34 @@ export async function sendInstagramMessage(recipientId, messageText, accessToken
  */
 export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null) {
   try {
-    const { username, email, phone_number } = userInfo;
+    if (!senderId || !businessId) {
+      console.warn('[WARN] Missing required fields for upserting Instagram user:', { senderId, businessId });
+      return;
+    }
+
+    const { username, email = null, phone_number = null } = userInfo || {};
+
     const { data, error } = await supabase
-  .from('instagram_users')
-  .upsert(
-    {
-      instagram_id: senderId,
-      username: username || null,
-      email: email || null,
-      phone_number: phone_number || null,
-      business_id: businessId,
-      role: role || 'customer',
-      location: location || null,
-    },
-    { onConflict: ['instagram_id', 'business_id'] }
-  )
+      .from('instagram_users')
+      .upsert(
+        {
+          instagram_id: senderId,
+          username: username || null,
+          email,
+          phone_number,
+          business_id: businessId,
+          role,
+          location,
+        },
+        { onConflict: ['instagram_id', 'business_id'] }
+      )
       .select()
       .single();
-    if (error) throw error;
+
+    if (error) {
+      throw error;
+    }
+
     console.log('[INFO] Instagram user upserted successfully:', data);
     return data;
   } catch (err) {
