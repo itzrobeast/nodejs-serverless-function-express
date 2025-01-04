@@ -300,7 +300,16 @@ export async function getPageAccessToken(businessId, pageId) {
 async function fetchAndStorePageAccessToken(businessId, pageId) {
   try {
     console.log(`[INFO] Fetching new page access token for businessId=${businessId}, pageId=${pageId}`);
-    const userAccessToken = await getUserAccessToken(businessId);
+    const businessOwnerId = await getBusinessOwnerId(businessId); // Fetch owner ID
+if (!businessOwnerId) {
+  console.error(`[ERROR] Could not fetch business owner ID for businessId=${businessId}`);
+  return null;
+}
+const userAccessToken = await getUserAccessToken(businessOwnerId); // Fetch token
+if (!userAccessToken) {
+  console.error(`[ERROR] Could not fetch user access token for businessOwnerId=${businessOwnerId}`);
+  return null;
+}
 
     console.log('[DEBUG] Using user access token for fetching page token:', userAccessToken); // Log the token
 
@@ -365,10 +374,16 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
 
 export async function forceRefreshPageAccessToken(businessId, pageId) {
   // 1) Get/refresh the user token
-  const userAccessToken = await getUserAccessToken(businessId);
-  if (!userAccessToken) {
-    console.error(`[ERROR] Cannot refresh page token; user token is unavailable for businessId=${businessId}`);
-    return null;
+  const businessOwnerId = await getBusinessOwnerId(businessId); // Fetch owner ID
+if (!businessOwnerId) {
+  console.error(`[ERROR] Could not fetch business owner ID for businessId=${businessId}`);
+  return;
+}
+const userAccessToken = await getUserAccessToken(businessOwnerId); // Fetch token
+if (!userAccessToken) {
+  console.error(`[ERROR] Could not fetch user access token for businessOwnerId=${businessOwnerId}`);
+  return;
+  
   }
 
   // 2) Make a direct call to FB Graph to fetch a brand-new page token
