@@ -91,36 +91,32 @@ async function fetchBusinessIdFromInstagramId(igId) {
 
 async function respondAndLog(businessId, senderId, recipientId, messageText, igId, username, businessDetails) {
   try {
-    // Fetch the page access token dynamically
+    if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
+      console.warn('[WARN] Missing required fields for respondAndLog:', {
+        businessId, senderId, recipientId, messageText, businessDetails,
+      });
+      return;
+    }
+
     const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
       console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
       return;
     }
 
-
-    if (!businessDetails || !businessDetails.ig_id) {
-  console.error('[ERROR] Missing businessDetails or ig_id. Cannot log the message.');
-  return null;
-}
-    // Send the message via Instagram API
     await sendInstagramMessage(senderId, messageText, pageAccessToken);
 
-   await logMessage(
-  businessId,
-  recipientId,
-  senderId,
-  messageText,
-  'sent',
-  true, // isBusinessMessage is true for business messages
-  businessDetails.ig_id, // Pass valid business ig_id
-  'Business', // Username for the business
-  null,
-  null,
-  null
-);
-
- } catch (err) {
+    await logMessage({
+      businessId,
+      senderId: recipientId, // Switched sender/recipient for business messages
+      recipientId: senderId,
+      message: messageText,
+      type: 'sent',
+      role: 'business',
+      igId,
+      username: 'Business',
+    });
+  } catch (err) {
     console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
   }
 }
@@ -137,11 +133,11 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
  * @param {string} username - The username of the sender.
  */
 
-
 async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
 
+    // Extract sender and recipient IDs
     const senderId = messageEvent.sender?.id;
     const recipientId = messageEvent.recipient?.id;
 
@@ -150,43 +146,33 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
+    // Determine whether the message is deleted or an echo
     const isDeleted = messageEvent.message?.is_deleted || false;
     const isEcho = messageEvent.message?.is_echo || false;
     const userMessage = messageEvent.message?.text || '';
     const messageId = messageEvent.message?.mid?.trim();
 
-    const igId = isEcho ? senderId : recipientId;
+    // Use recipient ID as the business Instagram ID (igId)
+    const igId = recipientId;
     console.log(`[DEBUG] Using Instagram ID: ${igId}`);
 
+    // Fetch business ID using Instagram ID
     const businessId = await fetchBusinessIdFromInstagramId(igId);
-if (!businessId) {
-  console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
-  return;
-}
+    if (!businessId) {
+      console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
+      return;
+    }
 
-const businessOwnerId = await getBusinessOwnerId(businessId);
-if (!businessOwnerId) {
-  console.error(`[ERROR] Could not resolve business owner ID for Business ID: ${businessId}`);
-  return;
-}
+    // Fetch business details
+    const businessDetails = await fetchBusinessDetails(businessId);
+    if (!businessDetails) {
+      console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
+      return;
+    }
 
-// Use businessOwnerId for token-related operations
-const userAccessToken = await getUserAccessToken(businessOwnerId);
-if (!userAccessToken) {
-  console.error(`[ERROR] Could not fetch user access token for Business Owner ID: ${businessOwnerId}`);
-  return;
-}
+    console.log(`[DEBUG] Business details fetched: ${JSON.stringify(businessDetails)}`);
 
-
-    
-const businessDetails = await fetchBusinessDetails(businessId);
-if (!businessDetails) {
-  console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
-  return;
-}
-   
-
-
+    // Handle deleted messages
     if (isDeleted) {
       if (!messageId) {
         console.error('[WARN] Deleted message does not have a valid message ID.');
@@ -197,37 +183,38 @@ if (!businessDetails) {
       return;
     }
 
+    // Ignore echo messages or empty messages
     if (isEcho || !userMessage.trim()) {
       console.log('[INFO] Ignoring echo or empty message.');
       return;
     }
 
-const { field, value, location } = parseUserMessage(userMessage);
+    // Parse user message for additional information
+    const { field, value, location } = parseUserMessage(userMessage);
 
-const userInfo = await fetchInstagramUserInfo(senderId, businessId);
-if (userInfo) {
-  console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
-  await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location); // Pass location
-}
+    // Fetch and upsert Instagram user information
+    const userInfo = await fetchInstagramUserInfo(senderId, businessId);
+    if (userInfo) {
+      console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
+      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location);
+    }
 
-await logMessage(
-  businessId,
-  senderId,
-  recipientId,
-  userMessage,
-  'received',
-  false, // isBusinessMessage is false for customer messages
-  igId, // Pass valid ig_id from sender/recipient
-  userInfo?.username || '',
-  userInfo?.email || null,
-  userInfo?.phone_number || null,
-  location || null
-);
+    // Log the received message
+    await logMessage({
+      businessId,
+      senderId,
+      recipientId,
+      message: userMessage,
+      type: 'received',
+      role: 'customer',
+      igId, // Pass valid igId from recipient
+      username: userInfo?.username || '',
+      email: userInfo?.email || null,
+      phone_number: userInfo?.phone_number || null,
+      location: location || null,
+    });
 
-
-
-
-
+    // Generate a response using the assistant handler
     const assistantResponse = await assistantHandler({
       userMessage,
       businessId,
@@ -236,6 +223,7 @@ await logMessage(
     });
 
     if (assistantResponse && assistantResponse.message) {
+      // Send and log the response
       await respondAndLog(
         businessId,
         senderId,
@@ -243,7 +231,7 @@ await logMessage(
         assistantResponse.message,
         igId,
         userInfo?.username || '',
-        businessDetails // Pass businessDetails here
+        businessDetails
       );
     } else {
       console.error(`[ERROR] assistantHandler did not return a valid response for businessId=${businessId}`);
