@@ -199,10 +199,6 @@ export async function fetchBusinessDetails(businessId) {
  * Log a message into the database.
  * @param {object} params - Parameters for logging the message.
  */
-/**
- * Log a message into the database.
- * @param {object} params - Parameters for logging the message.
- */
 export async function logMessage({
   businessId,
   senderId,
@@ -237,48 +233,44 @@ export async function logMessage({
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      // Ignore "not found" error; handle real issues only
       console.error('[ERROR] Failed to check for duplicate message:', fetchError.message);
       return;
     }
 
     if (existingMessage) {
       console.log('[INFO] Duplicate message detected. Skipping log.');
-      return; // Skip logging duplicates
+      return;
     }
 
     console.log('[DEBUG] Attempting to insert new message:', {
-  businessId,
-  senderId,
-  recipientId,
-  message,
-  type,
-  role,
-  igId,
-  username,
-  email,
-  phone_number,
-  location,
-});
+      businessId,
+      senderId,
+      recipientId,
+      message,
+      type,
+      role,
+      igId,
+      username,
+      email,
+      phone_number,
+      location,
+    });
 
-const { error } = await supabase
-  .from('instagram_conversations')
-  .insert([{
-    business_id: businessId,
-    sender_id: senderId,
-    recipient_id: recipientId,
-    message,
-    message_type: type,
-    role,
-    ig_id: igId,
-    sender_name: username,
-    email,
-    phone_number,
-    location,
-  }]);
-
-
-   
+    const { error } = await supabase
+      .from('instagram_conversations')
+      .insert([{
+        business_id: businessId,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        message,
+        message_type: type,
+        role,
+        ig_id: igId,
+        sender_name: username,
+        email,
+        phone_number,
+        location,
+      }]);
 
     if (error) {
       console.error('[ERROR] Failed to log message:', error.message);
@@ -289,6 +281,13 @@ const { error } = await supabase
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
+
+
+
+
+
+
+
 
 /**
  * Handle unsent (deleted) messages.
