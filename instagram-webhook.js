@@ -168,7 +168,6 @@ async function respondAndLog(
  * - Calls the assistant handler for a reply.
  * - Uses respondAndLog() to send the reply and log the "sent" message.
  */
-
 async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
@@ -188,25 +187,8 @@ async function processMessagingEvent(messageEvent) {
     const userMessage = messageEvent.message?.text || '';
     const messageId = messageEvent.message?.mid?.trim();
 
-    // This is the business’s IG ID (the recipient of the user’s message)
-    const igId = recipientId;
-    console.log(`[DEBUG] Using Instagram ID: ${igId}`);
-
-    // Fetch business ID using Instagram ID
-    const businessId = await fetchBusinessIdFromInstagramId(igId);
-    if (!businessId) {
-      console.error('[ERROR] Could not resolve businessId for Instagram ID:', igId);
-      return;
-    }
-
-    // Fetch business details (includes page_id, etc.)
-    const businessDetails = await fetchBusinessDetails(businessId);
-    if (!businessDetails) {
-      console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
-      return;
-    }
-
-    console.log(`[DEBUG] Business details fetched: ${JSON.stringify(businessDetails)}`);
+    // Log the IG IDs
+    console.log(`[DEBUG] Sender Instagram ID: ${senderId}, Recipient Instagram ID: ${recipientId}`);
 
     // Handle deleted messages
     if (isDeleted) {
@@ -215,7 +197,7 @@ async function processMessagingEvent(messageEvent) {
         return;
       }
       console.log(`[INFO] Handling deleted message with ID: ${messageId}`);
-      await handleUnsentMessage(messageId, businessId);
+      await handleUnsentMessage(messageId);
       return;
     }
 
@@ -225,8 +207,41 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    // Parse user message for additional information
-    const { field, value, location } = parseUserMessage(userMessage);
+    // Check if the message is from a customer or a business
+    const businessId = await fetchBusinessIdFromInstagramId(recipientId);
+
+    if (!businessId) {
+      console.log('[INFO] Message is from a customer; processing as a customer message.');
+
+      // Log the incoming "received" message in DB
+      await logMessage({
+        businessId: null, // No associated business for customer messages
+        senderId,
+        recipientId,
+        message: userMessage,
+        type: 'received',
+        role: 'customer',
+        igId: recipientId,
+        username: null, // Optional: Fetch from external API if needed
+        email: null,
+        phone_number: null,
+        location: null,
+      });
+
+      // No further processing for customer messages
+      return;
+    }
+
+    console.log(`[DEBUG] Business ID resolved for recipient IG ID: ${recipientId}`);
+
+    // Fetch business details (includes page_id, etc.)
+    const businessDetails = await fetchBusinessDetails(businessId);
+    if (!businessDetails) {
+      console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
+      return;
+    }
+
+    console.log(`[DEBUG] Business details fetched: ${JSON.stringify(businessDetails)}`);
 
     // Fetch and validate page access token
     let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
@@ -244,7 +259,7 @@ async function processMessagingEvent(messageEvent) {
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
       console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
-      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location);
+      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', null);
     }
 
     // Log the incoming "received" message in DB
@@ -255,29 +270,41 @@ async function processMessagingEvent(messageEvent) {
       message: userMessage,
       type: 'received',
       role: 'customer',
-      igId, // This is the business’s IG ID
+      igId: recipientId,
       username: userInfo?.username || '',
       email: userInfo?.email || null,
       phone_number: userInfo?.phone_number || null,
-      location: location || null,
+      location: null,
     });
 
     // Generate a response using the assistant handler
     const assistantResponse = await assistantHandler({
       userMessage,
       businessId,
-      field,
-      value,
     });
 
-    // If the assistant provided a message, respond and log it
+    // Log and respond with the assistant's response
     if (assistantResponse && assistantResponse.message) {
+      await logMessage({
+        businessId,
+        senderId: recipientId, // The business is the sender now
+        recipientId: senderId,
+        message: assistantResponse.message,
+        type: 'sent',
+        role: 'business',
+        igId: recipientId,
+        username: 'Business',
+        email: null,
+        phone_number: null,
+        location: null,
+      });
+
       await respondAndLog(
         businessId,
         senderId,
         recipientId,
         assistantResponse.message,
-        igId,
+        recipientId,
         userInfo?.username || '',
         businessDetails
       );
@@ -290,6 +317,7 @@ async function processMessagingEvent(messageEvent) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
 
 
 
