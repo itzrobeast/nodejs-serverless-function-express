@@ -198,12 +198,12 @@ async function processMessagingEvent(messageEvent) {
       }
       console.log(`[INFO] Handling deleted message with ID: ${messageId}`);
       
-      const businessId = await fetchBusinessIdFromInstagramId(igId);
-  if (!businessId) {
-    console.error('[ERROR] Could not resolve business ID for Instagram ID:', igId);
+     const businessDetails = await fetchBusinessDetails(businessId);
+  if (!businessDetails) {
+    console.error('[ERROR] Could not resolve business details for recipient IG ID:', recipientId);
     return;
   }
-      await handleUnsentMessage(messageId, businessId);
+  await handleUnsentMessage(messageId, businessDetails.id);
       return;
     }
 
