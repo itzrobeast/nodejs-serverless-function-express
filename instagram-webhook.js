@@ -89,16 +89,7 @@ router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }
  * Instagram can send duplicate events, so we track message IDs
  * for a short window to avoid double-logging or double-responding.
  *****************************************************************/
-const processedMessageIds = new Set();
-const DUPLICATION_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
-function markMessageIdAsProcessed(messageId) {
-  if (!messageId) return;
-  processedMessageIds.add(messageId);
-  setTimeout(() => {
-    processedMessageIds.delete(messageId);
-  }, DUPLICATION_EXPIRY_MS);
-}
 
 /**
  * Helper: fetchBusinessIdFromInstagramId
