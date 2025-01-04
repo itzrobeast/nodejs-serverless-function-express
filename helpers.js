@@ -304,17 +304,24 @@ export async function handleUnsentMessage(messageId, businessId) {
  * @param {string} messageText - Message content to be sent.
  * @param {string} accessToken - Facebook page access token.
  */
-export async function sendInstagramMessage(senderId, messageText, pageAccessToken, businessId, pageId) {
+export async function sendInstagramMessage(
+  senderId,
+  messageText,
+  pageAccessToken,
+  businessId,
+  pageId,
+  retryCount = 0
+) {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v17.0/me/messages`,
+      'https://graph.facebook.com/v17.0/me/messages',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           recipient: { id: senderId },
           message: { text: messageText },
-          access_token: pageAccessToken,
+          access_token: pageAccessToken, // Potentially expired
         }),
       }
     );
@@ -322,6 +329,7 @@ export async function sendInstagramMessage(senderId, messageText, pageAccessToke
     const data = await response.json();
 
     if (!response.ok) {
+      // Let’s unify error handling by throwing
       throw new Error(data.error?.message || 'Unknown error occurred while sending message');
     }
 
@@ -330,20 +338,37 @@ export async function sendInstagramMessage(senderId, messageText, pageAccessToke
   } catch (err) {
     console.error('[ERROR] Failed to send Instagram message:', err.message);
 
-    // Check for the usual token-expiration message
+    // Check if it’s token expiration
     if (
       err.message.includes('Error validating access token') ||
       err.message.includes('Session has expired')
     ) {
+      // If we already retried once or twice, STOP to avoid infinite loop
+      if (retryCount >= 1) {
+        console.error('[ERROR] Multiple token refresh attempts have failed. Aborting.');
+        return null; // Fail gracefully
+      }
+
       console.log('[INFO] Attempting to refresh tokens and retry...');
 
-      // Properly refresh the page token using the correct businessId and pageId
-      const refreshedToken = await getPageAccessToken(businessId, pageId);
+      // Force a new page token from Facebook, ignoring expires_at in DB
+      // so we do a "fresh" fetch from user token.
+      const refreshedToken = await forceRefreshPageAccessToken(businessId, pageId);
+
+      // If we got a new token, let’s try one more time
       if (refreshedToken) {
-        return sendInstagramMessage(senderId, messageText, refreshedToken, businessId, pageId);
+        return sendInstagramMessage(
+          senderId,
+          messageText,
+          refreshedToken,
+          businessId,
+          pageId,
+          retryCount + 1
+        );
       }
     }
 
+    // If it’s another error, or if refresh didn’t work, just bail out
     return null;
   }
 }
