@@ -10,11 +10,22 @@ import {
   validateUserAccessToken,
   getLongLivedUserAccessToken,
   refreshLongLivedUserAccessToken,
-  isExpired
+  isExpired,
 } from './auth/refresh-token.js';
 
-
-
+/**
+ * Validate and standardize an Instagram ID (ig_id).
+ * @param {string|number} igId - The Instagram ID to validate.
+ * @returns {string|null} - The validated ig_id as a string, or null if invalid.
+ */
+export function validateIgId(igId) {
+  const igIdStr = typeof igId === 'number' ? igId.toString() : igId;
+  if (!igIdStr || !/^\d+$/.test(igIdStr)) {
+    console.warn('[WARN] Invalid ig_id detected:', igId);
+    return null;
+  }
+  return igIdStr;
+}
 
 /**
  * Validate a Facebook access token.
@@ -32,14 +43,12 @@ export const validateFacebookToken = async (token) => {
         access_token: appAccessToken,
       },
     });
-
     const { data } = response;
-    if (!data || !data.data || !data.data.is_valid) {
+    if (!data?.data?.is_valid) {
       const errorMessage = data?.data?.error?.message || 'Invalid token';
       console.error('[ERROR] Token validation failed:', errorMessage);
       throw new Error(errorMessage);
     }
-
     console.log('[DEBUG] Facebook Token Validated:', data.data);
     return {
       isValid: data.data.is_valid,
@@ -52,63 +61,6 @@ export const validateFacebookToken = async (token) => {
     throw new Error('Your session has expired. Please log in again.');
   }
 };
-
-
-
-
-
-
-/**
- * Fetch Instagram user info from the Facebook Graph API.
- * @param {string} senderId - The Instagram user's sender ID.
- * @param {number} businessId - The business ID for authentication context.
- * @returns {Promise<object|null>} - The user info object or null if not found.
- */
-
-export async function fetchInstagramUserInfo(senderId, businessId) {
-  try {
-    const { data: businessDetails, error } = await supabase
-      .from('businesses')
-      .select('page_id')
-      .eq('id', businessId)
-      .single();
-
-    if (error || !businessDetails) {
-      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
-      return null;
-    }
-
-    const { page_id: pageId, access_token: accessToken } = businessDetails;
-    if (!accessToken || !pageId) {
-      console.error(`[ERROR] Missing page access token or page ID for businessId=${businessId}`);
-      return null;
-    }
-
-    const response = await fetch(
-      `https://graph.facebook.com/v17.0/${senderId}?fields=id,username,email,phone_number&access_token=${accessToken}`
-    );
-    const userInfo = await response.json();
-
-    if (!response.ok || !userInfo.id) {
-      console.error(`[ERROR] Failed to fetch Instagram user info for senderId=${senderId}:`, userInfo.error?.message || 'No data found');
-      return null;
-    }
-
-    return {
-      id: userInfo.id,
-      username: userInfo.username || null,
-      email: userInfo.email || null,
-      phone_number: userInfo.phone_number || null,
-    };
-  } catch (err) {
-    console.error('[ERROR] Exception while fetching Instagram user info:', err.message);
-    return null;
-  }
-}
-
-
-
-
 
 /**
  * Fetch Instagram Business ID using Facebook API.
@@ -123,7 +75,7 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
     );
     const data = await response.json();
     if (response.ok && data.instagram_business_account) {
-      return data.instagram_business_account.id;
+      return validateIgId(data.instagram_business_account.id);
     } else {
       console.warn(`[WARN] No Instagram Business Account linked to Page ID: ${pageId}`);
       return null;
@@ -134,10 +86,44 @@ export async function fetchInstagramIdFromFacebook(pageId, pageAccessToken) {
   }
 }
 
-
-
-
-
+/**
+ * Fetch Instagram user info from the Facebook Graph API.
+ * @param {string} senderId - The Instagram user's sender ID.
+ * @param {number} businessId - The business ID for authentication context.
+ * @returns {Promise<object|null>} - The user info object or null if not found.
+ */
+export async function fetchInstagramUserInfo(senderId, businessId) {
+  try {
+    const { data: businessDetails, error } = await supabase
+      .from('businesses')
+      .select('page_id')
+      .eq('id', businessId)
+      .single();
+    if (error || !businessDetails) {
+      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
+      return null;
+    }
+    const { page_id: pageId } = businessDetails;
+    const accessToken = await getPageAccessToken(pageId);
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${senderId}?fields=id,username,email,phone_number&access_token=${accessToken}`
+    );
+    const userInfo = await response.json();
+    if (!response.ok || !userInfo.id) {
+      console.error(`[ERROR] Failed to fetch Instagram user info for senderId=${senderId}:`, userInfo.error?.message || 'No data found');
+      return null;
+    }
+    return {
+      id: userInfo.id,
+      username: userInfo.username || null,
+      email: userInfo.email || null,
+      phone_number: userInfo.phone_number || null,
+    };
+  } catch (err) {
+    console.error('[ERROR] Exception while fetching Instagram user info:', err.message);
+    return null;
+  }
+}
 
 /**
  * Fetch Instagram ID from the database using a business ID.
@@ -151,41 +137,17 @@ export async function fetchInstagramIdFromDatabase(businessId) {
       .select('ig_id')
       .eq('id', businessId)
       .single();
-
     if (error || !data) {
       console.error(`[ERROR] Could not fetch Instagram ID for business ID ${businessId}:`, error?.message || 'No data found');
       return null;
     }
-
     console.log('[DEBUG] Retrieved ig_id:', data.ig_id);
-    return data.ig_id;
+    return validateIgId(data.ig_id);
   } catch (err) {
     console.error('[ERROR] Exception while fetching Instagram ID:', err.message);
     return null;
   }
 }
-
-
-
-/**
- * Validate and standardize an Instagram ID (ig_id).
- * @param {string|number} igId - The Instagram ID to validate.
- * @returns {string|null} - The validated ig_id as a string, or null if invalid.
- */
-export function validateIgId(igId) {
-  // Convert to string if it's a number
-  const igIdStr = typeof igId === 'number' ? igId.toString() : igId;
-
-  // Check if it's a valid numeric string
-  if (!igIdStr || !/^\d+$/.test(igIdStr)) {
-    console.warn('[WARN] Invalid ig_id detected:', igId);
-    return null;
-  }
-
-  return igIdStr; // Return as a string
-}
-
-
 
 /**
  * Fetch business details from the database.
@@ -200,11 +162,9 @@ export async function fetchBusinessDetails(businessId) {
       .select('id, name, ig_id, page_id, business_owner_id')
       .eq('id', businessId)
       .single();
-
     if (error || !data) {
       throw new Error(`[ERROR] Failed to fetch business details: ${error?.message || 'No data found'}`);
     }
-
     console.log('[DEBUG] Fetched business details:', data);
     return data;
   } catch (err) {
@@ -213,108 +173,82 @@ export async function fetchBusinessDetails(businessId) {
   }
 }
 
-
 /**
  * Log a message into the database.
- * @param {number} businessId - The ID of the business.
- * @param {string} senderId - The ID of the sender (Instagram user).
- * @param {string} recipientId - The ID of the recipient (your business).
- * @param {string} message - The message content.
- * @param {string} type - The type of the message (e.g., "sent" or "received").
- * @param {string|null} messageId - The unique message ID.
- * @param {boolean} isBusinessMessage - Whether the message is from the business.
- * @param {string} igId - The Instagram ID associated with the message.
- * @param {string} username - The username of the sender.
+ * @param {object} params - Parameters for logging the message.
  */
-export async function logMessage(
+export async function logMessage({
   businessId,
   senderId,
   recipientId,
   message,
   type,
-  isBusinessMessage, // Determine if the message is from the business
+  isBusinessMessage,
   igId,
   username,
   email = null,
   phone_number = null,
-  location = null
-) {
+  location = null,
+}) {
   try {
     const role = isBusinessMessage ? 'business' : 'customer';
-
-    // Ensure `ig_id` is numeric or null if unavailable
-    // Ensure `ig_id` is validated or null if unavailable
-const validIgId = isBusinessMessage ? igId : validateIgId(igId); // Use validation helper
-if (!validIgId && !isBusinessMessage) {
-  console.warn('[WARN] Invalid ig_id detected, defaulting to null:', igId);
+    const validIgId = validateIgId(igId);
+    if (!validIgId) {
+      console.warn('[WARN] Invalid ig_id detected for message logging:', igId);
+    }
+    console.log('[DEBUG] Logging message with data:', {
+      business_id: businessId,
+      sender_id: senderId,
+      recipient_id: recipientId,
+      message,
+      message_type: type,
+      role,
+      ig_id: validIgId || null,
+      sender_name: username,
+      email,
+      phone_number,
+      location,
+    });
+    const { data, error } = await supabase
+      .from('instagram_conversations')
+      .insert([{
+        business_id: businessId,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        message,
+        message_type: type,
+        role,
+        ig_id: validIgId || null,
+        sender_name: username,
+        email,
+        phone_number,
+        location,
+      }]);
+    if (error) throw error;
+    console.log('[DEBUG] Message logged successfully:', data);
+  } catch (err) {
+    console.error('[ERROR] Exception while logging message:', err.message);
+  }
 }
-
-console.log('[DEBUG] Logging message with data:', {
-  business_id: businessId,
-  sender_id: senderId,
-  recipient_id: recipientId,
-  message,
-  message_type: type,
-  role,
-  ig_id: validIgId || null,
-  sender_name: username,
-  email,
-  phone_number,
-  location,
-});
-
-const { data, error } = await supabase
-  .from('instagram_conversations')
-  .insert([{
-    business_id: businessId,
-    sender_id: senderId,
-    recipient_id: recipientId,
-    message,
-    message_type: type,
-    role,
-    ig_id: validIgId || null, // Ensure valid bigint or null
-    sender_name: username,
-    email,
-    phone_number,
-    location,
-  }]);
-
-if (error) {
-  console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message || error);
-  return;
-}
-
-console.log('[DEBUG] Message logged successfully:', data);
-
-
-
-
-
 
 /**
- * Parse user messages to extract field-value pairs in the format "key: value".
- * @param {string} userMessage - The message from the user.
- * @returns {Object} Parsed field and value or null if the message format is incorrect.
+ * Handle unsent (deleted) messages.
+ * @param {string} messageId - The ID of the deleted message.
+ * @param {number} businessId - The ID of the business associated with the message.
  */
-export function parseUserMessage(userMessage) {
-  if (typeof userMessage !== 'string' || userMessage.trim() === '') {
-    console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
-    return { field: null, value: null, location: null };
+export async function handleUnsentMessage(messageId, businessId) {
+  try {
+    console.log(`[INFO] Deleting message ID: ${messageId} for business ID: ${businessId}`);
+    const { error } = await supabase
+      .from('instagram_conversations')
+      .delete()
+      .match({ business_id: businessId, message_id: messageId });
+    if (error) throw error;
+    console.log(`[INFO] Message ID: ${messageId} deleted successfully.`);
+  } catch (err) {
+    console.error('[ERROR] Exception during message deletion:', err.message);
   }
-
-  // Regex to match location-related keywords (e.g., "Location: New York")
-  const locationRegex = /location:\s*(.+)$/i;
-  const match = userMessage.match(locationRegex);
-
-  const location = match ? match[1].trim() : null;
-
-  return {
-    field: null, // Add logic for other fields if needed
-    value: null, // Add logic for other fields if needed
-    location,
-  };
 }
-
 
 /**
  * Send a message to a user via Instagram Messaging API.
@@ -335,13 +269,11 @@ export async function sendInstagramMessage(recipientId, messageText, accessToken
         }),
       }
     );
-
     if (!response.ok) {
       const errorResponse = await response.json();
       console.error('[ERROR] Failed to send Instagram message:', errorResponse);
       throw new Error(errorResponse.error?.message || 'Unknown error');
     }
-
     console.log('[INFO] Instagram message sent successfully.');
   } catch (err) {
     console.error('[ERROR] Exception while sending Instagram message:', err.message);
@@ -358,7 +290,6 @@ export async function sendInstagramMessage(recipientId, messageText, accessToken
 export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null) {
   try {
     const { username, email, phone_number } = userInfo;
-
     const { data, error } = await supabase
       .from('instagram_users')
       .upsert(
@@ -368,19 +299,14 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
           email: email || null,
           phone_number: phone_number || null,
           business_id: businessId,
-          role, // Assign role
-          location, // Store location
+          role,
+          location,
         },
         { onConflict: ['instagram_id', 'business_id'] }
       )
       .select()
       .single();
-
-    if (error) {
-      console.error('[ERROR] Failed to upsert Instagram user:', error.message);
-      return null;
-    }
-
+    if (error) throw error;
     console.log('[INFO] Instagram user upserted successfully:', data);
     return data;
   } catch (err) {
@@ -389,37 +315,22 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
   }
 }
 
-
-
-
 /**
- * Handle unsent (deleted) messages.
- * @param {string} messageId - The ID of the deleted message.
- * @param {number} businessId - The ID of the business associated with the message.
+ * Parse user messages to extract field-value pairs in the format "key: value".
+ * @param {string} userMessage - The message from the user.
+ * @returns {Object} Parsed field and value or null if the message format is incorrect.
  */
-export async function handleUnsentMessage(messageId, businessId) {
-  try {
-    console.log(`[INFO] Deleting message ID: ${messageId} for business ID: ${businessId}`);
-
-    const { error } = await supabase
-      .from('instagram_conversations')
-      .delete()
-      .match({ business_id: businessId, message_id: messageId });
-
-    if (error) {
-      console.error('[ERROR] Failed to delete message:', error.message);
-      return;
-    }
-
-    console.log(`[INFO] Message ID: ${messageId} deleted successfully.`);
-  } catch (err) {
-    console.error('[ERROR] Exception during message deletion:', err.message);
+export function parseUserMessage(userMessage) {
+  if (typeof userMessage !== 'string' || userMessage.trim() === '') {
+    console.error('[ERROR] Invalid or empty input for parseUserMessage:', userMessage);
+    return { field: null, value: null, location: null };
   }
+  const locationRegex = /location:\s*(.+)$/i;
+  const match = userMessage.match(locationRegex);
+  const location = match ? match[1].trim() : null;
+  return {
+    field: null,
+    value: null,
+    location,
+  };
 }
-
-
-
-
-
-
-
