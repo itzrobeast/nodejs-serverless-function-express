@@ -199,8 +199,11 @@ export async function fetchBusinessDetails(businessId) {
  * Log a message into the database.
  * @param {object} params - Parameters for logging the message.
  */
+/**
+ * Log a message into the database.
+ * @param {object} params - Parameters for logging the message.
+ */
 export async function logMessage({
-  console.log('[DEBUG] Checking for existing message:', {
   businessId,
   senderId,
   recipientId,
@@ -214,6 +217,14 @@ export async function logMessage({
   location = null,
 }) {
   try {
+    console.log('[DEBUG] Checking for existing message:', {
+      businessId,
+      senderId,
+      recipientId,
+      message,
+      type,
+    });
+
     // Check if the message already exists
     const { data: existingMessage, error: fetchError } = await supabase
       .from('instagram_conversations')
@@ -226,35 +237,48 @@ export async function logMessage({
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      // Ignore "not found" error; only handle real issues
+      // Ignore "not found" error; handle real issues only
       console.error('[ERROR] Failed to check for duplicate message:', fetchError.message);
       return;
     }
-
-    console.log('[DEBUG] Existing message check result:', existingMessage);
 
     if (existingMessage) {
       console.log('[INFO] Duplicate message detected. Skipping log.');
       return; // Skip logging duplicates
     }
 
+    console.log('[DEBUG] Attempting to insert new message:', {
+      businessId,
+      senderId,
+      recipientId,
+      message,
+      type,
+      role,
+      igId,
+      username,
+      email,
+      phone_number,
+      location,
+    });
+
     // Insert new message if it's not a duplicate
     const { error } = await supabase
       .from('instagram_conversations')
-      .insert([{
-        console.log('[DEBUG] Attempting to insert new message:', {
-        business_id: businessId,
-        sender_id: senderId,
-        recipient_id: recipientId,
-        message,
-        message_type: type,
-        role,
-        ig_id: igId,
-        sender_name: username,
-        email,
-        phone_number,
-        location,
-      }]);
+      .insert([
+        {
+          business_id: businessId,
+          sender_id: senderId,
+          recipient_id: recipientId,
+          message,
+          message_type: type,
+          role,
+          ig_id: igId,
+          sender_name: username,
+          email,
+          phone_number,
+          location,
+        },
+      ]);
 
     if (error) {
       console.error('[ERROR] Failed to log message:', error.message);
@@ -265,7 +289,6 @@ export async function logMessage({
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
-
 
 /**
  * Handle unsent (deleted) messages.
@@ -285,28 +308,26 @@ export async function handleUnsentMessage(messageId, businessId) {
     console.log(`[INFO] Attempting to delete message ID: ${messageId} for business ID: ${businessId}`);
 
     // Delete the message from the database
-    const { error, count } = await supabase
+    const { data, error, count } = await supabase
       .from('instagram_conversations')
       .delete()
       .match({ business_id: businessId, message_id: messageId });
 
-    // Handle errors during deletion
     if (error) {
       console.error(`[ERROR] Failed to delete message with ID: ${messageId} for business ID: ${businessId}:`, error.message);
       return;
     }
 
-    // Log the result based on the number of affected rows
     if (count === 0) {
       console.warn(`[WARN] No message found with ID: ${messageId} for business ID: ${businessId}`);
     } else {
       console.log(`[INFO] Successfully deleted message ID: ${messageId} for business ID: ${businessId}.`);
     }
   } catch (err) {
-    // Log any unexpected exceptions
     console.error('[ERROR] Exception during message deletion:', err.message);
   }
 }
+
 
 
 
@@ -317,6 +338,14 @@ export async function handleUnsentMessage(messageId, businessId) {
  * @param {string} messageText - Message content to be sent.
  * @param {string} accessToken - Facebook page access token.
  */
+const processedMessageIds = new Set();
+
+function markMessageIdAsProcessed(messageId) {
+  if (!messageId) return;
+  processedMessageIds.add(messageId);
+  setTimeout(() => processedMessageIds.delete(messageId), 5 * 60 * 1000); // 5 minutes
+}
+
 export async function sendInstagramMessage(
   senderId,
   messageText,
@@ -325,6 +354,12 @@ export async function sendInstagramMessage(
   pageId,
   retryCount = 0
 ) {
+  if (processedMessageIds.has(messageText)) {
+    console.log('[INFO] Duplicate response detected. Skipping send.');
+    return;
+  }
+  markMessageIdAsProcessed(messageText);
+
   try {
     const response = await fetch(
       'https://graph.facebook.com/v17.0/me/messages',
@@ -334,7 +369,7 @@ export async function sendInstagramMessage(
         body: JSON.stringify({
           recipient: { id: senderId },
           message: { text: messageText },
-          access_token: pageAccessToken, // Potentially expired
+          access_token: pageAccessToken,
         }),
       }
     );
@@ -342,7 +377,6 @@ export async function sendInstagramMessage(
     const data = await response.json();
 
     if (!response.ok) {
-      // Let’s unify error handling by throwing
       throw new Error(data.error?.message || 'Unknown error occurred while sending message');
     }
 
@@ -351,24 +385,9 @@ export async function sendInstagramMessage(
   } catch (err) {
     console.error('[ERROR] Failed to send Instagram message:', err.message);
 
-    // Check if it’s token expiration
-    if (
-      err.message.includes('Error validating access token') ||
-      err.message.includes('Session has expired')
-    ) {
-      // If we already retried once or twice, STOP to avoid infinite loop
-      if (retryCount >= 1) {
-        console.error('[ERROR] Multiple token refresh attempts have failed. Aborting.');
-        return null; // Fail gracefully
-      }
-
+    if (retryCount < 1 && err.message.includes('Error validating access token')) {
       console.log('[INFO] Attempting to refresh tokens and retry...');
-
-      // Force a new page token from Facebook, ignoring expires_at in DB
-      // so we do a "fresh" fetch from user token.
       const refreshedToken = await forceRefreshPageAccessToken(businessId, pageId);
-
-      // If we got a new token, let’s try one more time
       if (refreshedToken) {
         return sendInstagramMessage(
           senderId,
@@ -381,7 +400,6 @@ export async function sendInstagramMessage(
       }
     }
 
-    // If it’s another error, or if refresh didn’t work, just bail out
     return null;
   }
 }
