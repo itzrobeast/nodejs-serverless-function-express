@@ -374,7 +374,7 @@ export async function sendInstagramMessage(
   }
 }
 
-const location = messageEvent.message?.location || null; // Adjust based on the actual structure of the event
+
 
 /**
  * Upsert Instagram user into the database.
