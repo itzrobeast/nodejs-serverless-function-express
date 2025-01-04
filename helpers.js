@@ -248,37 +248,37 @@ export async function logMessage({
     }
 
     console.log('[DEBUG] Attempting to insert new message:', {
-      businessId,
-      senderId,
-      recipientId,
-      message,
-      type,
-      role,
-      igId,
-      username,
-      email,
-      phone_number,
-      location,
-    });
+  businessId,
+  senderId,
+  recipientId,
+  message,
+  type,
+  role,
+  igId,
+  username,
+  email,
+  phone_number,
+  location,
+});
 
-    // Insert new message if it's not a duplicate
-    const { error } = await supabase
-      .from('instagram_conversations')
-      .insert([
-        {
-          business_id: businessId,
-          sender_id: senderId,
-          recipient_id: recipientId,
-          message,
-          message_type: type,
-          role,
-          ig_id: igId,
-          sender_name: username,
-          email,
-          phone_number,
-          location,
-        },
-      ]);
+const { error } = await supabase
+  .from('instagram_conversations')
+  .insert([{
+    business_id: businessId,
+    sender_id: senderId,
+    recipient_id: recipientId,
+    message,
+    message_type: type,
+    role,
+    ig_id: igId,
+    sender_name: username,
+    email,
+    phone_number,
+    location,
+  }]);
+
+
+   
 
     if (error) {
       console.error('[ERROR] Failed to log message:', error.message);
