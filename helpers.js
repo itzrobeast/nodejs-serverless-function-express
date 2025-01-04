@@ -304,7 +304,7 @@ export async function handleUnsentMessage(messageId, businessId) {
  * @param {string} messageText - Message content to be sent.
  * @param {string} accessToken - Facebook page access token.
  */
-export async function sendInstagramMessage(senderId, messageText, pageAccessToken) {
+export async function sendInstagramMessage(senderId, messageText, pageAccessToken, businessId, pageId) {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v17.0/me/messages`,
@@ -330,13 +330,17 @@ export async function sendInstagramMessage(senderId, messageText, pageAccessToke
   } catch (err) {
     console.error('[ERROR] Failed to send Instagram message:', err.message);
 
-    if (err.message.includes('Error validating access token')) {
+    // Check for the usual token-expiration message
+    if (
+      err.message.includes('Error validating access token') ||
+      err.message.includes('Session has expired')
+    ) {
       console.log('[INFO] Attempting to refresh tokens and retry...');
 
-      // Refresh tokens and retry
-      const refreshedToken = await getPageAccessToken(/* params */);
+      // Properly refresh the page token using the correct businessId and pageId
+      const refreshedToken = await getPageAccessToken(businessId, pageId);
       if (refreshedToken) {
-        return sendInstagramMessage(senderId, messageText, refreshedToken); // Retry with new token
+        return sendInstagramMessage(senderId, messageText, refreshedToken, businessId, pageId);
       }
     }
 
