@@ -259,7 +259,7 @@ async function processMessagingEvent(messageEvent) {
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
       console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
-      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', null);
+      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location);
     }
 
     // Log the incoming "received" message in DB
