@@ -373,7 +373,7 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
   }
 }
 
-async function forceRefreshPageAccessToken(businessId, pageId) {
+export async function forceRefreshPageAccessToken(businessId, pageId) {
   // 1) Get/refresh the user token
   const userAccessToken = await getUserAccessToken(businessId);
   if (!userAccessToken) {
