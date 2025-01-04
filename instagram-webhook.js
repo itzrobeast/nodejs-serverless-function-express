@@ -1,20 +1,9 @@
-/*****************************************************************
- * instagram-webhook.js
- *
- * A version that:
- * - Removes in-memory deduplication logic
- * - Still handles deleted messages (is_deleted)
- * - Maintains DB-level checks for duplicates (if any)
- * - Logs messages in the DB
- * - Invokes assistantHandler and responds
- *****************************************************************/
 import express from 'express';
 import fetch from 'node-fetch';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import supabase from './supabaseClient.js';
 import assistantHandler from './assistant.js';
-
 import {
   fetchInstagramIdFromDatabase,
   fetchInstagramIdFromFacebook,
@@ -37,13 +26,13 @@ import {
   getLongLivedUserAccessToken,
   refreshLongLivedUserAccessToken,
   refreshPageAccessToken,
-  forceRefreshPageAccessToken,
+  forceRefreshPageAccessToken, 
   isExpired,
 } from './auth/refresh-token.js';
 
-// ---------------------------------------------------
+const router = express.Router();
+
 // Environment Variables
-// ---------------------------------------------------
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 
@@ -52,56 +41,49 @@ if (!VERIFY_TOKEN || !FACEBOOK_APP_SECRET) {
   throw new Error('Environment variables missing. Cannot start server.');
 }
 
-// ---------------------------------------------------
-// Rate Limiter + JSON Parsing with Signature Verify
-// ---------------------------------------------------
+// Middleware for rate limiting and JSON parsing with Facebook signature verification
 const webhookLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   message: 'Too many requests from this IP, please try again later.',
 });
 
-/**
- * Verify the X-Hub-Signature-256 from Facebook/Instagram
- */
 function verifyFacebookSignature(req, res, buf) {
   const signature = req.headers['x-hub-signature-256'];
-  if (!signature) {
-    throw new Error('Missing X-Hub-Signature-256 header');
-  }
+  if (!signature) throw new Error('Missing X-Hub-Signature-256 header');
+
   const expectedSignature = `sha256=${crypto
     .createHmac('sha256', FACEBOOK_APP_SECRET)
     .update(buf)
     .digest('hex')}`;
 
-  if (signature !== expectedSignature) {
-    throw new Error('Invalid signature');
-  }
+  if (signature !== expectedSignature) throw new Error('Invalid signature');
 }
 
-// ---------------------------------------------------
-// Express Router Setup
-// ---------------------------------------------------
-const router = express.Router();
 router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
 
 /**
- * Helper to fetch business ID from an Instagram ID.
+ * Helper to fetch business ID from Instagram ID.
+ * @param {string} igId - The recipient’s (business) Instagram ID.
+ * @returns {Promise<number|null>} Business ID or null if not found.
  */
 async function fetchBusinessIdFromInstagramId(igId) {
+  // Validate igId before proceeding
   if (!igId || isNaN(Number(igId))) {
     console.error('[ERROR] Invalid or missing ig_id:', igId);
     return null;
   }
+
   try {
     const { data, error } = await supabase
       .from('businesses')
       .select('id')
       .eq('ig_id', igId)
+      .limit(1)
       .single();
 
     if (error || !data) {
-      console.error('[ERROR] Could not fetch businessId for Instagram ID', igId, error?.message || 'No data found');
+      console.error(`[ERROR] Could not fetch businessId for Instagram ID ${igId}:`, error?.message || 'No data found');
       return null;
     }
     return data.id;
@@ -113,7 +95,13 @@ async function fetchBusinessIdFromInstagramId(igId) {
 
 /**
  * Send a response message to the user and log it as "sent" by the business.
- * Checks the DB for duplicates, but no in-memory dedup.
+ * @param {number} businessId
+ * @param {string} senderId   - The user's IG ID (who sent the message).
+ * @param {string} recipientId - The business's IG ID.
+ * @param {string} messageText - The text to send to the user.
+ * @param {string} igId       - The same as recipientId (business’s IG ID).
+ * @param {string} username   - The user’s username (if known).
+ * @param {object} businessDetails - Contains page_id, etc.
  */
 async function respondAndLog(
   businessId,
@@ -125,38 +113,30 @@ async function respondAndLog(
   businessDetails
 ) {
   try {
-    // Check if we already logged this outgoing message
-    const { data: existingMessage, error: fetchError } = await supabase
-      .from('instagram_conversations')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('sender_id', recipientId) // The "business" is effectively the sender
-      .eq('recipient_id', senderId)
-      .eq('message', messageText)
-      .eq('message_type', 'sent')
-      .single();
-
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('[ERROR] Checking for duplicate response failed:', fetchError.message);
+    if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
+      console.warn('[WARN] Missing required fields for respondAndLog:', {
+        businessId,
+        senderId,
+        recipientId,
+        messageText,
+        businessDetails,
+      });
       return;
     }
 
-    if (existingMessage) {
-      console.log('[INFO] Duplicate response found. Skipping send.');
-      return;
-    }
-
+    // Fetch the page access token
     let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
-      console.error('[ERROR] Missing page access token for businessId=', businessId);
+      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
       pageAccessToken = await forceRefreshPageAccessToken(businessId, businessDetails.page_id);
+
       if (!pageAccessToken) {
-        console.error('[ERROR] Could not refresh page access token for businessId=', businessId);
+        console.error(`[ERROR] Unable to refresh page access token for businessId=${businessId}`);
         return;
       }
     }
 
-    // Actually send the message
+    // Send the message using the valid token
     await sendInstagramMessage(
       senderId,
       messageText,
@@ -165,10 +145,10 @@ async function respondAndLog(
       businessDetails.page_id
     );
 
-    // Log as "sent"
+    // Log the "sent" message in the database
     await logMessage({
       businessId,
-      senderId: recipientId, // The "business" is effectively the sender
+      senderId: recipientId, // The "business" is effectively the sender now
       recipientId: senderId,
       message: messageText,
       type: 'sent',
@@ -177,104 +157,115 @@ async function respondAndLog(
       username: 'Business',
     });
   } catch (err) {
-    console.error(`[ERROR] respondAndLog failed for businessId=${businessId}:`, err.message);
+    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
   }
 }
 
 /**
- * Main function to process incoming messages:
- * - Checks for deleted messages
- * - Ignores echo or empty
- * - Logs to DB
- * - Possibly calls assistantHandler
- * - Sends the response
+ * Core function to process incoming messages.
+ * - Logs the incoming "received" message.
+ * - Retrieves user info.
+ * - Calls the assistant handler for a reply.
+ * - Uses respondAndLog() to send the reply and log the "sent" message.
  */
 async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
 
+    // Extract sender and recipient IDs
     const senderId = messageEvent.sender?.id;
     const recipientId = messageEvent.recipient?.id;
-    const isDeleted = !!messageEvent.message?.is_deleted;
-    const isEcho = !!messageEvent.message?.is_echo;
+
+    if (!senderId || !recipientId) {
+      console.error('[ERROR] senderId or recipientId is missing in message payload.');
+      return;
+    }
+
+    // Determine whether the message is deleted or an echo
+    const isDeleted = messageEvent.message?.is_deleted || false;
+    const isEcho = messageEvent.message?.is_echo || false;
     const userMessage = messageEvent.message?.text || '';
     const messageId = messageEvent.message?.mid?.trim();
 
-    if (!senderId || !recipientId) {
-      console.error('[ERROR] Missing senderId or recipientId in message payload.');
-      return;
-    }
+    // Log the IG IDs
+    console.log(`[DEBUG] Sender Instagram ID: ${senderId}, Recipient Instagram ID: ${recipientId}`);
 
-    // Handle deleted messages early
+    // Handle deleted messages
     if (isDeleted) {
       if (!messageId) {
-        console.warn('[WARN] Deleted message has no valid message ID.');
+        console.error('[WARN] Deleted message does not have a valid message ID.');
         return;
       }
-      console.log('[INFO] Handling deleted message with ID:', messageId);
-      const businessId = await fetchBusinessIdFromInstagramId(recipientId);
-      if (!businessId) {
-        console.error('[ERROR] Could not resolve businessId for deleted message.');
-        return;
-      }
-      await handleUnsentMessage(messageId, businessId);
+      console.log(`[INFO] Handling deleted message with ID: ${messageId}`);
+      await handleUnsentMessage(messageId);
       return;
     }
 
-    // Ignore echo or empty text
-    if (isEcho) {
-      console.log('[INFO] Ignoring echo message.');
-      return;
-    }
-    if (!userMessage.trim()) {
-      console.log('[INFO] Ignoring empty message.');
+    // Ignore echo messages or empty messages
+    if (isEcho || !userMessage.trim()) {
+      console.log('[INFO] Ignoring echo or empty message.');
       return;
     }
 
-    // Determine if recipientId is the IG ID of a known business
+    // Check if the message is from a customer or a business
     const businessId = await fetchBusinessIdFromInstagramId(recipientId);
+
     if (!businessId) {
-      console.log('[INFO] No matching business found; logging as customer message only.');
-      // Just log as a "received" message with no business
+      console.log('[INFO] Message is from a customer; processing as a customer message.');
+
+      // Log the incoming "received" message in DB
       await logMessage({
-        businessId: null,
+        businessId: null, // No associated business for customer messages
         senderId,
         recipientId,
         message: userMessage,
         type: 'received',
         role: 'customer',
         igId: recipientId,
+        username: null, // Optional: Fetch from external API if needed
+        email: null,
+        phone_number: null,
+        location: null,
       });
+
+      // No further processing for customer messages
       return;
     }
 
-    // If found, fetch business details
+    console.log(`[DEBUG] Business ID resolved for recipient IG ID: ${recipientId}`);
+
+    // Fetch business details (includes page_id, etc.)
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
-      console.error('[ERROR] Could not fetch details for businessId=', businessId);
+      console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
       return;
     }
 
-    // (Optional) fetch page access token in case we need it
+    console.log(`[DEBUG] Business details fetched: ${JSON.stringify(businessDetails)}`);
+
+    // Fetch and validate page access token
     let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
-      console.error('[ERROR] Missing page access token for businessId=', businessId);
+      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
       pageAccessToken = await forceRefreshPageAccessToken(businessId, businessDetails.page_id);
+
       if (!pageAccessToken) {
-        console.error('[ERROR] Could not refresh page access token for businessId=', businessId);
+        console.error(`[ERROR] Unable to refresh page access token for businessId=${businessId}`);
         return;
       }
     }
 
-    // (Optional) fetch user info from Graph
+
+    const location = messageEvent.message?.location || null; 
+
+    // Fetch and upsert Instagram user information
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
-      console.log('[DEBUG] Fetched user info:', JSON.stringify(userInfo));
-      // Upsert user record
-      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', null, recipientId);
+      console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
+      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location);
     }
 
-    // Log the incoming "received" message
+    // Log the incoming "received" message in DB
     await logMessage({
       businessId,
       senderId,
@@ -284,28 +275,33 @@ async function processMessagingEvent(messageEvent) {
       role: 'customer',
       igId: recipientId,
       username: userInfo?.username || '',
+      email: userInfo?.email || null,
+      phone_number: userInfo?.phone_number || null,
+      location: null,
     });
 
-    // Call the assistant to generate a response
-    console.log('[DEBUG] Invoking assistantHandler with:', { userMessage, businessId });
-    const assistantResponse = await assistantHandler({ userMessage, businessId });
-    console.log('[DEBUG] Assistant response:', assistantResponse);
+    // Generate a response using the assistant handler
+    const assistantResponse = await assistantHandler({
+      userMessage,
+      businessId,
+    });
 
-    // If there's a message in the response, log it + respond
-    if (assistantResponse?.message) {
-      // 1) Log as "sent" by the business
+    // Log and respond with the assistant's response
+    if (assistantResponse && assistantResponse.message) {
       await logMessage({
         businessId,
-        senderId: recipientId, // "business" is the sender
+        senderId: recipientId, // The business is the sender now
         recipientId: senderId,
         message: assistantResponse.message,
         type: 'sent',
         role: 'business',
         igId: recipientId,
         username: 'Business',
+        email: null,
+        phone_number: null,
+        location: null,
       });
 
-      // 2) Actually send to Instagram + log again in respondAndLog
       await respondAndLog(
         businessId,
         senderId,
@@ -315,13 +311,23 @@ async function processMessagingEvent(messageEvent) {
         userInfo?.username || '',
         businessDetails
       );
+    } else {
+      console.error(
+        `[ERROR] assistantHandler did not return a valid response for businessId=${businessId}`
+      );
     }
   } catch (err) {
-    console.error('[ERROR] processMessagingEvent failed:', err.message);
+    console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
 
-// POST route for your Instagram Webhook
+
+
+
+
+
+
+// POST route for webhook
 router.post('/', async (req, res) => {
   try {
     const { object, entry } = req.body;
@@ -342,7 +348,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET route for webhook verification
+// GET route for verification
 router.get('/', (req, res) => {
   if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
     return res.status(200).send(req.query['hub.challenge']);
@@ -350,24 +356,27 @@ router.get('/', (req, res) => {
   return res.status(403).send('Verification failed');
 });
 
-// Optional route to fetch conversation logs
+// Optional route to fetch all conversation logs for a given business
 router.get('/fetch-conversations', async (req, res) => {
   try {
     const { business_id } = req.query;
+
     if (!business_id) {
       return res.status(400).json({ error: 'Missing required parameter: business_id' });
     }
 
-    console.log('[INFO] Fetching conversations for business_id=', business_id);
+    console.log(`[INFO] Fetching conversations for business_id=${business_id}`);
+
     const { data, error } = await supabase
       .from('instagram_conversations')
       .select('*')
       .eq('business_id', business_id);
 
     if (error) {
-      console.error('[ERROR] Failed to fetch conversations for business_id=', business_id, error.message);
+      console.error(`[ERROR] Failed to fetch conversations for business_id=${business_id}:`, error.message);
       return res.status(500).json({ error: 'Failed to fetch conversations' });
     }
+
     return res.status(200).json(data);
   } catch (err) {
     console.error('[ERROR] Exception while fetching conversations:', err.message);
