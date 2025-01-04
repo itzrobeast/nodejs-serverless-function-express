@@ -102,15 +102,21 @@ export async function getUserAccessToken(businessOwnerId) {
       .eq('id', businessOwnerId)
       .single();
 
-    if (error || !data) {
+    console.log('[DEBUG] Database response for user access token:', data);
+
+    if (error || !data || !data.user_access_token) {
       console.error(`[ERROR] No user access token found for Business Owner ID ${businessOwnerId}`);
       return null;
     }
 
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
 
-    // Refresh token if expired
-    if (!userAccessToken || isExpired(updatedAt, 'user')) {
+    if (!userAccessToken) {
+      console.error('[ERROR] Retrieved user access token is null or invalid.');
+      return null;
+    }
+
+    if (isExpired(updatedAt, 'user')) {
       console.log('[INFO] User access token is expired or invalid. Attempting to refresh...');
       return await refreshUserAccessToken(businessOwnerId, userAccessToken);
     }
