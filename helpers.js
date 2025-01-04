@@ -374,6 +374,7 @@ export async function sendInstagramMessage(
   }
 }
 
+const location = messageEvent.message?.location || null; // Adjust based on the actual structure of the event
 
 /**
  * Upsert Instagram user into the database.
@@ -396,7 +397,7 @@ export async function upsertInstagramUser(igId, userInfo, businessId, role = 'cu
         business_id: businessId, // Associate the customer with the messaging business
         username: userInfo?.username || null,
         role,
-        location,
+        location: location || null,
       }, { onConflict: ['ig_id', 'business_id'] });
 
     if (error) {
@@ -423,6 +424,8 @@ export function parseUserMessage(userMessage) {
   const locationRegex = /location:\s*(.+)$/i;
   const match = userMessage.match(locationRegex);
   const location = match ? match[1].trim() : null;
+  const { field, value, location } = parseUserMessage(userMessage) || { location: null };
+
   return {
     field: null,
     value: null,
