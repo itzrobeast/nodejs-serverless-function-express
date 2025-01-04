@@ -69,17 +69,26 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
         },
         { role: 'user', content: userMessage },
       ],
-      // You can adjust other parameters like temperature, max_tokens, etc., as needed
+      max_tokens: 750, // Ensure OpenAI doesn’t generate overly long responses
+      temperature: 0.7, // Adjust this as needed for response creativity
     });
 
-    const responseMessage = openaiResponse.choices[0]?.message?.content?.trim() || "I'm here to help!";
-    console.log(`[DEBUG] OpenAI response: "${responseMessage}"`);
+    let responseMessage = openaiResponse.choices[0]?.message?.content?.trim() || "I'm here to help!";
 
+    // Ensure the response is within Instagram's 1000-character limit
+    const maxLength = 1000;
+    if (responseMessage.length > maxLength) {
+      console.warn('[WARN] Truncating response message to fit Instagram character limit.');
+      responseMessage = `${responseMessage.substring(0, maxLength - 3)}...`; // Truncate and add ellipsis
+    }
+
+    console.log(`[DEBUG] Final OpenAI response: "${responseMessage}"`);
     return { message: responseMessage };
   } catch (error) {
     console.error('[ERROR] Failed to process assistant request:', error);
     return { message: 'Something went wrong. Please try again later.' };
   }
 };
+
 
 export default assistantHandler;
