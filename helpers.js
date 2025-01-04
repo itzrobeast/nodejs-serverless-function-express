@@ -332,6 +332,7 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
       .upsert(
         {
           instagram_id: senderId,
+          sender_id: senderId, // Ensure sender_id is populated
           username: username || null,
           email,
           phone_number,
@@ -339,12 +340,16 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
           role,
           location,
         },
-        { onConflict: ['instagram_id', 'business_id'] }
+        { onConflict: ['instagram_id', 'business_id'] } // Prevent duplicate instagram_id entries
       )
       .select()
       .single();
 
     if (error) {
+      if (error.code === '23505') { // Unique violation error
+        console.warn('[WARN] Instagram user already exists:', { senderId, businessId });
+        return null; // Optionally fetch and return the existing user
+      }
       throw error;
     }
 
