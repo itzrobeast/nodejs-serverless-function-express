@@ -373,6 +373,48 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
   }
 }
 
+async function forceRefreshPageAccessToken(businessId, pageId) {
+  // 1) Get/refresh the user token
+  const userAccessToken = await getUserAccessToken(businessId);
+  if (!userAccessToken) {
+    console.error(`[ERROR] Cannot refresh page token; user token is unavailable for businessId=${businessId}`);
+    return null;
+  }
+
+  // 2) Make a direct call to FB Graph to fetch a brand-new page token
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v17.0/${pageId}?fields=access_token&access_token=${userAccessToken}`
+    );
+    const data = await response.json();
+
+    if (!response.ok || !data.access_token) {
+      console.error(`[ERROR] Fresh fetch for page token failed: ${data.error?.message || 'Unknown error'}`);
+      return null;
+    }
+
+    // 3) Save to DB ignoring local expiry checks
+    const { error } = await supabase
+      .from('pages')
+      .upsert({
+        business_id: businessId,
+        page_id: pageId,
+        page_access_token: data.access_token,
+        expires_at: null, // We can set null or a new timestamp
+      }, { onConflict: ['business_id', 'page_id'] });
+
+    if (error) {
+      console.error('[ERROR] Failed to store newly fetched page token:', error.message);
+      return null;
+    }
+
+    console.log('[INFO] Successfully forced refresh of page token');
+    return data.access_token;
+  } catch (err) {
+    console.error('[ERROR] Exception forcing refresh of page token:', err.message);
+    return null;
+  }
+}
 
 
 /**
