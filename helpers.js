@@ -259,10 +259,10 @@ export async function logMessage({
   }
 }
 
-
-
 /**
  * Handle unsent (deleted) messages.
+ * Deletes a message from the database based on the message ID and business ID.
+ *
  * @param {string} messageId - The ID of the deleted message.
  * @param {number} businessId - The ID of the business associated with the message.
  */
@@ -270,34 +270,38 @@ export async function handleUnsentMessage(messageId, businessId) {
   try {
     // Validate inputs
     if (!messageId || !businessId) {
-      console.error('[ERROR] Invalid parameters. Message ID and Business ID are required.');
+      console.error('[ERROR] Invalid parameters. Both Message ID and Business ID are required.');
       return;
     }
 
     console.log(`[INFO] Attempting to delete message ID: ${messageId} for business ID: ${businessId}`);
-    
+
     // Delete the message from the database
-    const { data, error, count } = await supabase
+    const { error, count } = await supabase
       .from('instagram_conversations')
       .delete()
-      .match({ business_id: businessId, message_id: messageId })
-      .select('*', { count: 'exact' }); // Ensure you get the count of affected rows
-    
+      .match({ business_id: businessId, message_id: messageId });
+
+    // Handle errors during deletion
     if (error) {
-      console.error('[ERROR] Failed to delete message:', error.message);
+      console.error(`[ERROR] Failed to delete message with ID: ${messageId} for business ID: ${businessId}:`, error.message);
       return;
     }
 
-    // Check if the row was deleted
+    // Log the result based on the number of affected rows
     if (count === 0) {
       console.warn(`[WARN] No message found with ID: ${messageId} for business ID: ${businessId}`);
     } else {
       console.log(`[INFO] Successfully deleted message ID: ${messageId} for business ID: ${businessId}.`);
     }
   } catch (err) {
+    // Log any unexpected exceptions
     console.error('[ERROR] Exception during message deletion:', err.message);
   }
 }
+
+
+
 
 /**
  * Send a message to a user via Instagram Messaging API.
