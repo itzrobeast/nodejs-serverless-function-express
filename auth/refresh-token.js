@@ -109,7 +109,7 @@ export async function getUserAccessToken(businessOwnerId) {
 
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
 
-    // Check if the token is expired
+    // Refresh token if expired
     if (!userAccessToken || isExpired(updatedAt, 'user')) {
       console.log('[INFO] User access token is expired or invalid. Attempting to refresh...');
       return await refreshUserAccessToken(businessOwnerId, userAccessToken);
@@ -121,6 +121,7 @@ export async function getUserAccessToken(businessOwnerId) {
     return null;
   }
 }
+
 
 
 
@@ -379,7 +380,7 @@ export async function refreshPageAccessToken(pageId, userAccessToken) {
  */
 async function refreshAllTokens() {
   console.log('[INFO] Starting scheduled token refresh...');
-  
+
   const { data: businessOwners, error: ownerError } = await supabase
     .from('business_owners')
     .select('id, user_access_token, updated_at');
@@ -408,6 +409,7 @@ async function refreshAllTokens() {
 
   console.log('[INFO] Scheduled token refresh completed.');
 }
+
 
 
 cron.schedule('*/15 * * * *', refreshAllTokens); // Runs every 15 minutes
