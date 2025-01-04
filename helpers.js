@@ -389,6 +389,13 @@ export async function upsertInstagramUser(igId, userInfo, businessId, role = 'cu
       return;
     }
 
+     // Ensure senderId is valid
+    if (!senderId) {
+      console.error('[ERROR] Sender ID is required for upserting Instagram user.');
+      return;
+    }
+
+
     const { error } = await supabase
       .from('instagram_users')
       .upsert({
