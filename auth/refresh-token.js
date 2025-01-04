@@ -245,7 +245,7 @@ export async function ensurePageAccessToken(pageId, userAccessToken, currentPage
  * @param {string} pageId - The Facebook Page ID.
  * @returns {Promise<string|null>} The valid page access token or null if failed.
  */
-async function getPageAccessToken(businessId, pageId) {
+export async function getPageAccessToken(businessId, pageId) {
   try {
     const { data, error } = await supabase
       .from('page_access_tokens')
