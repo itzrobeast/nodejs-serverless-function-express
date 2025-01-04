@@ -89,7 +89,15 @@ async function fetchBusinessIdFromInstagramId(igId) {
 }
 
 
-async function respondAndLog(businessId, senderId, recipientId, messageText, igId, username, businessDetails) {
+async function respondAndLog(
+  businessId,
+  senderId,
+  recipientId,
+  messageText,
+  igId,
+  username,
+  businessDetails
+) {
   try {
     if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
       console.warn('[WARN] Missing required fields for respondAndLog:', {
@@ -104,11 +112,65 @@ async function respondAndLog(businessId, senderId, recipientId, messageText, igI
       return;
     }
 
-    await sendInstagramMessage(senderId, messageText, pageAccessToken);
+    // Pass businessId and pageId to sendInstagramMessage
+    await sendInstagramMessage(
+      senderId,
+      messageText,
+      pageAccessToken,
+      businessId,
+      businessDetails.page_id
+    );
 
     await logMessage({
       businessId,
-      senderId: recipientId, // Switched sender/recipient for business messages
+      senderId: recipientId, // 'Business' is the sender in this scenario
+      recipientId: senderId,
+      message: messageText,
+      type: 'sent',
+      role: 'business',
+      igId,
+      username: 'Business',
+    });
+  } catch (err) {
+    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
+  }
+}
+
+async function respondAndLog(
+  businessId,
+  senderId,
+  recipientId,
+  messageText,
+  igId,
+  username,
+  businessDetails
+) {
+  try {
+    if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
+      console.warn('[WARN] Missing required fields for respondAndLog:', {
+        businessId, senderId, recipientId, messageText, businessDetails,
+      });
+      return;
+    }
+
+    const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
+    if (!pageAccessToken) {
+      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
+      return;
+    }
+
+    // Pass businessId and pageId to sendInstagramMessage
+    await sendInstagramMessage(
+      senderId,
+      messageText,
+      pageAccessToken,
+      businessId,
+      businessDetails.page_id
+    );
+
+    await logMessage({
+      businessId,
+      senderId: recipientId, // 'Business' is the sender in this scenario
       recipientId: senderId,
       message: messageText,
       type: 'sent',
