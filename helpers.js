@@ -267,13 +267,32 @@ export async function logMessage({
  */
 export async function handleUnsentMessage(messageId, businessId) {
   try {
-    console.log(`[INFO] Deleting message ID: ${messageId} for business ID: ${businessId}`);
-    const { error } = await supabase
+    // Validate inputs
+    if (!messageId || !businessId) {
+      console.error('[ERROR] Invalid parameters. Message ID and Business ID are required.');
+      return;
+    }
+
+    console.log(`[INFO] Attempting to delete message ID: ${messageId} for business ID: ${businessId}`);
+    
+    // Delete the message from the database
+    const { data, error, count } = await supabase
       .from('instagram_conversations')
       .delete()
-      .match({ business_id: businessId, message_id: messageId });
-    if (error) throw error;
-    console.log(`[INFO] Message ID: ${messageId} deleted successfully.`);
+      .match({ business_id: businessId, message_id: messageId })
+      .select('*', { count: 'exact' }); // Ensure you get the count of affected rows
+    
+    if (error) {
+      console.error('[ERROR] Failed to delete message:', error.message);
+      return;
+    }
+
+    // Check if the row was deleted
+    if (count === 0) {
+      console.warn(`[WARN] No message found with ID: ${messageId} for business ID: ${businessId}`);
+    } else {
+      console.log(`[INFO] Successfully deleted message ID: ${messageId} for business ID: ${businessId}.`);
+    }
   } catch (err) {
     console.error('[ERROR] Exception during message deletion:', err.message);
   }
