@@ -104,7 +104,7 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
       return null;
     }
     const { page_id: pageId } = businessDetails;
-    const accessToken = await getPageAccessToken(pageId);
+    const accessToken = await getPageAccessToken(businessId, pageId);
     const response = await fetch(
       `https://graph.facebook.com/v17.0/${senderId}?fields=id,username,email,phone_number&access_token=${accessToken}`
     );
