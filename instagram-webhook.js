@@ -345,7 +345,9 @@ async function processMessagingEvent(messageEvent) {
     // ---------------------------------------------------
     // Generate a response from your assistant
     // ---------------------------------------------------
+   console.log('[DEBUG] Invoking assistantHandler with:', { userMessage, businessId });
     const assistantResponse = await assistantHandler({
+      console.log('[DEBUG] Assistant response:', assistantResponse);
       userMessage,
       businessId,
     });
