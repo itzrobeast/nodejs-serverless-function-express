@@ -204,19 +204,19 @@ export async function logMessage({
   recipientId,
   message,
   type,
-  isBusinessMessage,
-  igId,
-  username,
+  role = 'customer',
+  igId = null,
+  username = null,
   email = null,
   phone_number = null,
   location = null,
 }) {
   try {
-    const role = isBusinessMessage ? 'business' : 'customer';
-    const validIgId = validateIgId(igId);
-    if (!validIgId) {
-      console.warn('[WARN] Invalid ig_id detected for message logging:', igId);
+    if (!businessId || !senderId || !recipientId || !message || !type) {
+      console.warn('[WARN] Missing required fields for logging message:', { businessId, senderId, recipientId, message, type });
+      return;
     }
+
     console.log('[DEBUG] Logging message with data:', {
       business_id: businessId,
       sender_id: senderId,
@@ -224,13 +224,14 @@ export async function logMessage({
       message,
       message_type: type,
       role,
-      ig_id: validIgId || null,
+      ig_id: igId,
       sender_name: username,
       email,
       phone_number,
       location,
     });
-    const { data, error } = await supabase
+
+    const { error } = await supabase
       .from('instagram_conversations')
       .insert([{
         business_id: businessId,
@@ -239,18 +240,23 @@ export async function logMessage({
         message,
         message_type: type,
         role,
-        ig_id: validIgId || null,
-        sender_name: username,
-        email,
-        phone_number,
-        location,
+        ig_id: igId || null,
+        sender_name: username || null,
+        email: email || null,
+        phone_number: phone_number || null,
+        location: location || null,
       }]);
-    if (error) throw error;
-    console.log('[DEBUG] Message logged successfully:', data);
+
+    if (error) {
+      console.error('[ERROR] Failed to log message:', error.message);
+    } else {
+      console.log('[INFO] Message logged successfully.');
+    }
   } catch (err) {
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
+
 
 /**
  * Handle unsent (deleted) messages.
@@ -312,19 +318,19 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
   try {
     const { username, email, phone_number } = userInfo;
     const { data, error } = await supabase
-      .from('instagram_users')
-      .upsert(
-        {
-          instagram_id: senderId,
-          username: username || null,
-          email: email || null,
-          phone_number: phone_number || null,
-          business_id: businessId,
-          role,
-          location,
-        },
-        { onConflict: ['instagram_id', 'business_id'] }
-      )
+  .from('instagram_users')
+  .upsert(
+    {
+      instagram_id: senderId,
+      username: username || null,
+      email: email || null,
+      phone_number: phone_number || null,
+      business_id: businessId,
+      role: role || 'customer',
+      location: location || null,
+    },
+    { onConflict: ['instagram_id', 'business_id'] }
+  )
       .select()
       .single();
     if (error) throw error;
