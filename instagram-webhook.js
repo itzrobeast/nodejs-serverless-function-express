@@ -187,6 +187,14 @@ async function processMessagingEvent(messageEvent) {
 
     console.log(`[DEBUG] Sender Instagram ID: ${senderId}, Recipient Instagram ID: ${recipientId}`);
 
+
+ // Ignore echo messages
+    if (isEcho) {
+      console.log('[INFO] Ignoring echo message.');
+      return;
+    }
+
+    
     // Handle deleted messages
     if (isDeleted) {
       if (!messageId) {
@@ -203,11 +211,7 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    // Ignore echo messages
-    if (isEcho) {
-      console.log('[INFO] Ignoring echo message.');
-      return;
-    }
+   
 
     // Check if the message is from a customer or a business
     const businessId = await fetchBusinessIdFromInstagramId(recipientId);
