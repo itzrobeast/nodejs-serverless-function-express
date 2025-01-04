@@ -381,48 +381,30 @@ export async function sendInstagramMessage(
  * @param {object} userInfo - Instagram user information (e.g., username).
  * @param {number} businessId - Associated business ID.
  */
-export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null) {
+export async function upsertInstagramUser(igId, userInfo, businessId, role = 'customer', location = null) {
   try {
-    if (!senderId || !businessId) {
-      console.warn('[WARN] Missing required fields for upserting Instagram user:', { senderId, businessId });
-      return null;
+    if (!businessId) {
+      console.error('[ERROR] Business ID is required to associate the customer with a business.');
+      return;
     }
 
-    const { username, email = null, phone_number = null } = userInfo || {};
-
-    console.log('[DEBUG] Attempting to upsert user with:', { senderId, username, businessId });
-
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('instagram_users')
-      .upsert(
-        {
-          instagram_id: senderId,
-          sender_id: senderId, // Ensure sender_id is populated
-          username: username || null,
-          email,
-          phone_number,
-          business_id: businessId,
-          role,
-          location,
-        },
-        { onConflict: ['instagram_id', 'business_id'] } // Prevent duplicate instagram_id entries
-      )
-      .select()
-      .single();
+      .upsert({
+        ig_id: igId,
+        business_id: businessId, // Associate the customer with the messaging business
+        username: userInfo?.username || null,
+        role,
+        location,
+      }, { onConflict: ['ig_id', 'business_id'] });
 
     if (error) {
-      if (error.code === '23505') { // Unique violation error
-        console.warn('[INFO] Instagram user already exists:', { senderId, businessId });
-        return null; // Optionally fetch and return the existing user
-      }
-      throw error;
+      console.error('[ERROR] Failed to upsert Instagram user:', error.message);
+    } else {
+      console.log(`[INFO] Successfully upserted Instagram user for business ID: ${businessId} with role: ${role}`);
     }
-
-    console.log('[INFO] Instagram user upserted successfully:', data);
-    return data;
   } catch (err) {
     console.error('[ERROR] Exception while upserting Instagram user:', err.message);
-    return null;
   }
 }
 
