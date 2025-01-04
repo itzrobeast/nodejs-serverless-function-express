@@ -132,6 +132,7 @@ export async function getUserAccessToken(businessOwnerId) {
  * @returns {Promise<string|null>} The refreshed user access token or null if the refresh fails.
  */
 export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
+  // Takes a short-lived user token and tries to get a long-lived token
   const longLivedToken = await getLongLivedUserAccessToken(shortLivedToken);
 
   if (longLivedToken) {
@@ -149,9 +150,8 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
     return longLivedToken;
   } else {
     console.error('[ERROR] Failed to generate long-lived token for Business Owner ID:', businessOwnerId);
+    return null;
   }
-
-  return null;
 }
 
 
