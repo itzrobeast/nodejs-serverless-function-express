@@ -255,6 +255,9 @@ async function processMessagingEvent(messageEvent) {
       }
     }
 
+
+    const location = messageEvent.message?.location || null; 
+
     // Fetch and upsert Instagram user information
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
