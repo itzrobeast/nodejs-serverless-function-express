@@ -109,6 +109,7 @@ export async function getUserAccessToken(businessOwnerId) {
 
     const { user_access_token: userAccessToken, updated_at: updatedAt } = data;
 
+    // Check if the token is expired
     if (!userAccessToken || isExpired(updatedAt, 'user')) {
       console.log('[INFO] User access token is expired or invalid. Attempting to refresh...');
       return await refreshUserAccessToken(businessOwnerId, userAccessToken);
@@ -120,6 +121,7 @@ export async function getUserAccessToken(businessOwnerId) {
     return null;
   }
 }
+
 
 
 /**
@@ -150,6 +152,7 @@ export async function refreshUserAccessToken(businessOwnerId, shortLivedToken) {
 
   return null;
 }
+
 
 /**
  * Exchange a short-lived user token for a long-lived token.
@@ -261,15 +264,10 @@ export async function getPageAccessToken(businessId, pageId) {
     }
 
     if (data?.page_access_token) {
-      if (!data.expires_at) {
-        console.log(`[INFO] Valid long-lived page access token found for pageId=${pageId}`);
-        return data.page_access_token;
-      }
-
       const tokenExpiration = new Date(data.expires_at);
       const now = new Date();
 
-      if (tokenExpiration > now) {
+      if (!data.expires_at || tokenExpiration > now) {
         console.log(`[INFO] Valid page access token found for pageId=${pageId}`);
         return data.page_access_token;
       }
@@ -279,13 +277,14 @@ export async function getPageAccessToken(businessId, pageId) {
       console.warn(`[WARN] No page access token found for pageId=${pageId}`);
     }
 
-    // Fetch a new token if not found or expired
+    // Fetch and store a new token if the current one is missing or expired
     return await fetchAndStorePageAccessToken(businessId, pageId);
   } catch (err) {
     console.error('[ERROR] Exception while fetching page access token:', err.message);
     return null;
   }
 }
+
 
 /**
  * Fetch a new page access token from Facebook API and store it in the database.
