@@ -243,51 +243,49 @@ export async function logMessage(
     const role = isBusinessMessage ? 'business' : 'customer';
 
     // Ensure `ig_id` is numeric or null if unavailable
-    const validIgId = isBusinessMessage ? parseInt(igId, 10) : igId;
-    if (isNaN(validIgId) && !isBusinessMessage) {
-      console.warn('[WARN] Invalid ig_id detected, defaulting to null:', igId);
-    }
-
-    console.log('[DEBUG] Logging message with data:', {
-      business_id: businessId,
-      sender_id: senderId,
-      recipient_id: recipientId,
-      message,
-      message_type: type,
-      role,
-      ig_id: validIgId || null,
-      sender_name: username,
-      email,
-      phone_number,
-      location,
-    });
-
-    const { data, error } = await supabase
-      .from('instagram_conversations')
-      .insert([{
-        business_id: businessId,
-        sender_id: senderId,
-        recipient_id: recipientId,
-        message,
-        message_type: type,
-        role,
-        ig_id: validIgId || null, // Ensure valid bigint or null
-        sender_name: username,
-        email,
-        phone_number,
-        location,
-      }]);
-
-    if (error) {
-      console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message || error);
-      return;
-    }
-
-    console.log('[DEBUG] Message logged successfully:', data);
-  } catch (err) {
-    console.error('[ERROR] Exception while logging message:', err.message || err);
-  }
+    // Ensure `ig_id` is validated or null if unavailable
+const validIgId = isBusinessMessage ? igId : validateIgId(igId); // Use validation helper
+if (!validIgId && !isBusinessMessage) {
+  console.warn('[WARN] Invalid ig_id detected, defaulting to null:', igId);
 }
+
+console.log('[DEBUG] Logging message with data:', {
+  business_id: businessId,
+  sender_id: senderId,
+  recipient_id: recipientId,
+  message,
+  message_type: type,
+  role,
+  ig_id: validIgId || null,
+  sender_name: username,
+  email,
+  phone_number,
+  location,
+});
+
+const { data, error } = await supabase
+  .from('instagram_conversations')
+  .insert([{
+    business_id: businessId,
+    sender_id: senderId,
+    recipient_id: recipientId,
+    message,
+    message_type: type,
+    role,
+    ig_id: validIgId || null, // Ensure valid bigint or null
+    sender_name: username,
+    email,
+    phone_number,
+    location,
+  }]);
+
+if (error) {
+  console.error(`[ERROR] Failed to log message for businessId=${businessId}:`, error.message || error);
+  return;
+}
+
+console.log('[DEBUG] Message logged successfully:', data);
+
 
 
 
