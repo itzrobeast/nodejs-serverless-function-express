@@ -247,10 +247,7 @@ export async function logMessage({
       return;
     }
 
-    if (existingMessage) {
-      console.log('[INFO] Duplicate message detected. Skipping log.');
-      return;
-    }
+   
 
     console.log('[DEBUG] Attempting to insert new message:', {
       businessId,
