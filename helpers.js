@@ -172,6 +172,7 @@ export async function fetchInstagramIdFromDatabase(businessId) {
  */
 export async function fetchBusinessDetails(businessId) {
   try {
+    console.log('[DEBUG] Fetching business details for businessId:', businessId);
     const { data, error } = await supabase
       .from('businesses')
       .select('id, name, ig_id, page_id, business_owner_id')
@@ -189,6 +190,7 @@ export async function fetchBusinessDetails(businessId) {
     return null;
   }
 }
+
 
 /**
  * Log a message into the database.
