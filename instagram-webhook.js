@@ -124,14 +124,19 @@ async function respondAndLog(
       return;
     }
 
-    // Fetch the page access token first
-    const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
+    // Fetch the page access token
+    let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
       console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
-      return;
+      pageAccessToken = await forceRefreshPageAccessToken(businessId, businessDetails.page_id);
+
+      if (!pageAccessToken) {
+        console.error(`[ERROR] Unable to refresh page access token for businessId=${businessId}`);
+        return;
+      }
     }
 
-    // Call sendInstagramMessage with businessId, pageId for auto-refresh logic
+    // Send the message using the valid token
     await sendInstagramMessage(
       senderId,
       messageText,
@@ -140,7 +145,7 @@ async function respondAndLog(
       businessDetails.page_id
     );
 
-    // Log the "sent" message in our DB
+    // Log the "sent" message in the database
     await logMessage({
       businessId,
       senderId: recipientId, // The "business" is effectively the sender now
@@ -152,10 +157,7 @@ async function respondAndLog(
       username: 'Business',
     });
   } catch (err) {
-    console.error(
-      `[ERROR] Failed to respond and log message for businessId=${businessId}:`,
-      err.message
-    );
+    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
   }
 }
 
@@ -166,6 +168,7 @@ async function respondAndLog(
  * - Calls the assistant handler for a reply.
  * - Uses respondAndLog() to send the reply and log the "sent" message.
  */
+
 async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
@@ -225,6 +228,18 @@ async function processMessagingEvent(messageEvent) {
     // Parse user message for additional information
     const { field, value, location } = parseUserMessage(userMessage);
 
+    // Fetch and validate page access token
+    let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
+    if (!pageAccessToken) {
+      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
+      pageAccessToken = await forceRefreshPageAccessToken(businessId, businessDetails.page_id);
+
+      if (!pageAccessToken) {
+        console.error(`[ERROR] Unable to refresh page access token for businessId=${businessId}`);
+        return;
+      }
+    }
+
     // Fetch and upsert Instagram user information
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
@@ -275,6 +290,11 @@ async function processMessagingEvent(messageEvent) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
+
+
+
+
+
 
 // POST route for webhook
 router.post('/', async (req, res) => {
