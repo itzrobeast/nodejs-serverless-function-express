@@ -320,10 +320,12 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
   try {
     if (!senderId || !businessId) {
       console.warn('[WARN] Missing required fields for upserting Instagram user:', { senderId, businessId });
-      return;
+      return null;
     }
 
     const { username, email = null, phone_number = null } = userInfo || {};
+
+    console.log('[DEBUG] Attempting to upsert user with:', { senderId, username, businessId });
 
     const { data, error } = await supabase
       .from('instagram_users')
@@ -353,6 +355,7 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
     return null;
   }
 }
+
 
 /**
  * Parse user messages to extract field-value pairs in the format "key: value".
