@@ -61,14 +61,18 @@ function verifyFacebookSignature(req, res, buf) {
 
 router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
 
-// Helper to fetch business ID from Instagram ID
+/**
+ * Helper to fetch business ID from Instagram ID.
+ * @param {string} igId - The recipient’s (business) Instagram ID.
+ * @returns {Promise<number|null>} Business ID or null if not found.
+ */
 async function fetchBusinessIdFromInstagramId(igId) {
   // Validate igId before proceeding
   if (!igId || isNaN(Number(igId))) {
     console.error('[ERROR] Invalid or missing ig_id:', igId);
     return null;
   }
-  
+
   try {
     const { data, error } = await supabase
       .from('businesses')
@@ -88,113 +92,79 @@ async function fetchBusinessIdFromInstagramId(igId) {
   }
 }
 
-
-async function respondAndLog(
-  businessId,
-  senderId,
-  recipientId,
-  messageText,
-  igId,
-  username,
-  businessDetails
-) {
-  try {
-    if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
-      console.warn('[WARN] Missing required fields for respondAndLog:', {
-        businessId, senderId, recipientId, messageText, businessDetails,
-      });
-      return;
-    }
-
-    const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
-    if (!pageAccessToken) {
-      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
-      return;
-    }
-
-    // Pass businessId and pageId to sendInstagramMessage
-    await sendInstagramMessage(
-      senderId,
-      messageText,
-      pageAccessToken,
-      businessId,
-      businessDetails.page_id
-    );
-
-    await logMessage({
-      businessId,
-      senderId: recipientId, // 'Business' is the sender in this scenario
-      recipientId: senderId,
-      message: messageText,
-      type: 'sent',
-      role: 'business',
-      igId,
-      username: 'Business',
-    });
-  } catch (err) {
-    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
-  }
-}
-
-async function respondAndLog(
-  businessId,
-  senderId,
-  recipientId,
-  messageText,
-  igId,
-  username,
-  businessDetails
-) {
-  try {
-    if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
-      console.warn('[WARN] Missing required fields for respondAndLog:', {
-        businessId, senderId, recipientId, messageText, businessDetails,
-      });
-      return;
-    }
-
-    const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
-    if (!pageAccessToken) {
-      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
-      return;
-    }
-
-    // Pass businessId and pageId to sendInstagramMessage
-    await sendInstagramMessage(
-      senderId,
-      messageText,
-      pageAccessToken,
-      businessId,
-      businessDetails.page_id
-    );
-
-    await logMessage({
-      businessId,
-      senderId: recipientId, // 'Business' is the sender in this scenario
-      recipientId: senderId,
-      message: messageText,
-      type: 'sent',
-      role: 'business',
-      igId,
-      username: 'Business',
-    });
-  } catch (err) {
-    console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
-  }
-}
-
-
-// Core function to process incoming messages
 /**
- * Sends a message to the user and logs it.
- * @param {string} businessId - The business ID.
- * @param {string} senderId - The sender's Instagram ID.
- * @param {string} recipientId - The recipient's Instagram ID.
- * @param {string} messageText - The message to send.
- * @param {string} igId - The Instagram ID associated with the message.
- * @param {string} username - The username of the sender.
+ * Send a response message to the user and log it as "sent" by the business.
+ * @param {number} businessId
+ * @param {string} senderId   - The user's IG ID (who sent the message).
+ * @param {string} recipientId - The business's IG ID.
+ * @param {string} messageText - The text to send to the user.
+ * @param {string} igId       - The same as recipientId (business’s IG ID).
+ * @param {string} username   - The user’s username (if known).
+ * @param {object} businessDetails - Contains page_id, etc.
  */
+async function respondAndLog(
+  businessId,
+  senderId,
+  recipientId,
+  messageText,
+  igId,
+  username,
+  businessDetails
+) {
+  try {
+    if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
+      console.warn('[WARN] Missing required fields for respondAndLog:', {
+        businessId,
+        senderId,
+        recipientId,
+        messageText,
+        businessDetails,
+      });
+      return;
+    }
 
+    // Fetch the page access token first
+    const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
+    if (!pageAccessToken) {
+      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
+      return;
+    }
+
+    // Call sendInstagramMessage with businessId, pageId for auto-refresh logic
+    await sendInstagramMessage(
+      senderId,
+      messageText,
+      pageAccessToken,
+      businessId,
+      businessDetails.page_id
+    );
+
+    // Log the "sent" message in our DB
+    await logMessage({
+      businessId,
+      senderId: recipientId, // The "business" is effectively the sender now
+      recipientId: senderId,
+      message: messageText,
+      type: 'sent',
+      role: 'business',
+      igId,
+      username: 'Business',
+    });
+  } catch (err) {
+    console.error(
+      `[ERROR] Failed to respond and log message for businessId=${businessId}:`,
+      err.message
+    );
+  }
+}
+
+/**
+ * Core function to process incoming messages.
+ * - Logs the incoming "received" message.
+ * - Retrieves user info.
+ * - Calls the assistant handler for a reply.
+ * - Uses respondAndLog() to send the reply and log the "sent" message.
+ */
 async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
@@ -214,7 +184,7 @@ async function processMessagingEvent(messageEvent) {
     const userMessage = messageEvent.message?.text || '';
     const messageId = messageEvent.message?.mid?.trim();
 
-    // Use recipient ID as the business Instagram ID (igId)
+    // This is the business’s IG ID (the recipient of the user’s message)
     const igId = recipientId;
     console.log(`[DEBUG] Using Instagram ID: ${igId}`);
 
@@ -225,7 +195,7 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    // Fetch business details
+    // Fetch business details (includes page_id, etc.)
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
       console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
@@ -261,7 +231,7 @@ async function processMessagingEvent(messageEvent) {
       await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location);
     }
 
-    // Log the received message
+    // Log the incoming "received" message in DB
     await logMessage({
       businessId,
       senderId,
@@ -269,7 +239,7 @@ async function processMessagingEvent(messageEvent) {
       message: userMessage,
       type: 'received',
       role: 'customer',
-      igId, // Pass valid igId from recipient
+      igId, // This is the business’s IG ID
       username: userInfo?.username || '',
       email: userInfo?.email || null,
       phone_number: userInfo?.phone_number || null,
@@ -284,8 +254,8 @@ async function processMessagingEvent(messageEvent) {
       value,
     });
 
+    // If the assistant provided a message, respond and log it
     if (assistantResponse && assistantResponse.message) {
-      // Send and log the response
       await respondAndLog(
         businessId,
         senderId,
@@ -296,15 +266,14 @@ async function processMessagingEvent(messageEvent) {
         businessDetails
       );
     } else {
-      console.error(`[ERROR] assistantHandler did not return a valid response for businessId=${businessId}`);
+      console.error(
+        `[ERROR] assistantHandler did not return a valid response for businessId=${businessId}`
+      );
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
-
-
-
 
 // POST route for webhook
 router.post('/', async (req, res) => {
@@ -327,7 +296,15 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET route for verification
+router.get('/', (req, res) => {
+  if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
+    return res.status(200).send(req.query['hub.challenge']);
+  }
+  return res.status(403).send('Verification failed');
+});
 
+// Optional route to fetch all conversation logs for a given business
 router.get('/fetch-conversations', async (req, res) => {
   try {
     const { business_id } = req.query;
@@ -353,15 +330,6 @@ router.get('/fetch-conversations', async (req, res) => {
     console.error('[ERROR] Exception while fetching conversations:', err.message);
     return res.status(500).json({ error: 'Internal server error' });
   }
-});
-
-
-// GET route for verification
-router.get('/', (req, res) => {
-  if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
-    return res.status(200).send(req.query['hub.challenge']);
-  }
-  return res.status(403).send('Verification failed');
 });
 
 export default router;
