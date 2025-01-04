@@ -215,7 +215,13 @@ export async function logMessage({
   try {
     // Validate required fields
     if (!businessId || !senderId || !recipientId || !message || !type) {
-      console.warn('[WARN] Missing required fields for logging message:', { businessId, senderId, recipientId, message, type });
+      console.warn('[WARN] Missing required fields for logging message:', {
+        businessId,
+        senderId,
+        recipientId,
+        message,
+        type,
+      });
       return;
     }
 
@@ -233,24 +239,46 @@ export async function logMessage({
       location,
     });
 
-    const { error } = await supabase
+    // Deduplication check
+    const { data: existingMessage, error: fetchError } = await supabase
       .from('instagram_conversations')
-      .insert([{
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('sender_id', senderId)
+      .eq('recipient_id', recipientId)
+      .eq('message', message)
+      .eq('message_type', type)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('[ERROR] Failed to check for duplicate message:', fetchError.message);
+      return;
+    }
+
+    if (existingMessage) {
+      console.log('[INFO] Duplicate message detected. Skipping log.');
+      return;
+    }
+
+    // Insert message
+    const { error: insertError } = await supabase.from('instagram_conversations').insert([
+      {
         business_id: businessId,
         sender_id: senderId,
         recipient_id: recipientId,
         message,
         message_type: type,
         role,
-        ig_id: igId || null,
-        sender_name: username || null,
-        email: email || null,
-        phone_number: phone_number || null,
-        location: location || null,
-      }]);
+        ig_id: igId,
+        sender_name: username,
+        email,
+        phone_number,
+        location,
+      },
+    ]);
 
-    if (error) {
-      console.error('[ERROR] Failed to log message:', error.message);
+    if (insertError) {
+      console.error('[ERROR] Failed to log message:', insertError.message);
     } else {
       console.log('[INFO] Message logged successfully.');
     }
