@@ -10,6 +10,7 @@ import {
   validateUserAccessToken,
   getLongLivedUserAccessToken,
   refreshLongLivedUserAccessToken,
+  forceRefreshPageAccessToken,
   isExpired,
 } from './auth/refresh-token.js';
 
