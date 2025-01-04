@@ -103,7 +103,10 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
       .single();
 
     if (error || !businessDetails) {
-      console.error(`[ERROR] Failed to fetch business details for businessId=${businessId}:`, error?.message || 'No data found');
+      console.error(
+        `[ERROR] Failed to fetch business details for businessId=${businessId}:`,
+        error?.message || 'No data found'
+      );
       return null;
     }
 
@@ -124,7 +127,10 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
     // Check for response status
     if (!response.ok) {
       const errorResponse = await response.json();
-      console.error(`[ERROR] Failed to fetch Instagram user info for senderId=${senderId}:`, errorResponse.error?.message || 'Unknown error');
+      console.error(
+        `[ERROR] Failed to fetch Instagram user info for senderId=${senderId}:`,
+        errorResponse.error?.message || 'Unknown error'
+      );
       return null;
     }
 
@@ -146,7 +152,6 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
   }
 }
 
-
 /**
  * Fetch Instagram ID from the database using a business ID.
  * @param {number} businessId - The business ID to search for.
@@ -160,7 +165,10 @@ export async function fetchInstagramIdFromDatabase(businessId) {
       .eq('id', businessId)
       .single();
     if (error || !data) {
-      console.error(`[ERROR] Could not fetch Instagram ID for business ID ${businessId}:`, error?.message || 'No data found');
+      console.error(
+        `[ERROR] Could not fetch Instagram ID for business ID ${businessId}:`,
+        error?.message || 'No data found'
+      );
       return null;
     }
     console.log('[DEBUG] Retrieved ig_id:', data.ig_id);
@@ -185,7 +193,9 @@ export async function fetchBusinessDetails(businessId) {
       .eq('id', businessId)
       .single();
     if (error || !data) {
-      throw new Error(`[ERROR] Failed to fetch business details: ${error?.message || 'No data found'}`);
+      throw new Error(
+        `[ERROR] Failed to fetch business details: ${error?.message || 'No data found'}`
+      );
     }
     console.log('[DEBUG] Fetched business details:', data);
     return data;
@@ -258,19 +268,21 @@ export async function logMessage({
 
     const { error } = await supabase
       .from('instagram_conversations')
-      .insert([{
-        business_id: businessId,
-        sender_id: senderId,
-        recipient_id: recipientId,
-        message,
-        message_type: type,
-        role,
-        ig_id: igId,
-        sender_name: username,
-        email,
-        phone_number,
-        location,
-      }]);
+      .insert([
+        {
+          business_id: businessId,
+          sender_id: senderId,
+          recipient_id: recipientId,
+          message,
+          message_type: type,
+          role,
+          ig_id: igId,
+          sender_name: username,
+          email,
+          phone_number,
+          location,
+        },
+      ]);
 
     if (error) {
       console.error('[ERROR] Failed to log message:', error.message);
@@ -281,13 +293,6 @@ export async function logMessage({
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
-
-
-
-
-
-
-
 
 /**
  * Handle unsent (deleted) messages.
@@ -304,7 +309,9 @@ export async function handleUnsentMessage(messageId, businessId) {
       return;
     }
 
-    console.log(`[INFO] Attempting to delete message ID: ${messageId} for business ID: ${businessId}`);
+    console.log(
+      `[INFO] Attempting to delete message ID: ${messageId} for business ID: ${businessId}`
+    );
 
     // Delete the message from the database
     const { data, error, count } = await supabase
@@ -313,38 +320,43 @@ export async function handleUnsentMessage(messageId, businessId) {
       .match({ business_id: businessId, message_id: messageId });
 
     if (error) {
-      console.error(`[ERROR] Failed to delete message with ID: ${messageId} for business ID: ${businessId}:`, error.message);
+      console.error(
+        `[ERROR] Failed to delete message with ID: ${messageId} for business ID: ${businessId}:`,
+        error.message
+      );
       return;
     }
 
     if (count === 0) {
-      console.warn(`[WARN] No message found with ID: ${messageId} for business ID: ${businessId}`);
+      console.warn(
+        `[WARN] No message found with ID: ${messageId} for business ID: ${businessId}`
+      );
     } else {
-      console.log(`[INFO] Successfully deleted message ID: ${messageId} for business ID: ${businessId}.`);
+      console.log(
+        `[INFO] Successfully deleted message ID: ${messageId} for business ID: ${businessId}.`
+      );
     }
   } catch (err) {
     console.error('[ERROR] Exception during message deletion:', err.message);
   }
 }
 
-
-
-
-
-/**
- * Send a message to a user via Instagram Messaging API.
- * @param {string} recipientId - Instagram user ID of the recipient.
- * @param {string} messageText - Message content to be sent.
- * @param {string} accessToken - Facebook page access token.
- */
 const processedMessageIds = new Set();
-
 function markMessageIdAsProcessed(messageId) {
   if (!messageId) return;
   processedMessageIds.add(messageId);
   setTimeout(() => processedMessageIds.delete(messageId), 5 * 60 * 1000); // 5 minutes
 }
 
+/**
+ * Send a message to a user via Instagram Messaging API.
+ * @param {string} senderId - The Instagram user ID of the recipient.
+ * @param {string} messageText - Message content to be sent.
+ * @param {string} pageAccessToken - Facebook page access token.
+ * @param {number} businessId - The ID of the business.
+ * @param {number} pageId - The ID of the page.
+ * @param {number} retryCount - How many times we've retried after an expired token error.
+ */
 export async function sendInstagramMessage(
   senderId,
   messageText,
@@ -353,25 +365,23 @@ export async function sendInstagramMessage(
   pageId,
   retryCount = 0
 ) {
+  // Deduplicate outgoing text to avoid double-sending
   if (processedMessageIds.has(messageText)) {
-    console.log('[INFO] Duplicate response detected. Skipping send.');
+    console.log('[INFO] Duplicate response detected. Skipping send for messageText:', messageText);
     return;
   }
   markMessageIdAsProcessed(messageText);
 
   try {
-    const response = await fetch(
-      'https://graph.facebook.com/v17.0/me/messages',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipient: { id: senderId },
-          message: { text: messageText },
-          access_token: pageAccessToken,
-        }),
-      }
-    );
+    const response = await fetch('https://graph.facebook.com/v17.0/me/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: senderId },
+        message: { text: messageText },
+        access_token: pageAccessToken,
+      }),
+    });
 
     const data = await response.json();
 
@@ -403,51 +413,57 @@ export async function sendInstagramMessage(
   }
 }
 
-
-
 /**
  * Upsert Instagram user into the database.
  * @param {string} senderId - Instagram user ID.
  * @param {object} userInfo - Instagram user information (e.g., username).
  * @param {number} businessId - Associated business ID.
+ * @param {string} role - The role of the user (defaults to 'customer').
+ * @param {string|null} location - Optional location data.
+ * @param {string} igId - The same IG ID from the message (if relevant).
  */
-export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null, igId) {
+export async function upsertInstagramUser(
+  senderId,
+  userInfo,
+  businessId,
+  role = 'customer',
+  location = null,
+  igId
+) {
   try {
     if (!businessId) {
       console.error('[ERROR] Business ID is required to associate the customer with a business.');
       return;
     }
-
-     // Ensure senderId is valid
     if (!senderId) {
       console.error('[ERROR] Sender ID is required for upserting Instagram user.');
       return;
     }
 
-
-    const { error } = await supabase
-      .from('instagram_users')
-      .upsert({
+    const { error } = await supabase.from('instagram_users').upsert(
+      {
         sender_id: senderId,
         ig_id: igId,
-        business_id: businessId, // Associate the customer with the messaging business
+        business_id: businessId,
         username: userInfo?.username || null,
         role,
         location: location || null,
-        updated_at: new Date().toISOString(), 
-      }, { onConflict: ['sender_id', 'business_id'] });
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: ['sender_id', 'business_id'] }
+    );
 
     if (error) {
       console.error('[ERROR] Failed to upsert Instagram user:', error.message);
     } else {
-      console.log(`[INFO] Successfully upserted Instagram user for business ID: ${businessId} with role: ${role}`);
+      console.log(
+        `[INFO] Successfully upserted Instagram user for business ID: ${businessId} with role: ${role}`
+      );
     }
   } catch (err) {
     console.error('[ERROR] Exception while upserting Instagram user:', err.message);
   }
 }
-
-
 
 /**
  * Parse user messages to extract field-value pairs in the format "key: value".
@@ -462,7 +478,6 @@ export function parseUserMessage(userMessage) {
   const locationRegex = /location:\s*(.+)$/i;
   const match = userMessage.match(locationRegex);
   const location = match ? match[1].trim() : null;
-  
 
   return {
     field: null,
