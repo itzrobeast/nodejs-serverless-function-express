@@ -69,7 +69,7 @@ export async function fetchInstagramUserInfo(senderId, businessId) {
   try {
     const { data: businessDetails, error } = await supabase
       .from('businesses')
-      .select('page_id, access_token')
+      .select('page_id')
       .eq('id', businessId)
       .single();
 
