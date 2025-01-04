@@ -240,56 +240,73 @@ export async function ensurePageAccessToken(pageId, userAccessToken, currentPage
 
 
 /**
- * Ensure the page access token is valid and refresh if necessary.
- * @param {string} businessId - The business ID.
- * @param {string} pageId - The Facebook Page ID.
- * @returns {Promise<string|null>} The valid page access token or null if failed.
+ * Get the page access token for a business and page.
+ * @param {number} businessId - The ID of the business.
+ * @param {number} pageId - The ID of the Facebook page.
+ * @returns {Promise<string|null>} - The valid page access token or null if unavailable.
  */
 export async function getPageAccessToken(businessId, pageId) {
   try {
+    console.log(`[DEBUG] Fetching page access token for businessId=${businessId}, pageId=${pageId}`);
+
     const { data, error } = await supabase
-      .from('page_access_tokens')
-      .select('access_token, expires_at')
+      .from('pages')
+      .select('page_access_token, expires_at')
       .eq('business_id', businessId)
       .eq('page_id', pageId)
       .single();
 
-    if (error || !data?.access_token) {
-      console.warn(`[WARN] No valid page access token found for businessId=${businessId} and pageId=${pageId}`);
-      return await fetchAndStorePageAccessToken(businessId, pageId);
+    if (error) {
+      console.warn(`[WARN] Error fetching page access token from database: ${error.message}`);
     }
 
-    const tokenExpiration = new Date(data.expires_at);
-    const now = new Date();
+    // Check if token is valid
+    if (data?.page_access_token) {
+      const tokenExpiration = new Date(data.expires_at);
+      const now = new Date();
 
-    if (tokenExpiration <= now) {
-      console.warn(`[WARN] Page access token expired for businessId=${businessId} and pageId=${pageId}`);
-      return await fetchAndStorePageAccessToken(businessId, pageId);
+      if (tokenExpiration > now) {
+        console.log(`[INFO] Valid page access token found for pageId=${pageId}`);
+        return data.page_access_token;
+      }
+
+      console.warn(`[WARN] Page access token expired for pageId=${pageId}`);
+    } else {
+      console.warn(`[WARN] No page access token found for pageId=${pageId}`);
     }
 
-    return data.access_token;
+    // Fetch a new token if not found or expired
+    return await fetchAndStorePageAccessToken(businessId, pageId);
   } catch (err) {
     console.error('[ERROR] Exception while fetching page access token:', err.message);
     return null;
   }
 }
 
+/**
+ * Fetch a new page access token from Facebook API and store it in the database.
+ * @param {number} businessId - The ID of the business.
+ * @param {number} pageId - The ID of the Facebook page.
+ * @returns {Promise<string|null>} - The fetched page access token or null if fetching failed.
+ */
 async function fetchAndStorePageAccessToken(businessId, pageId) {
   try {
+    console.log(`[INFO] Fetching new page access token for businessId=${businessId}, pageId=${pageId}`);
+
     const userAccessToken = await getUserAccessTokenForBusiness(businessId);
     if (!userAccessToken) {
-      console.error(`[ERROR] Could not fetch user access token for businessId=${businessId}`);
+      console.error(`[ERROR] User access token not available for businessId=${businessId}`);
       return null;
     }
 
-    // Fetch the new page access token from Facebook API
+    // Call Facebook API to fetch a new page access token
     const response = await fetch(
       `https://graph.facebook.com/v17.0/${pageId}?fields=access_token,expires_at&access_token=${userAccessToken}`
     );
     const pageData = await response.json();
 
     if (!response.ok || !pageData.access_token) {
-      console.error(`[ERROR] Failed to fetch new page access token for pageId=${pageId}:`, pageData.error?.message || 'Unknown error');
+      console.error(`[ERROR] Failed to fetch page access token for pageId=${pageId}:`, pageData.error?.message || 'Unknown error');
       return null;
     }
 
@@ -297,20 +314,20 @@ async function fetchAndStorePageAccessToken(businessId, pageId) {
 
     // Update the token in the database
     const { error } = await supabase
-      .from('page_access_tokens')
+      .from('pages')
       .upsert({
         business_id: businessId,
         page_id: pageId,
-        access_token,
-        expires_at: new Date(expires_at * 1000).toISOString(), // Convert Unix timestamp to ISO format
+        page_access_token: access_token,
+        expires_at: expires_at ? new Date(expires_at * 1000).toISOString() : null, // Handle potential missing expires_at
       }, { onConflict: ['business_id', 'page_id'] });
 
     if (error) {
-      console.error(`[ERROR] Failed to update page access token for businessId=${businessId} and pageId=${pageId}:`, error.message);
+      console.error(`[ERROR] Failed to update page access token in database for pageId=${pageId}:`, error.message);
       return null;
     }
 
-    console.log(`[INFO] Page access token updated successfully for businessId=${businessId} and pageId=${pageId}`);
+    console.log(`[INFO] Page access token updated successfully for pageId=${pageId}`);
     return access_token;
   } catch (err) {
     console.error('[ERROR] Exception while fetching and storing page access token:', err.message);
