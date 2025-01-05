@@ -53,14 +53,20 @@ app.use(
   helmet({
     contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
       directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://example.com"],
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
+        defaultSrc: ["'self'"], // Default to same origin
+        scriptSrc: ["'self'", "https://mila-verse.vercel.app"], // Allow scripts from the frontend
+        connectSrc: ["'self'", "https://nodejs-serverless-function-express-two-wine.vercel.app"], // Allow API calls to the backend
+        styleSrc: ["'self'", "'unsafe-inline'"], // Allow styles from the same origin and inline styles
+        fontSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"], // Allow fonts from Google Fonts
+        imgSrc: ["'self'", "data:", "https://mila-verse.vercel.app"], // Allow images from frontend and data URIs
+        objectSrc: ["'none'"], // Disallow plugins like Flash
+        frameAncestors: ["'self'"], // Restrict embedding to the same origin
+        upgradeInsecureRequests: true, // Force HTTPS for all resources
       },
-    } : false,
+    } : false, // Disable CSP in non-production environments
   })
 );
+
 app.use(cookieParser());
 app.use(express.json());
 
