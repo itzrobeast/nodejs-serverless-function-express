@@ -72,7 +72,6 @@ app.use(
       console.log(`[DEBUG] CORS Origin Header: ${origin}`);
       const allowedOrigins = [
         'https://mila-verse.vercel.app',
-        'https://mila-verse-7ftxkl9b0-bears-projects-464726ee.vercel.app',
       ];
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
