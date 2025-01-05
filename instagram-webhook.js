@@ -62,6 +62,9 @@ function verifyFacebookSignature(req, res, buf) {
 
 router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }));
 
+
+
+
 /**
  * Helper to fetch business ID from Instagram ID.
  * @param {string} igId - The recipient’s (business) Instagram ID.
@@ -163,7 +166,7 @@ async function respondAndLog(
 
 
 
-const lastResponseTimestamps = new Map(); // In-memory rate-limiting store
+const lastUserMessages  = new Map(); // In-memory rate-limiting store
 
 /**
  * Core function to process incoming messages.
@@ -185,20 +188,8 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-
+    // Build a conversation key
     const conversationKey = `${senderId}-${recipientId}`;
-    // Check rate limiting (skip if the last response was within 5 seconds)
-    const now = Date.now();
-    if (lastResponseTimestamps.has(conversationKey)) {
-      const lastResponseTime = lastResponseTimestamps.get(conversationKey);
-      if (now - lastResponseTime < 5000) {
-        console.log(`[INFO] Skipping response for conversationKey=${conversationKey} due to rate limiting.`);
-        return;
-      }
-    }
-    // Update the last response timestamp
-    lastResponseTimestamps.set(conversationKey, now);
-
 
     // Determine whether the message is deleted or an echo
     const isDeleted = messageEvent.message?.is_deleted || false;
@@ -206,13 +197,13 @@ async function processMessagingEvent(messageEvent) {
     const userMessage = messageEvent.message?.text || '';
     const messageId = messageEvent.message?.mid?.trim();
 
-    // Log the IG IDs
-    console.log(`[DEBUG] Sender Instagram ID: ${senderId}, Recipient Instagram ID: ${recipientId}`);
+    // Debug logs
+    console.log(`[DEBUG] Sender IG ID: ${senderId}, Recipient IG ID: ${recipientId}`);
 
-    // Handle deleted messages
+    // 1) Handle deleted messages
     if (isDeleted) {
       if (!messageId) {
-        console.error('[WARN] Deleted message does not have a valid message ID.');
+        console.warn('[WARN] Deleted message does not have a valid message ID.');
         return;
       }
       console.log(`[INFO] Handling deleted message with ID: ${messageId}`);
@@ -220,71 +211,79 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    // Ignore echo messages or empty messages
+    // 2) Ignore echo or empty messages
     if (isEcho || !userMessage.trim()) {
       console.log('[INFO] Ignoring echo or empty message.');
       return;
     }
 
-    // Check if the message is from a customer or a business
-    const businessId = await fetchBusinessIdFromInstagramId(recipientId);
-
-    if (!businessId) {
-      console.log('[INFO] Message is from a customer; processing as a customer message.');
-
-      // Log the incoming "received" message in DB
+    /*****************************************************************
+     * 3) Skip if user repeats the exact same message as last time
+     *****************************************************************/
+    const lastMessage = lastUserMessages.get(conversationKey);
+    if (lastMessage && lastMessage === userMessage) {
+      console.log(`[INFO] Skipping assistant response. User repeated text: "${userMessage}"`);
+      // Optionally still log it if you want, or just skip everything
+      // For example:
       await logMessage({
-        businessId: null, // No associated business for customer messages
+        businessId: null, // If no business or skip your logic
+        senderId,
+        recipientId,
+        message: userMessage,
+        type: 'received',
+        role: 'customer',
+      });
+      return; // do NOT call the assistant
+    }
+
+    // Store this as the last user text for 5 minutes
+    lastUserMessages.set(conversationKey, userMessage);
+    setTimeout(() => {
+      // After 5 minutes, forget the last user text for this conversation
+      lastUserMessages.delete(conversationKey);
+    }, 1 * 60 * 1000);
+
+    // 4) Identify if the recipient is your business
+    const businessId = await fetchBusinessIdFromInstagramId(recipientId);
+    if (!businessId) {
+      console.log('[INFO] Message is from a customer; no known business ID. Logging normally.');
+      await logMessage({
+        businessId: null,
         senderId,
         recipientId,
         message: userMessage,
         type: 'received',
         role: 'customer',
         igId: recipientId,
-        username: null, // Optional: Fetch from external API if needed
-        email: null,
-        phone_number: null,
-        location: null,
       });
-
-      // No further processing for customer messages
       return;
     }
 
     console.log(`[DEBUG] Business ID resolved for recipient IG ID: ${recipientId}`);
 
-    // Fetch business details (includes page_id, etc.)
+    // 5) Fetch business details
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
       console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
       return;
     }
+    console.log('[DEBUG] Business details fetched:', JSON.stringify(businessDetails));
 
-    console.log(`[DEBUG] Business details fetched: ${JSON.stringify(businessDetails)}`);
-
-    // Fetch and validate page access token
+    // 6) Possibly fetch & validate page access token, user info, etc.
+    //    Example: 
     let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
     if (!pageAccessToken) {
-      console.error(`[ERROR] Missing page access token for businessId=${businessId}`);
       pageAccessToken = await forceRefreshPageAccessToken(businessId, businessDetails.page_id);
-
-      if (!pageAccessToken) {
-        console.error(`[ERROR] Unable to refresh page access token for businessId=${businessId}`);
-        return;
-      }
+      if (!pageAccessToken) return;
     }
 
-
-    const location = messageEvent.message?.location || null; 
-
-    // Fetch and upsert Instagram user information
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
-      console.log(`[DEBUG] Fetched user info: ${JSON.stringify(userInfo)}`);
-      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', location);
+      console.log('[DEBUG] Fetched user info:', JSON.stringify(userInfo));
+      await upsertInstagramUser(senderId, userInfo, businessId, 'customer', null, recipientId);
     }
 
-    // Log the incoming "received" message in DB
+    // 7) Log the received message in DB
     await logMessage({
       businessId,
       senderId,
@@ -294,31 +293,21 @@ async function processMessagingEvent(messageEvent) {
       role: 'customer',
       igId: recipientId,
       username: userInfo?.username || '',
-      email: userInfo?.email || null,
-      phone_number: userInfo?.phone_number || null,
-      location: null,
     });
 
-    // Generate a response using the assistant handler
-    const assistantResponse = await assistantHandler({
-      userMessage,
-      businessId,
-    });
-
-    // Log and respond with the assistant's response
-    if (assistantResponse && assistantResponse.message) {
+    // 8) Generate assistant response
+    const assistantResponse = await assistantHandler({ userMessage, businessId });
+    if (assistantResponse?.message) {
+      // 9) Log + respond
       await logMessage({
         businessId,
-        senderId: recipientId, // The business is the sender now
+        senderId: recipientId,
         recipientId: senderId,
         message: assistantResponse.message,
         type: 'sent',
         role: 'business',
         igId: recipientId,
         username: 'Business',
-        email: null,
-        phone_number: null,
-        location: null,
       });
 
       await respondAndLog(
@@ -330,17 +319,11 @@ async function processMessagingEvent(messageEvent) {
         userInfo?.username || '',
         businessDetails
       );
-    } else {
-      console.error(
-        `[ERROR] assistantHandler did not return a valid response for businessId=${businessId}`
-      );
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
-
-
 
 
 
