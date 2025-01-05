@@ -71,30 +71,43 @@ router.use('/', webhookLimiter, express.json({ verify: verifyFacebookSignature }
  * @returns {Promise<number|null>} Business ID or null if not found.
  */
 async function fetchBusinessIdFromInstagramId(igId) {
-  // Validate igId before proceeding
+  // Validate igId: it must be a valid number
   if (!igId || isNaN(Number(igId))) {
     console.error('[ERROR] Invalid or missing ig_id:', igId);
     return null;
   }
 
+  // Convert igId to a number (INT8)
+  const numericIgId = Number(igId);
+
+  console.log(`[DEBUG] Querying business ID for ig_id=${numericIgId}`);
+
   try {
     const { data, error } = await supabase
       .from('businesses')
       .select('id')
-      .eq('ig_id', igId)
+      .eq('ig_id', numericIgId)
       .limit(1)
       .single();
 
-    if (error || !data) {
-      console.error(`[ERROR] Could not fetch businessId for Instagram ID ${igId}:`, error?.message || 'No data found');
+    if (error) {
+      console.error(`[ERROR] Supabase error for ig_id=${numericIgId}:`, error.message);
       return null;
     }
+
+    if (!data) {
+      console.error(`[ERROR] No data found for ig_id=${numericIgId}`);
+      return null;
+    }
+
+    console.log(`[DEBUG] Successfully retrieved business ID: ${data.id}`);
     return data.id;
   } catch (err) {
-    console.error('[ERROR] Exception while fetching businessId:', err.message);
+    console.error(`[ERROR] Exception during database query for ig_id=${numericIgId}:`, err.message, err.stack);
     return null;
   }
 }
+
 
 /**
  * Send a response message to the user and log it as "sent" by the business.
