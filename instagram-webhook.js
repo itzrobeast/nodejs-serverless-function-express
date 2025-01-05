@@ -331,22 +331,48 @@ async function processMessagingEvent(messageEvent) {
 router.post('/', async (req, res) => {
   try {
     const { object, entry } = req.body;
+
+    // Log the full request for debugging
+    console.log('[DEBUG] Full Webhook Request:', JSON.stringify(req.body, null, 2));
+
     if (object === 'instagram') {
       for (const event of entry) {
+        // Log event-level metadata
+        console.log('[DEBUG] Instagram Entry Event:', JSON.stringify(event, null, 2));
+
         if (event.messaging) {
           for (const messageEvent of event.messaging) {
+            // Log message-level details
+            console.log('[DEBUG] Messaging Event:', JSON.stringify(messageEvent, null, 2));
+
+            // Log the unique message ID and sender/recipient IDs
+            const messageId = messageEvent.message?.mid || 'No Message ID';
+            const senderId = messageEvent.sender?.id || 'Unknown Sender';
+            const recipientId = messageEvent.recipient?.id || 'Unknown Recipient';
+
+            console.log(`[DEBUG] Processing Message ID: ${messageId}, Sender: ${senderId}, Recipient: ${recipientId}`);
+
+            // Process the messaging event
             await processMessagingEvent(messageEvent);
           }
+        } else {
+          console.log('[DEBUG] Non-messaging Instagram Event:', JSON.stringify(event, null, 2));
         }
       }
+
+      // Respond that the Instagram event was handled
       return res.status(200).send('Instagram messaging handled');
     }
+
+    // Log unhandled object types
+    console.log('[WARN] Unhandled Object Type:', object);
     return res.status(400).send('Unhandled object type');
   } catch (err) {
-    console.error('[ERROR] Webhook processing failed:', err.message);
+    console.error('[ERROR] Webhook processing failed:', err.message, err.stack);
     return res.status(500).send('Webhook processing failed');
   }
 });
+
 
 // GET route for verification
 router.get('/', (req, res) => {
