@@ -167,7 +167,7 @@ async function respondAndLog(
 
 
 const lastUserMessages  = new Map(); // In-memory rate-limiting store
-
+const processedEvents = new Set();
 /**
  * Core function to process incoming messages.
  * - Logs the incoming "received" message.
@@ -187,6 +187,14 @@ async function processMessagingEvent(messageEvent) {
       console.error('[ERROR] senderId or recipientId is missing in message payload.');
       return;
     }
+
+    const uniqueEventKey = `${messageEvent.message?.mid}-${messageEvent.sender?.id}-${messageEvent.recipient?.id}-${messageEvent.timestamp}`;
+    if (processedEvents.has(uniqueEventKey)) {
+        console.log('[INFO] Duplicate event detected. Skipping processing.');
+        return;
+    }
+    processedEvents.add(uniqueEventKey);
+    setTimeout(() => processedEvents.delete(uniqueEventKey), 60 * 1000); // Keep track for 1 minute
 
     // Build a conversation key
     const conversationKey = `${senderId}-${recipientId}`;
