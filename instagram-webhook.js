@@ -79,31 +79,33 @@ async function fetchBusinessIdFromInstagramId(igId) {
 
   console.log(`[DEBUG] Received igId: ${igId}, Type: ${typeof igId}`);
 
+  // Convert to BigInt for safe handling of large numbers
+  const numericIgId = BigInt(igId);
+  console.log(`[DEBUG] Querying business ID for ig_id=${numericIgId}`);
+
   try {
-    console.log(`[DEBUG] Querying business ID for ig_id=${igId}`);
-    
     // Query the database using igId as-is
     const { data, error } = await supabase
       .from('businesses')
       .select('id')
-      .eq('ig_id', igId)
+      .eq('ig_id', numericIgId.toString()) // Convert BigInt back to string for query
       .limit(1)
       .single();
 
     if (error) {
-      console.error(`[ERROR] Supabase error for ig_id=${igId}:`, error.message);
+      console.error(`[ERROR] Supabase error for ig_id=${numericIgId}:`, error.message);
       return null;
     }
 
     if (!data) {
-      console.error(`[ERROR] No data found for ig_id=${igId}`);
+      console.error(`[ERROR] No data found for ig_id=${numericIgId}`);
       return null;
     }
 
     console.log(`[DEBUG] Successfully retrieved business ID: ${data.id}`);
     return data.id;
   } catch (err) {
-    console.error(`[ERROR] Exception during database query for ig_id=${igId}:`, err.message, err.stack);
+    console.error(`[ERROR] Exception during database query for ig_id=${numericIgId}:`, err.message, err.stack);
     return null;
   }
 }
