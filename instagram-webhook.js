@@ -226,14 +226,24 @@ async function processMessagingEvent(messageEvent) {
 
     // 1) Handle deleted messages
     if (isDeleted) {
-      if (!messageId) {
-        console.warn('[WARN] Deleted message does not have a valid message ID.');
+      // Fetch the business ID based on recipient IG ID
+      const businessId = await fetchBusinessIdFromInstagramId(recipientId);
+
+      if (!businessId) {
+        console.error('[ERROR] Business ID not found for recipient IG ID:', recipientId);
         return;
       }
-      console.log(`[INFO] Handling deleted message with ID: ${messageId}`);
-      await handleUnsentMessage(messageId);
+
+      console.log('[DEBUG] Deleting unsent message with:', { messageId, businessId });
+
+      // Call the handler
+      await handleUnsentMessage(messageId, businessId);
       return;
     }
+  } catch (err) {
+    console.error('[ERROR] Failed to process messaging event:', err.message);
+  }
+}
 
     // 2) Ignore echo or empty messages
     if (isEcho || !userMessage.trim()) {
