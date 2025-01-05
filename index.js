@@ -54,7 +54,7 @@ app.use(
     contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://mila-verse.vercel.app"], // Frontend
+        scriptSrc: ["'https://mila-verse.vercel.app'"], // Frontend
         connectSrc: ["'self'", "https://nodejs-serverless-function-express-2f0apavpt.vercel.app"], // Backend
         styleSrc: ["'self'", "'unsafe-inline'"], // Inline styles if used
         fontSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"], // Google Fonts
