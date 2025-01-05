@@ -51,19 +51,7 @@ app.use('/auth/logout', logoutRouter);
 // Middleware
 app.use(
   helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'https://mila-verse.vercel.app'"], // Frontend
-        connectSrc: ["'self'", "https://nodejs-serverless-function-express-2f0apavpt.vercel.app"], // Backend
-        styleSrc: ["'self'", "'unsafe-inline'"], // Inline styles if used
-        fontSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"], // Google Fonts
-        imgSrc: ["'self'", "data:"], // Self-hosted images and data URIs
-        objectSrc: ["'none'"], // Disallow plugins
-        frameAncestors: ["'none'"], // Prevent embedding
-        upgradeInsecureRequests: true, // Upgrade HTTP to HTTPS
-      },
-    } : false,
+    contentSecurityPolicy: false,
   })
 );
 
