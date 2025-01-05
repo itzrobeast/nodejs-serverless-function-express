@@ -161,6 +161,10 @@ async function respondAndLog(
   }
 }
 
+
+
+const lastResponseTimestamps = new Map(); // In-memory rate-limiting store
+
 /**
  * Core function to process incoming messages.
  * - Logs the incoming "received" message.
@@ -180,6 +184,21 @@ async function processMessagingEvent(messageEvent) {
       console.error('[ERROR] senderId or recipientId is missing in message payload.');
       return;
     }
+
+
+    const conversationKey = `${senderId}-${recipientId}`;
+    // Check rate limiting (skip if the last response was within 5 seconds)
+    const now = Date.now();
+    if (lastResponseTimestamps.has(conversationKey)) {
+      const lastResponseTime = lastResponseTimestamps.get(conversationKey);
+      if (now - lastResponseTime < 5000) {
+        console.log(`[INFO] Skipping response for conversationKey=${conversationKey} due to rate limiting.`);
+        return;
+      }
+    }
+    // Update the last response timestamp
+    lastResponseTimestamps.set(conversationKey, now);
+
 
     // Determine whether the message is deleted or an echo
     const isDeleted = messageEvent.message?.is_deleted || false;
