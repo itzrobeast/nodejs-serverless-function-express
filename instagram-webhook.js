@@ -174,6 +174,7 @@ async function respondAndLog(
       role: 'business',
       igId,
       username: 'Business',
+      
     });
   } catch (err) {
     console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
@@ -248,7 +249,7 @@ async function processMessagingEvent(messageEvent) {
 
     if (!businessId) {
       console.log('[INFO] Message is from a customer; no known business ID. Logging normally.');
-      await logMessage({ businessId: null, senderId, recipientId, message: userMessage, type: 'received', role: 'customer', igId: recipientId });
+      await logMessage({ businessId: null, senderId, recipientId, message: userMessage, type: 'received', role: 'customer', igId: recipientId, messageId });
       return;
     }
 
@@ -267,7 +268,7 @@ async function processMessagingEvent(messageEvent) {
       await upsertInstagramUser(senderId, userInfo, businessId, 'customer', null, recipientId);
     }
 
-    await logMessage({ businessId, senderId, recipientId, message: userMessage, type: 'received', role: 'customer', igId: recipientId, username: userInfo?.username || '' });
+    await logMessage({ businessId, senderId, recipientId, message: userMessage, type: 'received', role: 'customer', igId: recipientId, username: userInfo?.username || '', messageId });
 
     const assistantResponse = await assistantHandler({ userMessage, businessId });
     if (assistantResponse?.message) {
