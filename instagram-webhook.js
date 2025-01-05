@@ -195,7 +195,6 @@ async function processMessagingEvent(messageEvent) {
   try {
     console.log('[DEBUG] Incoming message payload:', JSON.stringify(messageEvent, null, 2));
 
-    // Extract sender and recipient IDs
     const senderId = messageEvent.sender?.id;
     const recipientId = messageEvent.recipient?.id;
 
@@ -204,112 +203,63 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    const uniqueEventKey = `${messageEvent.message?.mid}-${messageEvent.sender?.id}-${messageEvent.recipient?.id}-${messageEvent.timestamp}`;
+    const uniqueEventKey = `${messageEvent.message?.mid}-${senderId}-${recipientId}-${messageEvent.timestamp}`;
     if (processedEvents.has(uniqueEventKey)) {
-        console.log('[INFO] Duplicate event detected. Skipping processing.');
-        return;
+      console.log('[INFO] Duplicate event detected. Skipping processing.');
+      return;
     }
     processedEvents.add(uniqueEventKey);
-    setTimeout(() => processedEvents.delete(uniqueEventKey), 60 * 1000); // Keep track for 1 minute
+    setTimeout(() => processedEvents.delete(uniqueEventKey), 60 * 1000);
 
-    // Build a conversation key
-    const conversationKey = `${senderId}-${recipientId}`;
-
-    // Determine whether the message is deleted or an echo
     const isDeleted = messageEvent.message?.is_deleted || false;
     const isEcho = messageEvent.message?.is_echo || false;
     const userMessage = messageEvent.message?.text || '';
     const messageId = messageEvent.message?.mid?.trim();
 
-    // Debug logs
-    console.log(`[DEBUG] Sender IG ID: ${senderId}, Recipient IG ID: ${recipientId}`);
-
-    // 1) Handle deleted messages
-    if (isDeleted) {
-      // Fetch the business ID based on recipient IG ID
-      const businessId = await fetchBusinessIdFromInstagramId(recipientId);
-
+    let businessId = null;
+    if (isDeleted || !isEcho) {
+      businessId = await fetchBusinessIdFromInstagramId(recipientId);
       if (!businessId) {
         console.error('[ERROR] Business ID not found for recipient IG ID:', recipientId);
-        return;
       }
+    }
 
+    if (isDeleted) {
+      if (!businessId) return;
       console.log('[DEBUG] Deleting unsent message with:', { messageId, businessId });
-
-      // Call the handler
       await handleUnsentMessage(messageId, businessId);
       return;
     }
-  } catch (err) {
-    console.error('[ERROR] Failed to process messaging event:', err.message);
-  }
-}
 
-    // 2) Ignore echo or empty messages
     if (isEcho || !userMessage.trim()) {
       console.log('[INFO] Ignoring echo or empty message.');
       return;
     }
 
-    /*****************************************************************
-     * 3) Skip if user repeats the exact same message as last time
-     *****************************************************************/
-    const lastMessage = lastUserMessages.get(conversationKey);
+    const lastMessage = lastUserMessages.get(`${senderId}-${recipientId}`);
     if (lastMessage && lastMessage === userMessage) {
       console.log(`[INFO] Skipping assistant response. User repeated text: "${userMessage}"`);
-      // Optionally still log it if you want, or just skip everything
-      // For example:
-      await logMessage({
-        businessId: null, // If no business or skip your logic
-        senderId,
-        recipientId,
-        message: userMessage,
-        type: 'received',
-        role: 'customer',
-      });
-      return; // do NOT call the assistant
-    }
-
-    // Store this as the last user text for 5 minutes
-    lastUserMessages.set(conversationKey, userMessage);
-    setTimeout(() => {
-      // After 5 minutes, forget the last user text for this conversation
-      lastUserMessages.delete(conversationKey);
-    }, 1 * 60 * 1000);
-
-    // 4) Identify if the recipient is your business
-    const businessId = await fetchBusinessIdFromInstagramId(recipientId);
-    if (!businessId) {
-      console.log('[INFO] Message is from a customer; no known business ID. Logging normally.');
-      await logMessage({
-        businessId: null,
-        senderId,
-        recipientId,
-        message: userMessage,
-        type: 'received',
-        role: 'customer',
-        igId: recipientId,
-      });
+      await logMessage({ businessId: null, senderId, recipientId, message: userMessage, type: 'received', role: 'customer' });
       return;
     }
 
-    console.log(`[DEBUG] Business ID resolved for recipient IG ID: ${recipientId}`);
+    lastUserMessages.set(`${senderId}-${recipientId}`, userMessage);
+    setTimeout(() => lastUserMessages.delete(`${senderId}-${recipientId}`), 5 * 60 * 1000);
 
-    // 5) Fetch business details
+    if (!businessId) {
+      console.log('[INFO] Message is from a customer; no known business ID. Logging normally.');
+      await logMessage({ businessId: null, senderId, recipientId, message: userMessage, type: 'received', role: 'customer', igId: recipientId });
+      return;
+    }
+
     const businessDetails = await fetchBusinessDetails(businessId);
     if (!businessDetails) {
       console.error(`[ERROR] Could not fetch business details for businessId=${businessId}`);
       return;
     }
-    console.log('[DEBUG] Business details fetched:', JSON.stringify(businessDetails));
 
-    // 6) Possibly fetch & validate page access token, user info, etc.
-    //    Example: 
-    let pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id);
-    if (!pageAccessToken) {
-      pageAccessToken = await forceRefreshPageAccessToken(businessId, businessDetails.page_id);
-      if (!pageAccessToken) return;
-    }
+    const pageAccessToken = await getPageAccessToken(businessId, businessDetails.page_id) || await forceRefreshPageAccessToken(businessId, businessDetails.page_id);
+    if (!pageAccessToken) return;
 
     const userInfo = await fetchInstagramUserInfo(senderId, businessId);
     if (userInfo) {
@@ -317,48 +267,17 @@ async function processMessagingEvent(messageEvent) {
       await upsertInstagramUser(senderId, userInfo, businessId, 'customer', null, recipientId);
     }
 
-    // 7) Log the received message in DB
-    await logMessage({
-      businessId,
-      senderId,
-      recipientId,
-      message: userMessage,
-      type: 'received',
-      role: 'customer',
-      igId: recipientId,
-      username: userInfo?.username || '',
-    });
+    await logMessage({ businessId, senderId, recipientId, message: userMessage, type: 'received', role: 'customer', igId: recipientId, username: userInfo?.username || '' });
 
-    // 8) Generate assistant response
     const assistantResponse = await assistantHandler({ userMessage, businessId });
     if (assistantResponse?.message) {
-      // 9) Log + respond
-      await logMessage({
-        businessId,
-        senderId: recipientId,
-        recipientId: senderId,
-        message: assistantResponse.message,
-        type: 'sent',
-        role: 'business',
-        igId: recipientId,
-        username: 'Business',
-      });
-
-      await respondAndLog(
-        businessId,
-        senderId,
-        recipientId,
-        assistantResponse.message,
-        recipientId,
-        userInfo?.username || '',
-        businessDetails
-      );
+      await logMessage({ businessId, senderId: recipientId, recipientId: senderId, message: assistantResponse.message, type: 'sent', role: 'business', igId: recipientId, username: 'Business' });
+      await respondAndLog(businessId, senderId, recipientId, assistantResponse.message, recipientId, userInfo?.username || '', businessDetails);
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
   }
 }
-
 
 
 
