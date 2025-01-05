@@ -208,6 +208,7 @@ export async function logMessage({
   role = 'customer',
   igId = null,
   username = null,
+  messageId = null,
   email = null,
   phone_number = null,
   location = null,
@@ -234,6 +235,7 @@ export async function logMessage({
       role,
       ig_id: igId,
       sender_name: username,
+      message_id: messageId,
       email,
       phone_number,
       location,
@@ -248,6 +250,7 @@ export async function logMessage({
       .eq('recipient_id', recipientId)
       .eq('message', message)
       .eq('message_type', type)
+      .eq('message_id', messageId)
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
@@ -271,6 +274,7 @@ export async function logMessage({
         role,
         ig_id: igId,
         sender_name: username,
+        message_id: messageId,
         email,
         phone_number,
         location,
