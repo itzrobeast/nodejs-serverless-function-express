@@ -63,20 +63,53 @@ router.post('/', loginLimiter, async (req, res) => {
     const pageAccessToken = firstPage.access_token;
 
     // Step 6: Upsert Page into the Pages Table
-    const { error: pageError } = await supabase
-      .from('pages')
-      .upsert(
-        {
-          id: firstPage.id,
-          name: firstPage.name,
-          category: firstPage.category || null,
-          page_access_token: pageAccessToken,
-        },
-        { onConflict: ['id'] }
-      );
+    // Step: Upsert Page into the Pages Table
+const { data: existingPage, error: pageFetchError } = await supabase
+  .from('pages')
+  .select('id, business_id') // Select the primary key and business_id
+  .eq('page_id', firstPage.id)
+  .single();
 
-    if (pageError) throw new Error(`Page upsert failed: ${pageError.message}`);
-    console.log('[DEBUG] Page Upserted:', firstPage.id);
+if (pageFetchError && pageFetchError.code !== 'PGRST116') { // Handle only critical errors
+  throw new Error(`Error checking existing page with page_id ${firstPage.id}: ${pageFetchError.message}`);
+}
+
+if (existingPage) {
+  // If the page exists, update its information
+  const { error: pageUpdateError } = await supabase
+    .from('pages')
+    .update({
+      name: firstPage.name,
+      page_access_token: pageAccessToken, // Update the access token
+      business_id: user.business_id, // Ensure the correct business_id is linked
+    })
+    .eq('id', existingPage.id); // Use the primary key for the update
+
+  if (pageUpdateError) {
+    throw new Error(`Page update failed for existing page_id ${firstPage.id}: ${pageUpdateError.message}`);
+  }
+
+  console.log(`[INFO] Page updated successfully for page_id ${firstPage.id}, linked to business_id ${user.business_id}`);
+} else {
+  // If the page does not exist, insert it
+  const { data: newPage, error: pageInsertError } = await supabase
+    .from('pages')
+    .insert({
+      page_id: firstPage.id, // Unique identifier for the page
+      name: firstPage.name,
+      page_access_token: pageAccessToken,
+      business_id: user.business_id, // Link the business_id
+    })
+    .select()
+    .single();
+
+  if (pageInsertError) {
+    throw new Error(`Page insert failed for page_id ${firstPage.id}: ${pageInsertError.message}`);
+  }
+
+  console.log(`[INFO] Page inserted successfully with page_id ${firstPage.id}, linked to business_id ${user.business_id}`);
+}
+
 
     // Step 7: Fetch Instagram Business ID for the Page
     const fetchedIgId = await fetchInstagramIdFromFacebook(firstPage.id, pageAccessToken);
