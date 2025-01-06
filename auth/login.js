@@ -56,11 +56,29 @@ router.post('/', loginLimiter, async (req, res) => {
     if (!pagesResponse.ok) throw new Error('Failed to fetch Facebook pages.');
     const pagesData = await pagesResponse.json();
     const firstPage = pagesData.data[0];
+    if (!firstPage) throw new Error('No Facebook pages found for the user.');
+
     console.log('[DEBUG] Using First Page:', firstPage);
 
     const pageAccessToken = firstPage.access_token;
 
-    // Step 6: Fetch Instagram Business ID for the Page
+    // Step 6: Upsert Page into the Pages Table
+    const { error: pageError } = await supabase
+      .from('pages')
+      .upsert(
+        {
+          id: firstPage.id,
+          name: firstPage.name,
+          category: firstPage.category || null,
+          page_access_token: pageAccessToken,
+        },
+        { onConflict: ['id'] }
+      );
+
+    if (pageError) throw new Error(`Page upsert failed: ${pageError.message}`);
+    console.log('[DEBUG] Page Upserted:', firstPage.id);
+
+    // Step 7: Fetch Instagram Business ID for the Page
     const fetchedIgId = await fetchInstagramIdFromFacebook(firstPage.id, pageAccessToken);
     if (!fetchedIgId) {
       console.warn('[WARN] Failed to fetch Instagram Business ID (ig_id) from Facebook. Proceeding without it.');
@@ -68,7 +86,7 @@ router.post('/', loginLimiter, async (req, res) => {
       console.log(`[DEBUG] Fetched and mapped Instagram Business ID (ig_id): ${fetchedIgId}`);
     }
 
-    // Step 7: Upsert Business Owner in Supabase
+    // Step 8: Upsert Business Owner in Supabase
     const { data: user, error: userError } = await supabase
       .from('business_owners')
       .upsert(
@@ -88,7 +106,7 @@ router.post('/', loginLimiter, async (req, res) => {
     if (userError) throw new Error(`User upsert failed: ${userError.message}`);
     console.log('[DEBUG] Business Owner Upserted:', user);
 
-    // Step 8: Upsert Business
+    // Step 9: Upsert Business
     const businessData = {
       business_owner_id: user.id,
       name: `${name}'s Business`,
@@ -105,7 +123,7 @@ router.post('/', loginLimiter, async (req, res) => {
     if (businessError) throw new Error(`Business upsert failed: ${businessError.message}`);
     console.log('[DEBUG] Business Upserted:', business);
 
-    // Step 9: Set Secure Cookies
+    // Step 10: Set Secure Cookies
     res.cookie('authToken', finalAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -131,7 +149,7 @@ router.post('/', loginLimiter, async (req, res) => {
       maxAge: 3600000, // 1 hour
     });
 
-    // Step 10: Send Response
+    // Step 11: Send Response
     return res.status(200).json({
       message: 'Login successful',
       businessOwnerId: user.id,
