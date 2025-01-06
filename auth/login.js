@@ -178,7 +178,6 @@ router.post('/', loginLimiter, async (req, res) => {
         .update({
           name: firstPage.name,
           category: firstPage.category || null, // if you'd like to store category
-          category_list: firstPage.category_list || null, // store as JSON or text
           page_access_token: pageAccessToken,
           business_id: business.id, // Link to the newly upserted business
         })
@@ -201,7 +200,6 @@ router.post('/', loginLimiter, async (req, res) => {
           page_id: firstPage.id,
           name: firstPage.name,
           category: firstPage.category || null,
-          category_list: firstPage.category_list || null,
           page_access_token: pageAccessToken,
           business_id: business.id,
         })
