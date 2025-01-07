@@ -76,7 +76,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       message: 'Session verified successfully',
       businessOwner: { fb_id: tokenDetails.userId, scopes: tokenDetails.scopes },
-      businessId: data.id,
+      businessId: businessId: data.businessId,
     });
   } catch (error) {
     console.error('[ERROR] Unexpected error during session verification:', error.message);
