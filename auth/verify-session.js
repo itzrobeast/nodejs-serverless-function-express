@@ -1,3 +1,5 @@
+// File: auth/verify-session.js
+
 import { refreshUserAccessToken } from './refresh-token.js';
 import { validateFacebookToken } from '../helpers.js';
 import cookie from 'cookie';
@@ -6,11 +8,16 @@ export default async function handler(req, res) {
   try {
     console.log('[DEBUG] Incoming request to /auth/verify-session');
 
+    // --------------------------------------------
+    // Only allow POST
+    // --------------------------------------------
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
+    // --------------------------------------------
     // Parse cookies to extract tokens
+    // --------------------------------------------
     const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
     const authToken = cookies.authToken;
     const businessOwnerId = cookies.businessOwnerId ? parseInt(cookies.businessOwnerId, 10) : NaN;
@@ -25,10 +32,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // Validate token
+    // --------------------------------------------
+    // Validate token with Facebook
+    // --------------------------------------------
     const tokenDetails = await validateFacebookToken(authToken);
     if (!tokenDetails.isValid) {
       console.warn('[WARN] Token expired or invalid. Attempting to refresh...');
+      // Attempt refresh using your refreshUserAccessToken logic
       const refreshedToken = await refreshUserAccessToken(businessOwnerId, authToken);
       if (!refreshedToken) {
         console.error('[ERROR] Failed to refresh token for businessOwnerId:', businessOwnerId);
@@ -38,18 +48,24 @@ export default async function handler(req, res) {
       }
 
       console.log('[INFO] Token refreshed successfully:', refreshedToken);
+      // Set the updated cookie
       res.cookie('authToken', refreshedToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'None',
         maxAge: 3600000, // 1 hour
       });
+
       return res.status(200).json({
         message: 'Session verified and token refreshed successfully',
+        // Optionally return user info from tokenDetails
         businessOwner: { fb_id: tokenDetails.userId, scopes: tokenDetails.scopes },
       });
     }
 
+    // --------------------------------------------
+    // Token is valid; return success
+    // --------------------------------------------
     console.log('[DEBUG] Session verified successfully:', tokenDetails);
     return res.status(200).json({
       message: 'Session verified successfully',
