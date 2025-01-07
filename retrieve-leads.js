@@ -1,13 +1,11 @@
-// retrieve-leads.js
-
 import Joi from 'joi';
 import fetch from 'node-fetch';
 import express from 'express';
-import supabase from './supabaseClient.js'; // Ensure supabaseClient.js is correctly configured
+import supabase from './supabaseClient.js';
 import * as Sentry from '@sentry/node';
 
 Sentry.init({
-  dsn: process.env.SENTRY_DSN, // Ensure this is set in your environment variables
+  dsn: process.env.SENTRY_DSN, // Ensure this is set
   tracesSampleRate: 1.0,
 });
 
@@ -20,12 +18,14 @@ const leadSchema = Joi.object({
   lead_id: Joi.string().required(),
   created_time: Joi.date().required(),
   business_id: Joi.number().required(),
-  field_data: Joi.array().items(
-    Joi.object({
-      name: Joi.string().required(),
-      values: Joi.array().items(Joi.string()).required(),
-    })
-  ).required(),
+  field_data: Joi.array()
+    .items(
+      Joi.object({
+        name: Joi.string().required(),
+        values: Joi.array().items(Joi.string()).required(),
+      })
+    )
+    .required(),
   name: Joi.string().optional().allow(null, ''),
   phone: Joi.string().optional().allow(null, ''),
   email: Joi.string().email().optional().allow(null, ''),
@@ -36,7 +36,6 @@ const leadSchema = Joi.object({
 
 /**
  * Mapping of desired field keys to actual field names in field_data
- * Ensure this mapping includes all possible variations used in your Facebook Leadgen forms
  */
 const FIELD_NAME_MAPPING = {
   name: [
@@ -49,7 +48,7 @@ const FIELD_NAME_MAPPING = {
     'fullName',
     'FullName',
     'Full Name',
-    'full_name', // Added variation
+    'full_name',
   ],
   phone: [
     'phone',
@@ -58,93 +57,56 @@ const FIELD_NAME_MAPPING = {
     'contact number',
     'contactphone',
     'phonenumber',
-    'mobile number', // Added variation
-    'phone_number', // Added variation
-    'user_provided_phone_number', // Added variation
+    'mobile number',
+    'phone_number',
+    'user_provided_phone_number',
   ],
-  email: [
-    'email',
-    'email address',
-    'contact email',
-    'EmailAddress',
-    'Email Address',
-  ],
-  city: [
-    'city',
-    'town',
-    'location',
-    'City',
-    'Town',
-    'Location',
-  ],
-  status: [
-    'status',
-    'lead status',
-    'lead_status',
-    'Status',
-    'Lead Status',
-    'Lead_Status',
-  ],
+  email: ['email', 'email address', 'contact email', 'EmailAddress', 'Email Address'],
+  city: ['city', 'town', 'location', 'City', 'Town', 'Location'],
+  status: ['status', 'lead status', 'lead_status', 'Status', 'Lead Status', 'Lead_Status'],
 };
 
 /**
- * Helper function to sanitize field_data
- * Ensures that each field has a 'name' and 'values' as an array
- * Normalizes field names by trimming and converting to lowercase
- * @param {Array} fieldData - Array of field data objects
- * @returns {Array} Sanitized field data
+ * Sanitize field_data to ensure consistent structure
  */
 const sanitizeFieldData = (fieldData) => {
   return fieldData.map((field) => ({
     name: field.name ? field.name.trim().toLowerCase() : 'unnamed_field',
     values: Array.isArray(field.values)
-      ? field.values.map(value => value.trim())
+      ? field.values.map((value) => value.trim())
       : [field.values ? field.values.trim() : 'no_value'],
   }));
 };
 
 /**
- * Helper function to extract specific fields from field_data based on mappings
- * and deduplicate values if necessary.
- * @param {Array} fieldData - Array of field data objects
- * @param {string} fieldKey - The key of the field to extract (e.g., 'name', 'phone')
- * @returns {string|null} - The extracted field value or null if not found
+ * Extract a specific field from field_data using FIELD_NAME_MAPPING
  */
 const getFieldValue = (fieldData, fieldKey) => {
   const possibleNames = FIELD_NAME_MAPPING[fieldKey.toLowerCase()] || [fieldKey.toLowerCase()];
-  
-  // Filter fields that match the possible names (case-insensitive)
-  const matchingFields = fieldData.filter(item =>
+
+  // Find matching fields
+  const matchingFields = fieldData.filter((item) =>
     possibleNames.includes(item.name.trim().toLowerCase())
   );
 
   if (matchingFields.length > 0) {
-    // Extract all values from matching fields
-    const allValues = matchingFields.flatMap(field =>
-      Array.isArray(field.values) ? field.values.map(val => val.trim()) : [field.values ? field.values.trim() : '']
+    const allValues = matchingFields.flatMap((field) =>
+      Array.isArray(field.values) ? field.values.map((val) => val.trim()) : []
     );
-
-    // Deduplicate the values
     const uniqueValues = [...new Set(allValues)];
-
-    // Join the unique values into a single string
     const combinedValues = uniqueValues.join(', ');
 
     console.log(`[DEBUG] Extracted ${fieldKey}: ${combinedValues}`);
     return combinedValues;
   }
 
-  // Log the entire field_data for debugging purposes
   console.log(`[DEBUG] ${fieldKey} not found in field_data. Possible names: ${possibleNames.join(', ')}`);
   console.log(`[DEBUG] Current field_data: ${JSON.stringify(fieldData, null, 2)}`);
   return null;
 };
 
 /**
- * Helper function to fetch leadgen forms from Facebook Graph API
- * @param {string} pageId - Facebook Page ID
- * @param {string} pageAccessToken - Page-specific access token
- * @returns {Array} Array of leadgen forms
+ * Fetch leadgen forms from FB
  */
 const fetchLeadForms = async (pageId, pageAccessToken) => {
   let allForms = [];
@@ -152,7 +114,6 @@ const fetchLeadForms = async (pageId, pageAccessToken) => {
 
   while (nextPageUrl) {
     const response = await fetch(nextPageUrl);
-    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(`Failed to fetch leadgen forms: ${JSON.stringify(errorData)}`);
@@ -160,7 +121,6 @@ const fetchLeadForms = async (pageId, pageAccessToken) => {
 
     const data = await response.json();
     allForms.push(...(data.data || []));
-
     nextPageUrl = data.paging?.next || null;
   }
 
@@ -169,10 +129,7 @@ const fetchLeadForms = async (pageId, pageAccessToken) => {
 };
 
 /**
- * Helper function to fetch leads for a specific leadgen form
- * @param {string} formId - Leadgen Form ID
- * @param {string} pageAccessToken - Page-specific access token
- * @returns {Array} Array of leads
+ * Fetch leads for a specific form
  */
 const fetchLeadsForForm = async (formId, pageAccessToken) => {
   let allLeads = [];
@@ -180,7 +137,6 @@ const fetchLeadsForForm = async (formId, pageAccessToken) => {
 
   while (nextPageUrl) {
     const response = await fetch(nextPageUrl);
-    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(`Failed to fetch leads for form ${formId}: ${JSON.stringify(errorData)}`);
@@ -188,7 +144,6 @@ const fetchLeadsForForm = async (formId, pageAccessToken) => {
 
     const data = await response.json();
     allLeads.push(...(data.data || []));
-
     nextPageUrl = data.paging?.next || null;
   }
 
@@ -197,44 +152,34 @@ const fetchLeadsForForm = async (formId, pageAccessToken) => {
 };
 
 /**
- * Helper function to fetch all leads for a page by fetching all active forms and their leads
- * @param {string} pageId - Facebook Page ID
- * @param {string} pageAccessToken - Page-specific access token
- * @returns {Array} Array of all leads
+ * Fetch all leads for a page by scanning each active form
  */
 const fetchAllLeadsForPage = async (pageId, pageAccessToken) => {
-  try {
-    const forms = await fetchLeadForms(pageId, pageAccessToken);
-    const allLeads = [];
+  const forms = await fetchLeadForms(pageId, pageAccessToken);
+  const allLeads = [];
 
-    for (const form of forms) {
-      // Optionally, include all forms or filter based on criteria
-      console.log(`[DEBUG] Fetching leads for form: ${form.name} (ID: ${form.id})`);
-      try {
-        const leads = await fetchLeadsForForm(form.id, pageAccessToken);
-        // Filter out leads without valid field_data
-        const validLeads = leads.filter(lead => Array.isArray(lead.field_data));
-        if (validLeads.length !== leads.length) {
-          console.warn(`[WARN] ${leads.length - validLeads.length} leads from form ${form.id} have invalid field_data and were skipped.`);
-        }
-        allLeads.push(...validLeads);
-      } catch (formError) {
-        console.error(`[ERROR] Error fetching leads for form ${form.id}: ${formError.message}`);
-        // Continue with other forms
+  for (const form of forms) {
+    console.log(`[DEBUG] Fetching leads for form: ${form.name} (ID: ${form.id})`);
+    try {
+      const leads = await fetchLeadsForForm(form.id, pageAccessToken);
+      const validLeads = leads.filter((lead) => Array.isArray(lead.field_data));
+      if (validLeads.length !== leads.length) {
+        console.warn(
+          `[WARN] ${leads.length - validLeads.length} leads from form ${form.id} have invalid field_data and were skipped.`
+        );
       }
+      allLeads.push(...validLeads);
+    } catch (formError) {
+      console.error(`[ERROR] Error fetching leads for form ${form.id}: ${formError.message}`);
+      // continue
     }
-
-    return allLeads;
-  } catch (error) {
-    console.error(`[ERROR] Failed to fetch all leads for page ${pageId}: ${error.message}`);
-    throw error;
   }
+
+  return allLeads;
 };
 
 /**
- * Optional: Validate the page access token using Facebook's debug_token endpoint
- * @param {string} pageAccessToken - Page access token to validate
- * @returns {boolean} Whether the token is valid
+ * Optional: Validate the page token with Facebook
  */
 const validatePageToken = async (pageAccessToken) => {
   try {
@@ -242,8 +187,8 @@ const validatePageToken = async (pageAccessToken) => {
     const appSecret = process.env.FACEBOOK_APP_SECRET;
 
     if (!appId || !appSecret) {
-      console.warn('[WARN] Missing FACEBOOK_APP_ID or FACEBOOK_APP_SECRET for token validation.');
-      return true; // Skip validation if missing
+      console.warn('[WARN] Missing FACEBOOK_APP_ID or FACEBOOK_APP_SECRET, skipping token validation.');
+      return true;
     }
 
     const response = await fetch(
@@ -265,10 +210,7 @@ const validatePageToken = async (pageAccessToken) => {
 };
 
 /**
- * Helper function to store leads in Supabase
- * @param {Array} leads - Array of lead objects
- * @param {string} businessId - Business ID to associate the leads with
- * @returns {void}
+ * Store leads in Supabase
  */
 const storeLeadsInSupabase = async (leads, businessId) => {
   try {
@@ -277,31 +219,27 @@ const storeLeadsInSupabase = async (leads, businessId) => {
       return;
     }
 
-    // Prepare leads for insertion
     const formattedLeads = leads.map((lead) => {
       const sanitizedFieldData = sanitizeFieldData(lead.field_data);
 
       return {
         lead_id: lead.id,
-        created_time: new Date(lead.created_time), // Ensure proper date format
-        business_id: businessId,
-        field_data: sanitizedFieldData, // Store as JSON object
+        created_time: new Date(lead.created_time),
+        business_id: Number(businessId),
+        field_data: sanitizedFieldData,
         name: getFieldValue(sanitizedFieldData, 'name'),
         phone: getFieldValue(sanitizedFieldData, 'phone'),
         email: getFieldValue(sanitizedFieldData, 'email'),
         city: getFieldValue(sanitizedFieldData, 'city'),
         status: getFieldValue(sanitizedFieldData, 'status'),
-        // Add other fields as necessary
       };
     });
 
-    // Validate each lead against the schema
     const validatedLeads = [];
     const invalidLeads = [];
 
     formattedLeads.forEach((lead) => {
       const { error, value } = leadSchema.validate(lead, { abortEarly: false });
-
       if (error) {
         console.error(`[ERROR] Validation failed for lead ID ${lead.lead_id}:`, error.details);
         invalidLeads.push({ lead, errors: error.details });
@@ -310,14 +248,13 @@ const storeLeadsInSupabase = async (leads, businessId) => {
       }
     });
 
-    // Handle invalid leads (e.g., log, notify, etc.)
     if (invalidLeads.length > 0) {
       console.warn(`[WARN] ${invalidLeads.length} leads failed validation and will not be inserted.`);
-      // Optionally, insert invalid leads into a separate table for review
+
       const invalidFormattedLeads = invalidLeads.map(({ lead, errors }) => ({
         lead_id: lead.lead_id,
         business_id: lead.business_id,
-        errors: errors.map(err => err.message).join('; '),
+        errors: errors.map((err) => err.message).join('; '),
         field_data: lead.field_data,
         name: lead.name,
         phone: lead.phone,
@@ -325,18 +262,21 @@ const storeLeadsInSupabase = async (leads, businessId) => {
         city: lead.city,
         status: lead.status,
         created_time: lead.created_time,
-        // Include other relevant fields as needed
       }));
 
       if (invalidFormattedLeads.length > 0) {
         const { error: insertInvalidError } = await supabase
-          .from('invalid_leads') // Ensure you have this table created
+          .from('invalid_leads')
           .insert(invalidFormattedLeads);
 
         if (insertInvalidError) {
-          console.error(`[ERROR] Failed to insert invalid leads into Supabase: ${insertInvalidError.message}`);
+          console.error(
+            `[ERROR] Failed to insert invalid leads into Supabase: ${insertInvalidError.message}`
+          );
         } else {
-          console.log(`[DEBUG] Successfully inserted ${invalidFormattedLeads.length} invalid leads into Supabase.`);
+          console.log(
+            `[DEBUG] Successfully inserted ${invalidFormattedLeads.length} invalid leads into Supabase.`
+          );
         }
       }
     }
@@ -346,7 +286,6 @@ const storeLeadsInSupabase = async (leads, businessId) => {
       return;
     }
 
-    // Insert validated leads, ignoring duplicates based on lead_id and business_id
     const { error } = await supabase
       .from('leads')
       .upsert(validatedLeads, { onConflict: ['business_id', 'lead_id'] });
@@ -364,51 +303,59 @@ const storeLeadsInSupabase = async (leads, businessId) => {
 
 /**
  * GET /retrieve-leads
- * Fetches leads from Facebook using stored page access tokens and stores them in Supabase
- * Requires businessOwnerId and businessId from cookies
+ *
+ * Expects:
+ *   - businessOwnerId, businessId from query (or use your own approach)
+ * e.g. GET /retrieve-leads?businessOwnerId=123&businessId=456
  */
 router.get('/', Sentry.Handlers.requestHandler(), async (req, res) => {
   try {
-    const { businessOwnerId, businessId } = req.cookies;
+    // 1) Retrieve businessOwnerId, businessId from query (instead of cookies)
+    const { businessOwnerId, businessId } = req.query;
 
-    console.log('[DEBUG] Parsed Cookies:', { businessOwnerId, businessId });
+    console.log('[DEBUG] Query params:', { businessOwnerId, businessId });
 
     if (!businessOwnerId || !businessId) {
-      console.error('[ERROR] Missing businessOwnerId or businessId in cookies.');
-      return res.status(400).json({ error: 'Missing businessOwnerId or businessId in cookies.' });
+      console.error('[ERROR] Missing businessOwnerId or businessId in query.');
+      return res
+        .status(400)
+        .json({ error: 'Missing businessOwnerId or businessId in query parameters.' });
     }
 
-    // 1. Retrieve the page access token and page ID from 'page_access_tokens' table
+    // 2) Retrieve the page access token from your database
+    //    Adjust these table/column names to match your schema
     const { data: pageRow, error: pageRowError } = await supabase
       .from('page_access_tokens')
       .select('page_id, page_access_token')
-      .eq('business_owner_id', userId)
+      .eq('business_owner_id', businessOwnerId)
       .eq('business_id', businessId)
       .single();
 
     if (pageRowError || !pageRow) {
-      console.error(`[ERROR] Page access token not found for businessOwnerId: ${businessOwnerId}, businessId: ${businessId}. Error: ${pageRowError?.message}`);
+      console.error(
+        `[ERROR] Page access token not found for businessOwnerId: ${businessOwnerId}, businessId: ${businessId}.`
+      );
       return res.status(404).json({ error: 'Page access token not found.' });
     }
 
     const { page_id: pageId, page_access_token: pageAccessToken } = pageRow;
-    console.log('[DEBUG] Retrieved Page Token:', { pageId, pageAccessToken });
+    console.log('[DEBUG] Retrieved Page Token:', { pageId, pageAccessToken: '******' });
 
-    // 2. (Optional) Validate the page access token
+    // 3) (Optional) Validate the page token
     const isValid = await validatePageToken(pageAccessToken);
     if (!isValid) {
       console.error('[ERROR] Invalid or expired page access token.');
       return res.status(403).json({ error: 'Invalid or expired page access token.' });
     }
 
-    // 3. Fetch all leads for the page
+    // 4) Fetch leads from Facebook
     const leads = await fetchAllLeadsForPage(pageId, pageAccessToken);
     console.log(`[DEBUG] Retrieved ${leads.length} leads for businessId: ${businessId}`);
 
-    // 4. Store leads in Supabase
+    // 5) Store leads in Supabase
     await storeLeadsInSupabase(leads, businessId);
 
-    // 5. Fetch and return the leads to frontend
+    // 6) Fetch and return leads from the database
     const { data: insertedLeads, error: insertError } = await supabase
       .from('leads')
       .select('*')
@@ -416,7 +363,9 @@ router.get('/', Sentry.Handlers.requestHandler(), async (req, res) => {
       .order('created_time', { ascending: false });
 
     if (insertError) {
-      console.error(`[ERROR] Failed to fetch inserted leads for businessId: ${businessId}: ${insertError.message}`);
+      console.error(
+        `[ERROR] Failed to fetch inserted leads for businessId: ${businessId}: ${insertError.message}`
+      );
       return res.status(500).json({ error: 'Failed to fetch leads after insertion.' });
     }
 
