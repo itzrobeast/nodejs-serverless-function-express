@@ -50,21 +50,47 @@ router.post('/', async (req, res) => {
 
     console.log('[DEBUG] /setup-business route hit with payload:', req.body);
 
-    // Step 1: Validate Application ID
+    // Validate Application ID
     if (appId !== 'milaVerse') {
       return res.status(400).json({ error: 'Invalid application' });
     }
 
-    // Step 2: Upsert User in Supabase
-    const { error: userError } = await supabase
+    // Step 1: Upsert User in Supabase
+    const { data: owner, error: userError } = await supabase
       .from('business_owners')
-      .upsert({ fb_id: user.id, name: user.name, email: contactEmail });
+      .upsert({ fb_id: user.id, name: user.name, email: contactEmail }, { onConflict: 'fb_id' })
+      .select()
+      .single();
 
     if (userError) {
       throw new Error(`Failed to upsert user: ${userError.message}`);
     }
 
-    console.log('[INFO] User upserted successfully');
+    console.log('[INFO] User upserted successfully:', owner);
+
+    // Step 2: Fetch or Create Business
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .upsert(
+        {
+          business_owner_id: owner.id,
+          name: businessName || `${user.name}'s Business`,
+          contact_email: contactEmail,
+          locations,
+          insurance_policies: insurancePolicies,
+          objections,
+          ai_knowledge_base: aiKnowledgeBase,
+        },
+        { onConflict: 'business_owner_id' }
+      )
+      .select()
+      .single();
+
+    if (businessError) {
+      throw new Error(`Failed to upsert business: ${businessError.message}`);
+    }
+
+    console.log('[INFO] Business upserted successfully:', business);
 
     // Step 3: Fetch Facebook Pages
     const pagesResponse = await fetch(
@@ -82,53 +108,81 @@ router.post('/', async (req, res) => {
       const { id: pageId, access_token: pageAccessToken, name: pageName } = page;
 
       // Fetch Instagram Business Account ID
-
-
-
-      
       const igId = await fetchInstagramIdFromFacebook(pageId, pageAccessToken);
 
-      
-      // Validate igId
-if (!igId || typeof igId !== 'string') {
-  console.error('[ERROR] Invalid ig_id detected during business setup:', igId);
-  return null;
-}
-
-
-      // Upsert Business in Supabase
-      const { error: businessError } = await supabase.from('businesses').upsert({
-        name: businessName || `${pageName} Business`,
-        owner_id: user.id,
-        contact_email: contactEmail,
-        locations,
-        insurance_policies: insurancePolicies,
-        objections,
-        ai_knowledge_base: aiKnowledgeBase,
-        page_id: pageId,
-        ig_id: igId,
-      });
-
-      if (businessError) {
-        throw new Error(`Failed to upsert business for Page ID ${pageId}: ${businessError.message}`);
+      if (!igId) {
+        console.warn('[WARN] No Instagram Business ID found for page:', pageId);
       }
 
-      console.log(`[INFO] Business upserted for Page ID ${pageId}`);
+      // Upsert Page in the Pages Table
+      const { data: existingPage, error: pageFetchError } = await supabase
+        .from('pages')
+        .select('id')
+        .eq('page_id', pageId)
+        .single();
 
-      // Subscribe Page to Webhook
-      const subscriptionSuccess = await subscribePageToWebhook(pageId, pageAccessToken);
+      if (pageFetchError && pageFetchError.code !== 'PGRST116') {
+        throw new Error(
+          `Error checking existing page with page_id ${pageId}: ${pageFetchError.message}`
+        );
+      }
 
-      if (!subscriptionSuccess) {
-        console.warn(`[WARN] Failed to subscribe Page ID ${pageId} to webhook`);
+      if (existingPage) {
+        // Update existing page
+        const { error: pageUpdateError } = await supabase
+          .from('pages')
+          .update({
+            name: pageName,
+            page_access_token: pageAccessToken,
+            business_id: business.id, // Link to the current business
+          })
+          .eq('id', existingPage.id);
+
+        if (pageUpdateError) {
+          throw new Error(
+            `Page update failed for page_id ${pageId}: ${pageUpdateError.message}`
+          );
+        }
+
+        console.log(
+          `[INFO] Page updated successfully for page_id ${pageId}, linked to business_id ${business.id}`
+        );
+      } else {
+        // Insert a new page
+        const { data: newPage, error: pageInsertError } = await supabase
+          .from('pages')
+          .insert({
+            page_id: pageId,
+            name: pageName,
+            page_access_token: pageAccessToken,
+            business_id: business.id, // Link to the current business
+          })
+          .select()
+          .single();
+
+        if (pageInsertError) {
+          throw new Error(
+            `Page insert failed for page_id ${pageId}: ${pageInsertError.message}`
+          );
+        }
+
+        console.log(
+          `[INFO] Page inserted successfully with page_id ${pageId}, linked to business_id ${business.id}`
+        );
       }
     }
 
-    // Step 5: Send Success Response
-    res.status(200).json({ message: 'Business setup successful' });
+    // Final Response
+    res.status(200).json({
+      message: 'Business setup successful',
+      businessId: business.id,
+      businessOwnerId: owner.id,
+    });
   } catch (error) {
     console.error('[ERROR] /setup-business:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 export default router;
