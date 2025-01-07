@@ -106,6 +106,7 @@ router.post('/', loginLimiter, async (req, res) => {
           fb_id,
           name,
           email,
+          businessId,
           page_id: firstPage.id,
           ig_id: fetchedIgId || null,
           user_access_token: finalAccessToken,
@@ -125,6 +126,7 @@ router.post('/', loginLimiter, async (req, res) => {
     // --------------------------------------------
     const businessPayload = {
       business_owner_id: owner.id,
+      business_id: business.id
       name: `${name}'s Business`,
       page_id: firstPage.id,
       ig_id: fetchedIgId || null,
