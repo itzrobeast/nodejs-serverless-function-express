@@ -143,22 +143,48 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Business Owner Upserted:', owner);
 
     // Upsert Business
-    const businessPayload = {
-      business_owner_id: owner.id,
-      name: `${name}'s Business`,
-      page_id: firstPage.id,
-      ig_id: firstPage.ig_id || null,
-    };
+    // Upsert Business
+const businessPayload = {
+  business_owner_id: owner.id,
+  name: `${name}'s Business`,
+  page_id: firstPage.id,
+  ig_id: firstPage.ig_id || null, // Allow nullable ig_id
+};
 
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(businessPayload, { onConflict: 'business_owner_id' })
-      .select()
-      .single();
-    if (businessError) {
-      throw new Error(`Business upsert failed: ${businessError.message}`);
-    }
-    console.log('[DEBUG] Business Upserted:', business);
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .upsert(businessPayload, { onConflict: 'business_owner_id' })
+  .select()
+  .single();
+
+if (businessError) {
+  throw new Error(`Business upsert failed: ${businessError.message}`);
+}
+console.log('[DEBUG] Business Upserted:', business);
+
+// Handle Instagram Conversations only if ig_id is present
+if (business.ig_id) {
+  console.log('[DEBUG] Business is connected to Instagram. Handling conversations...');
+
+  // Fetch existing conversations or perform related logic
+  // Example: Upsert new conversations for the IG account
+  const igConversationsPayload = {
+    ig_id: business.ig_id,
+    conversation_data: {}, // Add your conversation data here
+  };
+
+  const { error: igConversationsError } = await supabase
+    .from('instagram_conversations')
+    .upsert(igConversationsPayload)
+    .select();
+
+  if (igConversationsError) {
+    throw new Error(`Failed to upsert Instagram conversations: ${igConversationsError.message}`);
+  }
+} else {
+  console.log('[DEBUG] Business is not connected to Instagram. Skipping conversations...');
+}
+
 
     // Link Business ID to Business Owner
     const { error: ownerUpdateError } = await supabase
