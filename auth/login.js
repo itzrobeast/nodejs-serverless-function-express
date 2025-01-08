@@ -154,24 +154,45 @@ const businessPayload = {
 if (businessPayload.ig_id === null) {
   console.log('[DEBUG] Business has no Instagram ID.');
 
-  // Remove rows in instagram_users for the previous ig_id (if any)
+  // Remove rows in instagram_users for the previous ig_id
   const { error: deleteUsersError } = await supabase
     .from('instagram_users')
     .delete()
-    .eq('business_ig_id', businessPayload.ig_id);
+    .is('ig_id', null); // Use `.is` for null-safe checks
 
   if (deleteUsersError) {
     console.warn('[WARN] Failed to delete outdated Instagram users:', deleteUsersError.message);
   }
 
-  // Remove rows in instagram_conversations for the previous ig_id (if any)
+  // Remove rows in instagram_conversations for the previous ig_id
   const { error: deleteConversationsError } = await supabase
+    .from('instagram_conversations')
+    .delete()
+    .is('ig_id', null); // Use `.is` for null-safe checks
+
+  if (deleteConversationsError) {
+    console.warn('[WARN] Failed to delete outdated Instagram conversations:', deleteConversationsError.message);
+  }
+} else {
+  console.log('[DEBUG] Business has an Instagram ID. Cleaning up stale data...');
+
+  // Clean up rows with the existing ig_id
+  const { error: cleanUsersError } = await supabase
+    .from('instagram_users')
+    .delete()
+    .eq('ig_id', businessPayload.ig_id);
+
+  if (cleanUsersError) {
+    console.warn('[WARN] Failed to clean Instagram users:', cleanUsersError.message);
+  }
+
+  const { error: cleanConversationsError } = await supabase
     .from('instagram_conversations')
     .delete()
     .eq('ig_id', businessPayload.ig_id);
 
-  if (deleteConversationsError) {
-    console.warn('[WARN] Failed to delete outdated Instagram conversations:', deleteConversationsError.message);
+  if (cleanConversationsError) {
+    console.warn('[WARN] Failed to clean Instagram conversations:', cleanConversationsError.message);
   }
 }
 
@@ -187,23 +208,13 @@ if (businessError) {
 }
 console.log('[DEBUG] Business Upserted:', business);
 
-// Safeguard: Skip Instagram logic if ig_id is null
+// Safeguard: Skip Instagram-specific logic if ig_id is null
 if (!business.ig_id) {
   console.log('[DEBUG] Business does not have an Instagram ID. Skipping Instagram-specific logic...');
 } else {
   console.log('[DEBUG] Business has an Instagram ID. Handling Instagram-specific logic...');
 
-  // Clean up stale Instagram conversations
-  const { error: cleanConversationsError } = await supabase
-    .from('instagram_conversations')
-    .delete()
-    .eq('ig_id', business.ig_id);
-
-  if (cleanConversationsError) {
-    console.warn('[WARN] Failed to clean Instagram conversations:', cleanConversationsError.message);
-  }
-
-  // Upsert Instagram conversations
+  // Upsert Instagram Conversations
   const igConversationsPayload = {
     ig_id: business.ig_id,
     conversation_data: {}, // Add relevant conversation data here
@@ -218,6 +229,7 @@ if (!business.ig_id) {
     throw new Error(`Failed to upsert Instagram conversations: ${igConversationsError.message}`);
   }
 }
+
 
   
 
