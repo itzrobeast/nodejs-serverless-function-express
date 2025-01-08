@@ -130,6 +130,7 @@ router.post('/', loginLimiter, async (req, res) => {
           name,
           email,
           page_id: firstPage.id,
+          ig_id: firstPage.ig_id || null,
           user_access_token: finalAccessToken,
         },
         { onConflict: 'fb_id' }
