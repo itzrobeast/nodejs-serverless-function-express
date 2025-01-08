@@ -143,7 +143,6 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Business Owner Upserted:', owner);
 
     // Upsert Business
-    // Upsert Business
 const businessPayload = {
   business_owner_id: owner.id,
   name: `${name}'s Business`,
@@ -162,15 +161,16 @@ if (businessError) {
 }
 console.log('[DEBUG] Business Upserted:', business);
 
-// Handle Instagram Conversations only if ig_id is present
-if (business.ig_id) {
-  console.log('[DEBUG] Business is connected to Instagram. Handling conversations...');
+// Safeguard: Skip Instagram Conversations if ig_id is null
+if (!business.ig_id) {
+  console.log('[DEBUG] Business does not have an Instagram ID. Skipping Instagram conversations...');
+} else {
+  console.log('[DEBUG] Business has an Instagram ID. Handling Instagram conversations...');
 
-  // Fetch existing conversations or perform related logic
-  // Example: Upsert new conversations for the IG account
+  // Example logic for upserting Instagram conversations
   const igConversationsPayload = {
     ig_id: business.ig_id,
-    conversation_data: {}, // Add your conversation data here
+    conversation_data: {}, // Add relevant conversation data here
   };
 
   const { error: igConversationsError } = await supabase
@@ -181,8 +181,6 @@ if (business.ig_id) {
   if (igConversationsError) {
     throw new Error(`Failed to upsert Instagram conversations: ${igConversationsError.message}`);
   }
-} else {
-  console.log('[DEBUG] Business is not connected to Instagram. Skipping conversations...');
 }
 
 
