@@ -141,6 +141,7 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error(`User upsert failed: ${ownerError.message}`);
     }
     console.log('[DEBUG] Business Owner Upserted:', owner);
+
 // Upsert Business
 const businessPayload = {
   business_owner_id: owner.id,
@@ -149,7 +150,22 @@ const businessPayload = {
   ig_id: firstPage.ig_id || null, // Allow nullable ig_id
 };
 
-// Upsert Business and handle errors
+// Handle existing Instagram conversations if ig_id changes or is null
+if (businessPayload.ig_id === null) {
+  console.log('[DEBUG] Business has no Instagram ID. Deleting old Instagram conversations...');
+
+  // Remove rows in instagram_conversations for the previous ig_id (if any)
+  const { error: deleteConversationsError } = await supabase
+    .from('instagram_conversations')
+    .delete()
+    .eq('ig_id', businessPayload.ig_id);
+
+  if (deleteConversationsError) {
+    console.warn('[WARN] Failed to delete outdated Instagram conversations:', deleteConversationsError.message);
+  }
+}
+
+// Upsert Business
 const { data: business, error: businessError } = await supabase
   .from('businesses')
   .upsert(businessPayload, { onConflict: 'business_owner_id' })
@@ -157,28 +173,8 @@ const { data: business, error: businessError } = await supabase
   .single();
 
 if (businessError) {
-  if (businessError.message.includes('violates foreign key constraint')) {
-    console.warn('[WARN] Clearing outdated Instagram conversations...');
-    // Clear outdated Instagram conversations before retrying
-    await supabase
-      .from('instagram_conversations')
-      .delete()
-      .eq('ig_id', businessPayload.ig_id);
-
-    console.log('[DEBUG] Retrying Business Upsert...');
-    const retryBusiness = await supabase
-      .from('businesses')
-      .upsert(businessPayload, { onConflict: 'business_owner_id' })
-      .select()
-      .single();
-    if (retryBusiness.error) {
-      throw new Error(`Retry Business upsert failed: ${retryBusiness.error.message}`);
-    }
-  } else {
-    throw new Error(`Business upsert failed: ${businessError.message}`);
-  }
+  throw new Error(`Business upsert failed: ${businessError.message}`);
 }
-
 console.log('[DEBUG] Business Upserted:', business);
 
 // Safeguard: Skip Instagram Conversations if ig_id is null
@@ -187,7 +183,7 @@ if (!business.ig_id) {
 } else {
   console.log('[DEBUG] Business has an Instagram ID. Handling Instagram conversations...');
 
-  // Upsert Instagram Conversations
+  // Example logic for upserting Instagram conversations
   const igConversationsPayload = {
     ig_id: business.ig_id,
     conversation_data: {}, // Add relevant conversation data here
