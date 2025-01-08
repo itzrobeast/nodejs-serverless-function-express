@@ -143,67 +143,83 @@ router.post('/', loginLimiter, async (req, res) => {
     console.log('[DEBUG] Business Owner Upserted:', owner);
 
     // Upsert Business
-    const businessPayload = {
-      business_owner_id: owner.id,
-      name: `${name}'s Business`,
-      page_id: firstPage.id,
-      ig_id: firstPage.ig_id || null, // Allow nullable ig_id
-    };
+const businessPayload = {
+  business_owner_id: owner.id,
+  name: `${name}'s Business`,
+  page_id: firstPage.id,
+  ig_id: firstPage.ig_id || null, // Allow nullable ig_id
+};
 
-    // Handle existing Instagram conversations if ig_id changes or is null
-    if (businessPayload.ig_id === null) {
-      console.log('[DEBUG] Business has no Instagram ID. Deleting old Instagram conversations...');
+// Handle existing Instagram users and conversations if ig_id changes or is null
+if (businessPayload.ig_id === null) {
+  console.log('[DEBUG] Business has no Instagram ID.');
 
-      // Remove rows in instagram_conversations for the previous ig_id (if any)
-      const { error: deleteConversationsError } = await supabase
-        .from('instagram_conversations')
-        .delete()
-        .eq('ig_id', businessPayload.ig_id);
+  // Remove rows in instagram_users for the previous ig_id (if any)
+  const { error: deleteUsersError } = await supabase
+    .from('instagram_users')
+    .delete()
+    .eq('business_ig_id', businessPayload.ig_id);
 
-      if (deleteConversationsError) {
-        console.warn('[WARN] Failed to delete outdated Instagram conversations:', deleteConversationsError.message);
-      }
-    }
+  if (deleteUsersError) {
+    console.warn('[WARN] Failed to delete outdated Instagram users:', deleteUsersError.message);
+  }
 
-    // Upsert Business
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(businessPayload, { onConflict: 'business_owner_id' })
-      .select()
-      .single();
+  // Remove rows in instagram_conversations for the previous ig_id (if any)
+  const { error: deleteConversationsError } = await supabase
+    .from('instagram_conversations')
+    .delete()
+    .eq('ig_id', businessPayload.ig_id);
 
-    if (businessError) {
-      throw new Error(`Business upsert failed: ${businessError.message}`);
-    }
-    console.log('[DEBUG] Business Upserted:', business);
+  if (deleteConversationsError) {
+    console.warn('[WARN] Failed to delete outdated Instagram conversations:', deleteConversationsError.message);
+  }
+}
 
-    // Safeguard: Skip Instagram Conversations if ig_id is null
-    if (!business.ig_id) {
-      console.log('[DEBUG] Business does not have an Instagram ID. Skipping Instagram conversations...');
-    } else {
-      console.log('[DEBUG] Business has an Instagram ID. Handling Instagram conversations...');
+// Upsert Business
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .upsert(businessPayload, { onConflict: 'business_owner_id' })
+  .select()
+  .single();
 
-      // Clean up any stale Instagram conversations before upserting
-      await supabase
-        .from('instagram_conversations')
-        .delete()
-        .eq('ig_id', business.ig_id);
+if (businessError) {
+  throw new Error(`Business upsert failed: ${businessError.message}`);
+}
+console.log('[DEBUG] Business Upserted:', business);
 
-      // Upsert Instagram Conversations
-      const igConversationsPayload = {
-        ig_id: business.ig_id,
-        conversation_data: {}, // Add relevant conversation data here
-      };
+// Safeguard: Skip Instagram logic if ig_id is null
+if (!business.ig_id) {
+  console.log('[DEBUG] Business does not have an Instagram ID. Skipping Instagram-specific logic...');
+} else {
+  console.log('[DEBUG] Business has an Instagram ID. Handling Instagram-specific logic...');
 
-      const { error: igConversationsError } = await supabase
-        .from('instagram_conversations')
-        .upsert(igConversationsPayload)
-        .select();
+  // Clean up stale Instagram conversations
+  const { error: cleanConversationsError } = await supabase
+    .from('instagram_conversations')
+    .delete()
+    .eq('ig_id', business.ig_id);
 
-      if (igConversationsError) {
-        throw new Error(`Failed to upsert Instagram conversations: ${igConversationsError.message}`);
-      }
-    }
+  if (cleanConversationsError) {
+    console.warn('[WARN] Failed to clean Instagram conversations:', cleanConversationsError.message);
+  }
+
+  // Upsert Instagram conversations
+  const igConversationsPayload = {
+    ig_id: business.ig_id,
+    conversation_data: {}, // Add relevant conversation data here
+  };
+
+  const { error: igConversationsError } = await supabase
+    .from('instagram_conversations')
+    .upsert(igConversationsPayload)
+    .select();
+
+  if (igConversationsError) {
+    throw new Error(`Failed to upsert Instagram conversations: ${igConversationsError.message}`);
+  }
+}
+
+  
 
     // Link Business ID to Business Owner
     const { error: ownerUpdateError } = await supabase
