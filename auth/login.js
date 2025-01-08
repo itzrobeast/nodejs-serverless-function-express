@@ -25,6 +25,7 @@ const loginSchema = Joi.object({
 // POST /auth/login
 router.post('/', loginLimiter, async (req, res) => {
   try {
+    // Validate input
     const { error, value } = loginSchema.validate(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
@@ -39,7 +40,6 @@ router.post('/', loginLimiter, async (req, res) => {
 
     const refreshedToken = await refreshUserAccessToken(tokenDetails.userId, accessToken);
     const finalAccessToken = refreshedToken || accessToken;
-    console.log('[DEBUG] Final Access Token:', finalAccessToken);
 
     // Fetch Facebook User Data
     const fbUserResponse = await fetch(
@@ -50,8 +50,6 @@ router.post('/', loginLimiter, async (req, res) => {
     }
     const fbUser = await fbUserResponse.json();
     const { id: fb_id, name, email } = fbUser;
-
-    console.log('[DEBUG] Facebook User Data:', fbUser);
 
     // Fetch Facebook Pages
     const pagesResponse = await fetch(
@@ -80,9 +78,6 @@ router.post('/', loginLimiter, async (req, res) => {
       });
     }
 
-    console.log('[DEBUG] Upserted Pages:', upsertedPages);
-
-    // Use the first page for owner and business data
     const firstPage = upsertedPages[0];
 
     // Upsert Business Owner
@@ -106,8 +101,6 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error(`User upsert failed: ${ownerError.message}`);
     }
 
-    console.log('[DEBUG] Business Owner Upserted:', owner);
-
     // Construct Business Payload
     const businessPayload = {
       business_owner_id: owner.id,
@@ -115,8 +108,6 @@ router.post('/', loginLimiter, async (req, res) => {
       page_id: firstPage.id,
       ig_id: firstPage.ig_id || null,
     };
-
-    console.log('[DEBUG] Business Payload:', businessPayload);
 
     // Upsert Business
     const { data: business, error: businessError } = await supabase
@@ -129,15 +120,46 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error(`Business upsert failed: ${businessError.message}`);
     }
 
-    console.log('[DEBUG] Business Upserted:', business);
-
-    // Handle Instagram Cleanup
-    if (business.ig_id) {
-      console.log('[DEBUG] Cleaning up Instagram users and conversations...');
-      await supabase.from('instagram_users').delete().eq('ig_id', business.ig_id);
-      await supabase.from('instagram_conversations').delete().eq('ig_id', business.ig_id);
+    // Handle Instagram Cleanup and Logic
+    if (!business.ig_id) {
+      console.log('[DEBUG] Business does not have an Instagram ID. Skipping Instagram logic...');
     } else {
-      console.log('[DEBUG] Skipping Instagram-specific cleanup for null IG ID.');
+      console.log('[DEBUG] Business has an Instagram ID. Handling Instagram-specific logic...');
+
+      // Clean up old Instagram users
+      const { error: cleanUsersError } = await supabase
+        .from('instagram_users')
+        .delete()
+        .eq('ig_id', business.ig_id);
+
+      if (cleanUsersError) {
+        console.warn('[WARN] Failed to clean Instagram users:', cleanUsersError.message);
+      }
+
+      // Clean up old Instagram conversations
+      const { error: cleanConversationsError } = await supabase
+        .from('instagram_conversations')
+        .delete()
+        .eq('ig_id', business.ig_id);
+
+      if (cleanConversationsError) {
+        console.warn('[WARN] Failed to clean Instagram conversations:', cleanConversationsError.message);
+      }
+
+      // Insert Instagram-specific data
+      const igConversationsPayload = {
+        ig_id: business.ig_id,
+        conversation_data: {}, // Add relevant conversation data here
+      };
+
+      const { error: igConversationsError } = await supabase
+        .from('instagram_conversations')
+        .upsert(igConversationsPayload)
+        .select();
+
+      if (igConversationsError) {
+        throw new Error(`Failed to upsert Instagram conversations: ${igConversationsError.message}`);
+      }
     }
 
     // Link Business ID to Business Owner
@@ -179,3 +201,4 @@ router.post('/', loginLimiter, async (req, res) => {
 });
 
 export default router;
+
