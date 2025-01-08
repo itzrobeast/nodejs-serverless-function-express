@@ -29,8 +29,6 @@ const loginSchema = Joi.object({
 // --------------------------------------------------
 // POST /auth/login
 // --------------------------------------------------
-// File: auth/login.js
-
 router.post('/', loginLimiter, async (req, res) => {
   try {
     // Validate input
@@ -69,15 +67,59 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error('Failed to fetch Facebook pages.');
     }
     const pagesData = await pagesResponse.json();
-    const firstPage = pagesData.data?.[0];
-    if (!firstPage) {
+
+    if (!pagesData.data || pagesData.data.length === 0) {
       throw new Error('No Facebook pages found for this user.');
     }
-    const pageAccessToken = firstPage.access_token;
-    console.log('[DEBUG] Using First Page:', firstPage);
 
-    // Fetch Instagram Business ID (optional)
-    const fetchedIgId = await fetchInstagramIdFromFacebook(firstPage.id, pageAccessToken);
+    const upsertedPages = [];
+    for (const page of pagesData.data) {
+      const pageAccessToken = page.access_token;
+
+      // Fetch Instagram Business ID (optional)
+      const fetchedIgId = await fetchInstagramIdFromFacebook(page.id, pageAccessToken);
+
+      // Upsert Page in Pages Table
+      const { data: existingPage, error: pageFetchError } = await supabase
+        .from('pages')
+        .select('id')
+        .eq('page_id', page.id)
+        .single();
+
+      if (existingPage) {
+        const { error: pageUpdateError } = await supabase
+          .from('pages')
+          .update({
+            name: page.name,
+            category: page.category || null,
+            page_access_token: pageAccessToken,
+            ig_id: fetchedIgId || null,
+          })
+          .eq('id', existingPage.id);
+        if (pageUpdateError) {
+          throw new Error(`Page update failed: ${pageUpdateError.message}`);
+        }
+      } else {
+        const { error: pageInsertError } = await supabase
+          .from('pages')
+          .insert({
+            page_id: page.id,
+            name: page.name,
+            category: page.category || null,
+            page_access_token: pageAccessToken,
+            ig_id: fetchedIgId || null,
+          });
+        if (pageInsertError) {
+          throw new Error(`Page insert failed: ${pageInsertError.message}`);
+        }
+      }
+
+      upsertedPages.push(page);
+    }
+    console.log('[DEBUG] Upserted Pages:', upsertedPages);
+
+    // Use the first page for owner and business data
+    const firstPage = upsertedPages[0];
 
     // Upsert Business Owner
     const { data: owner, error: ownerError } = await supabase
@@ -88,7 +130,6 @@ router.post('/', loginLimiter, async (req, res) => {
           name,
           email,
           page_id: firstPage.id,
-          ig_id: fetchedIgId || null,
           user_access_token: finalAccessToken,
         },
         { onConflict: 'fb_id' }
@@ -105,7 +146,7 @@ router.post('/', loginLimiter, async (req, res) => {
       business_owner_id: owner.id,
       name: `${name}'s Business`,
       page_id: firstPage.id,
-      ig_id: fetchedIgId || null,
+      ig_id: firstPage.ig_id || null,
     };
 
     const { data: business, error: businessError } = await supabase
@@ -127,41 +168,6 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error(`Failed to update business_id in business_owners: ${ownerUpdateError.message}`);
     }
     console.log('[DEBUG] Linked Business ID to Business Owner:', business.id);
-
-    // Upsert Page in Pages Table
-    const { data: existingPage, error: pageFetchError } = await supabase
-      .from('pages')
-      .select('id')
-      .eq('page_id', firstPage.id)
-      .single();
-
-    if (existingPage) {
-      const { error: pageUpdateError } = await supabase
-        .from('pages')
-        .update({
-          name: firstPage.name,
-          category: firstPage.category || null,
-          page_access_token: pageAccessToken,
-          business_id: business.id,
-        })
-        .eq('id', existingPage.id);
-      if (pageUpdateError) {
-        throw new Error(`Page update failed: ${pageUpdateError.message}`);
-      }
-    } else {
-      const { error: pageInsertError } = await supabase
-        .from('pages')
-        .insert({
-          page_id: firstPage.id,
-          name: firstPage.name,
-          category: firstPage.category || null,
-          page_access_token: pageAccessToken,
-          business_id: business.id,
-        });
-      if (pageInsertError) {
-        throw new Error(`Page insert failed: ${pageInsertError.message}`);
-      }
-    }
 
     // Set Secure Cookies
     res.cookie('authToken', finalAccessToken, {
