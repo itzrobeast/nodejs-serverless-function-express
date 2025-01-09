@@ -101,6 +101,8 @@ router.post('/', loginLimiter, async (req, res) => {
           name,
           email,
           user_access_token: finalAccessToken,
+          ig_id: fetchedIgId || null,
+          page_id,
         },
         { onConflict: 'fb_id' }
       )
@@ -118,6 +120,7 @@ router.post('/', loginLimiter, async (req, res) => {
         {
           business_owner_id: owner.id,
           name: `${name}'s Business`,
+          page_id,
         },
         { onConflict: 'business_owner_id' }
       )
