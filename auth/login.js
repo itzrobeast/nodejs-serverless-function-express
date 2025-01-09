@@ -24,7 +24,7 @@ const loginSchema = Joi.object({
 
 // Helper: Upsert a single page and return its primary key
 // Helper: Upsert a single page and return its data
-async function upsertPage(pageData) {
+async function upsertPage(pageData, businessId = null) {
   const pageAccessToken = pageData.access_token;
   const fetchedIgId = await fetchInstagramIdFromFacebook(pageData.id, pageAccessToken);
 
@@ -37,10 +37,11 @@ async function upsertPage(pageData) {
         category: pageData.category || null,
         page_access_token: pageAccessToken,
         ig_id: fetchedIgId || null, // Optional Instagram ID
+        business_id: businessId,
       },
       { onConflict: 'page_id' }
     )
-    .select()
+    .select('id, page_id, business_id')
     .single();
 
   if (error) {
@@ -94,7 +95,7 @@ router.post('/', loginLimiter, async (req, res) => {
 
     const upsertedPages = [];
     for (const page of pagesData.data) {
-      const upsertedPage = await upsertPage(page); // Upserting each page
+      const upsertedPage = await upsertPage(page, business.id); // Upserting each page
       upsertedPages.push(upsertedPage); // Store the returned data
     }
 
