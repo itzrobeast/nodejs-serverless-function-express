@@ -36,18 +36,18 @@ async function upsertPage(pageData, businessId = null) {
         category: pageData.category || null,
         page_access_token: pageAccessToken,
         ig_id: fetchedIgId || null, // Optional Instagram ID
-        business_id: businessId,
+        business_id: businessId,   // Link to business_id if provided
       },
       { onConflict: 'page_id' }
     )
-    .select('id, page_id, business_id')
+    .select('id, page_id, business_id, ig_id')
     .single();
 
   if (error) {
     throw new Error(`Page upsert failed: ${error.message}`);
   }
 
-  return data; // Returning the data directly
+  return data;
 }
 
 // Main POST handler
@@ -92,36 +92,6 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error('No Facebook pages found for this user.');
     }
 
-    // Upsert Business
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(
-        {
-          business_owner_id: null, // Placeholder, will update later
-          name: `${name}'s Business`,
-          page_id: null, // Placeholder, will update later
-          ig_id: null, // Placeholder, will update later
-        },
-        { onConflict: 'business_owner_id' }
-      )
-      .select()
-      .single();
-
-    if (businessError) {
-      throw new Error(`Business upsert failed: ${businessError.message}`);
-    }
-
-    const upsertedPages = [];
-    for (const page of pagesData.data) {
-      const upsertedPage = await upsertPage(page, business.id); // Upserting each page
-      upsertedPages.push(upsertedPage); // Store the returned data
-    }
-
-    const primaryPage = upsertedPages[0]; // Use the first page for reference
-    if (!primaryPage?.id) {
-      throw new Error('No valid primary page ID found.');
-    }
-
     // Upsert Business Owner
     const { data: owner, error: ownerError } = await supabase
       .from('business_owners')
@@ -130,10 +100,7 @@ router.post('/', loginLimiter, async (req, res) => {
           fb_id,
           name,
           email,
-          page_id: primaryPage.page_id, // Use page_id directly
-          ig_id: primaryPage.ig_id || null,
           user_access_token: finalAccessToken,
-          business_id: business.id, // Associate with the business
         },
         { onConflict: 'fb_id' }
       )
@@ -144,20 +111,40 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error(`User upsert failed: ${ownerError.message}`);
     }
 
-    // Update Business with Page ID and Owner ID
-    const { error: businessUpdateError } = await supabase
+    // Upsert Business
+    const { data: business, error: businessError } = await supabase
       .from('businesses')
-      .update({
-        page_id: primaryPage.page_id,
-        business_owner_id: owner.id,
-        ig_id: primaryPage.ig_id || null,
-      })
-      .eq('id', business.id);
+      .upsert(
+        {
+          business_owner_id: owner.id,
+          name: `${name}'s Business`,
+        },
+        { onConflict: 'business_owner_id' }
+      )
+      .select()
+      .single();
 
-    if (businessUpdateError) {
+    if (businessError) {
+      throw new Error(`Business upsert failed: ${businessError.message}`);
+    }
+
+    // Link Business ID to Business Owner
+    const { error: ownerUpdateError } = await supabase
+      .from('business_owners')
+      .update({ business_id: business.id })
+      .eq('id', owner.id);
+
+    if (ownerUpdateError) {
       throw new Error(
-        `Failed to update business with page ID and owner ID: ${businessUpdateError.message}`
+        `Failed to update business_id in business_owners: ${ownerUpdateError.message}`
       );
+    }
+
+    // Upsert Pages and Associate with Business
+    const upsertedPages = [];
+    for (const page of pagesData.data) {
+      const upsertedPage = await upsertPage(page, business.id); // Pass business.id
+      upsertedPages.push(upsertedPage);
     }
 
     // Set Secure Cookies
