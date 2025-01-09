@@ -23,12 +23,12 @@ const loginSchema = Joi.object({
 });
 
 // Helper: Upsert a single page and return its primary key
+// Helper: Upsert a single page and return its data
 async function upsertPage(pageData) {
   const pageAccessToken = pageData.access_token;
   const fetchedIgId = await fetchInstagramIdFromFacebook(pageData.id, pageAccessToken);
 
-  // Upsert into `pages`
-  const { data: pageRow, error: pageError } = await supabase
+  const { data, error } = await supabase
     .from('pages')
     .upsert(
       {
@@ -40,35 +40,36 @@ async function upsertPage(pageData) {
       },
       { onConflict: 'page_id' }
     )
-    .select('id, page_id, ig_id') // Retrieve primary key, page_id, and ig_id
+    .select()
     .single();
 
-  if (pageError) {
-    throw new Error(`Page upsert failed: ${pageError.message}`);
+  if (error) {
+    throw new Error(`Page upsert failed: ${error.message}`);
   }
 
-  return pageRow;
+  return data; // Returning the data directly (no "pageRow" terminology)
 }
 
-// POST /auth/login
+// Main POST handler
 router.post('/', loginLimiter, async (req, res) => {
   try {
-    // 1. Validate input
     const { error, value } = loginSchema.validate(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
+
     const { accessToken } = value;
 
-    // 2. Validate & Refresh Token
+    // Validate Facebook Token
     const tokenDetails = await validateFacebookToken(accessToken);
     if (!tokenDetails.isValid) {
       throw new Error('Invalid or expired Facebook token. Please log in again.');
     }
+
     const refreshedToken = await refreshUserAccessToken(tokenDetails.userId, accessToken);
     const finalAccessToken = refreshedToken || accessToken;
 
-    // 3. Fetch Facebook User Data
+    // Fetch Facebook User Data
     const fbUserRes = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email&access_token=${finalAccessToken}`
     );
@@ -78,30 +79,31 @@ router.post('/', loginLimiter, async (req, res) => {
     const fbUser = await fbUserRes.json();
     const { id: fb_id, name, email } = fbUser;
 
-    // 4. Fetch Facebook Pages
+    // Fetch Facebook Pages
     const pagesRes = await fetch(
       `https://graph.facebook.com/me/accounts?access_token=${finalAccessToken}`
     );
     if (!pagesRes.ok) {
       throw new Error('Failed to fetch Facebook pages.');
     }
+
     const pagesData = await pagesRes.json();
     if (!pagesData?.data || pagesData.data.length === 0) {
       throw new Error('No Facebook pages found for this user.');
     }
 
-    // 5. Upsert Pages and Get Primary Key of the First Page
     const upsertedPages = [];
-for (const page of pagesData.data) {
-  const pageRow = await upsertPage(page); // Pass the correct variable
-  upsertedPages.push(pageRow);
-}
-    const primaryPage = upsertedPages[0];
+    for (const page of pagesData.data) {
+      const upsertedPage = await upsertPage(page); // Upserting each page
+      upsertedPages.push(upsertedPage); // Store the returned data
+    }
+
+    const primaryPage = upsertedPages[0]; // Use the first page for reference
     if (!primaryPage?.id) {
       throw new Error('No valid primary page ID found.');
     }
 
-    // 6. Upsert Business Owner
+    // Upsert Business Owner
     const { data: owner, error: ownerError } = await supabase
       .from('business_owners')
       .upsert(
@@ -109,7 +111,7 @@ for (const page of pagesData.data) {
           fb_id,
           name,
           email,
-          page_id: primaryPage.id, // FK => pages.id
+          page_id: primaryPage.page_id, // Use page_id directly
           ig_id: primaryPage.ig_id || null,
           user_access_token: finalAccessToken,
         },
@@ -122,45 +124,38 @@ for (const page of pagesData.data) {
       throw new Error(`User upsert failed: ${ownerError.message}`);
     }
 
-    // 7. Upsert Business
-    const businessPayload = {
-      business_owner_id: owner.id, // ties to business_owners
-      name: `${name}'s Business`,
-      page_id: primaryPage.id, // references pages.id
-      ig_id: primaryPage.ig_id || null,
-    };
+    // Upsert Business
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .upsert(
+        {
+          business_owner_id: owner.id,
+          name: `${name}'s Business`,
+          page_id: primaryPage.page_id, // Use page_id directly
+          ig_id: primaryPage.ig_id || null,
+        },
+        { onConflict: 'business_owner_id' }
+      )
+      .select()
+      .single();
 
-    // Upsert into `businesses`
-const { data: business, error: businessError } = await supabase
-  .from('businesses')
-  .upsert(
-    {
-      business_owner_id: owner.id, // FK to `business_owners`
-      name: `${owner.name}'s Business`,
-      page_id: pageRow.id, // Reference `pages.id` (primary key)
-      ig_id: pageRow.ig_id || null, // Optional Instagram ID
-    },
-    { onConflict: 'business_owner_id' }
-  )
-  .select()
-  .single();
+    if (businessError) {
+      throw new Error(`Business upsert failed: ${businessError.message}`);
+    }
 
-if (businessError) {
-  throw new Error(`Business upsert failed: ${businessError.message}`);
-}
-
-
-    // 8. Link the Business ID in business_owners
+    // Link Business ID to Business Owner
     const { error: ownerUpdateError } = await supabase
       .from('business_owners')
       .update({ business_id: business.id })
       .eq('id', owner.id);
 
     if (ownerUpdateError) {
-      throw new Error(`Failed to update business_id in business_owners: ${ownerUpdateError.message}`);
+      throw new Error(
+        `Failed to update business_id in business_owners: ${ownerUpdateError.message}`
+      );
     }
 
-    // 9. Set Secure Cookies
+    // Set Secure Cookies
     res.cookie('authToken', finalAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -180,7 +175,6 @@ if (businessError) {
       maxAge: 3600000,
     });
 
-    // 10. Final success response
     return res.status(200).json({
       message: 'Login successful',
       businessOwnerId: owner.id,
