@@ -32,10 +32,10 @@ const { data: pageRow, error: pageError } = await supabase
   .from('pages')
   .upsert(
     {
-      page_id: fbPage.id, // Facebook Page ID (text)
-      name: fbPage.name,
-      category: fbPage.category || null,
-      page_access_token: fbPage.access_token,
+      page_id: Page.id, // Facebook Page ID (text)
+      name: Page.name,
+      category: Page.category || null,
+      page_access_token: Page.access_token,
     },
     { onConflict: 'page_id' }
   )
