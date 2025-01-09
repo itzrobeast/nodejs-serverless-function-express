@@ -1,4 +1,3 @@
-// File: auth/login.js
 import express from 'express';
 import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
@@ -33,19 +32,17 @@ async function upsertAllPages(pagesData = []) {
 
   for (const page of pagesData) {
     const pageAccessToken = page.access_token;
-    // Optional IG fetch
     const fetchedIgId = await fetchInstagramIdFromFacebook(page.id, pageAccessToken);
 
-    // Upsert or insert the page
     const { data: pageRecord, error: pageError } = await supabase
       .from('pages')
       .upsert(
         {
-          page_id: page.id,           // Unique external ID from Facebook
+          page_id: page.id,
           name: page.name,
           category: page.category || null,
           page_access_token: pageAccessToken,
-          ig_id: fetchedIgId || null, // can be null if no Instagram
+          ig_id: fetchedIgId || null,
         },
         { onConflict: 'page_id' }
       )
@@ -56,11 +53,10 @@ async function upsertAllPages(pagesData = []) {
       throw new Error(`Page upsert failed: ${pageError.message}`);
     }
 
-    // Keep track of the new or existing ID
     upsertedPages.push({
       ...page,
-      id: pageRecord.id,            // The primary key in "pages" table
-      ig_id: pageRecord.ig_id,      // The final IG ID in DB (could differ if existing)
+      id: pageRecord.id,
+      ig_id: pageRecord.ig_id,
     });
   }
 
@@ -111,7 +107,6 @@ router.post('/', loginLimiter, async (req, res) => {
 
     // 5. Upsert ALL pages first (so we have valid page IDs in DB)
     const upsertedPages = await upsertAllPages(pagesData.data);
-    // Use the *first* page as "primary" for business_owners & business
     const primaryPage = upsertedPages[0];
     if (!primaryPage?.id) {
       throw new Error('No valid primary page ID found.');
@@ -122,14 +117,14 @@ router.post('/', loginLimiter, async (req, res) => {
       .from('business_owners')
       .upsert(
         {
-          fb_id,                 // unique key if onConflict: 'fb_id'
+          fb_id,
           name,
           email,
-          page_id: primaryPage.id,        // FK => pages.id
+          page_id: primaryPage.id,
           ig_id: primaryPage.ig_id || null,
           user_access_token: finalAccessToken,
         },
-        { onConflict: 'fb_id' } // updates if fb_id already exists
+        { onConflict: 'fb_id' }
       )
       .select()
       .single();
@@ -140,9 +135,9 @@ router.post('/', loginLimiter, async (req, res) => {
 
     // 7. Upsert Business (linked to business_owners.id)
     const businessPayload = {
-      business_owner_id: owner.id, // ties to business_owners
+      business_owner_id: owner.id,
       name: `${name}'s Business`,
-      page_id: primaryPage.id,     // optional reference to primary page
+      page_id: primaryPage.id,
       ig_id: primaryPage.ig_id || null,
     };
 
@@ -161,36 +156,12 @@ router.post('/', loginLimiter, async (req, res) => {
       .from('business_owners')
       .update({ business_id: business.id })
       .eq('id', owner.id);
+
     if (ownerUpdateError) {
       throw new Error(`Failed to update business_id in business_owners: ${ownerUpdateError.message}`);
     }
 
-    // 9. (Optional) Upsert the 'primary' page to point to this business if needed
-    //    If your "pages" table has a "business_id" column you want to link:
-    const { error: pageUpdateError } = await supabase
-      .from('pages')
-      .update({ business_id: business.id })
-      .eq('id', primaryPage.id);
-    if (pageUpdateError) {
-      console.warn('[WARN] Failed to set business_id on pages table:', pageUpdateError.message);
-    }
-
-    // 10. No Data Loss: (We skip mass deletions in instagram_users or conversations)
-    //     If you do want to upsert or sync IG data, do it here conditionally.
-    //     Example (only if business.ig_id is not null):
-    /*
-    if (business.ig_id) {
-      const { error: igConvError } = await supabase
-        .from('instagram_conversations')
-        .upsert({ ig_id: business.ig_id, conversation_data: {} })
-        .select();
-      if (igConvError) {
-        console.warn('[WARN] IG convo upsert failed:', igConvError.message);
-      }
-    }
-    */
-
-    // 11. Set Secure Cookies
+    // 9. Set Secure Cookies
     res.cookie('authToken', finalAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -210,7 +181,7 @@ router.post('/', loginLimiter, async (req, res) => {
       maxAge: 3600000,
     });
 
-    // 12. Final success response
+    // 10. Final success response
     return res.status(200).json({
       message: 'Login successful',
       businessOwnerId: owner.id,
