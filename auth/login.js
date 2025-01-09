@@ -64,85 +64,84 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error('No Facebook pages found for this user.');
     }
 
-    const upsertedPages = [];
-    for (const page of pagesData.data) {
-      const pageAccessToken = page.access_token;
+   // Upsert Pages
+const upsertedPages = [];
+for (const page of pagesData.data) {
+  const pageAccessToken = page.access_token;
 
-      // Fetch Instagram Business ID (optional)
-      const fetchedIgId = await fetchInstagramIdFromFacebook(page.id, pageAccessToken);
-      console.log('[DEBUG] Fetched IG ID:', fetchedIgId, 'for Page ID:', page.id);
+  // Fetch Instagram Business ID (optional)
+  const fetchedIgId = await fetchInstagramIdFromFacebook(page.id, pageAccessToken);
+  console.log('[DEBUG] Fetched IG ID:', fetchedIgId, 'for Page ID:', page.id);
 
-      // Upsert the Page in Pages Table
-      const { error: pageUpsertError } = await supabase
-        .from('pages')
-        .upsert(
-          {
-            page_id: page.id,
-            name: page.name,
-            category: page.category || null,
-            page_access_token: pageAccessToken,
-            ig_id: fetchedIgId || null,
-          },
-          { onConflict: 'page_id' } // Ensure page_id uniqueness
-        );
+  // Upsert Page in Pages Table
+  const { data: pageRecord, error: pageError } = await supabase
+    .from('pages')
+    .upsert(
+      {
+        page_id: page.id,
+        name: page.name,
+        category: page.category || null,
+        page_access_token: pageAccessToken,
+        ig_id: fetchedIgId || null,
+      },
+      { onConflict: 'page_id' }
+    )
+    .select('id') // Fetch the ID for reference
+    .single();
 
-      if (pageUpsertError) {
-        console.error('[ERROR] Page upsert failed:', pageUpsertError.message);
-        throw new Error(`Page upsert failed: ${pageUpsertError.message}`);
-      }
+  if (pageError) {
+    throw new Error(`Page upsert failed: ${pageError.message}`);
+  }
 
-      upsertedPages.push({ ...page, ig_id: fetchedIgId || null });
-    }
+  upsertedPages.push({ ...page, id: pageRecord.id });
+}
+console.log('[DEBUG] Upserted Pages:', upsertedPages);
 
-    console.log('[DEBUG] Upserted Pages:', upsertedPages);
+// Use the first page for owner and business data
+const firstPage = upsertedPages[0];
 
-    // Use the first page for owner and business data
-    const firstPage = upsertedPages[0];
-
-    // Upsert Business Owner
-    const { data: owner, error: ownerError } = await supabase
-      .from('business_owners')
-      .upsert(
-        {
-          fb_id,
-          name,
-          email,
-          page_id: firstPage.id, // This will now always exist in the `pages` table
-          ig_id: firstPage.ig_id || null,
-          user_access_token: finalAccessToken,
-        },
-        { onConflict: 'fb_id' }
-      )
-      .select()
-      .single();
-
-    if (ownerError) {
-      console.error('[ERROR] User upsert failed:', ownerError.message);
-      throw new Error(`User upsert failed: ${ownerError.message}`);
-    }
-
-    console.log('[DEBUG] Business Owner Upserted:', owner);
-
-    // Upsert Business
-    const businessPayload = {
-      business_owner_id: owner.id,
-      name: `${name}'s Business`,
-      page_id: firstPage.id,
+// Upsert Business Owner
+const { data: owner, error: ownerError } = await supabase
+  .from('business_owners')
+  .upsert(
+    {
+      fb_id,
+      name,
+      email,
+      page_id: firstPage.id, // Use the fetched ID from pages
       ig_id: firstPage.ig_id || null,
-    };
+      user_access_token: finalAccessToken,
+    },
+    { onConflict: 'fb_id' }
+  )
+  .select()
+  .single();
 
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(businessPayload, { onConflict: 'business_owner_id' })
-      .select()
-      .single();
+if (ownerError) {
+  throw new Error(`User upsert failed: ${ownerError.message}`);
+}
+console.log('[DEBUG] Business Owner Upserted:', owner);
 
-    if (businessError) {
-      console.error('[ERROR] Business upsert failed:', businessError.message);
-      throw new Error(`Business upsert failed: ${businessError.message}`);
-    }
+// Construct and Upsert Business
+const businessPayload = {
+  business_owner_id: owner.id,
+  name: `${name}'s Business`,
+  page_id: firstPage.id,
+  ig_id: firstPage.ig_id || null,
+};
 
-    console.log('[DEBUG] Business Upserted:', business);
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .upsert(businessPayload, { onConflict: 'business_owner_id' })
+  .select()
+  .single();
+
+if (businessError) {
+  throw new Error(`Business upsert failed: ${businessError.message}`);
+}
+console.log('[DEBUG] Business Upserted:', business);
+
+    
 
     // Handle Instagram Cleanup and Logic
     if (business.ig_id) {
