@@ -48,10 +48,6 @@ router.get('/', async (req, res) => {
 
 
 
-/**
- * Update business data for the authenticated user.
- * PUT /get-business/update-business
- */
 router.put('/update-business', async (req, res) => {
   try {
     const business_owner_id = req.cookies.businessOwnerId
@@ -65,17 +61,25 @@ router.put('/update-business', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized: Please log in again.' });
     }
 
-    const { name, address, phone } = req.body;
+    const { name, locations, insurance_policies, objections, contact_email, ai_knowledge_base, platform } = req.body;
 
-    if (!name || !address || !phone) {
-      console.error('[ERROR] Missing required fields in request body.');
-      return res.status(400).json({ error: 'Missing required fields: name, address, phone' });
+    if (!name) {
+      console.error('[ERROR] Missing required field: name');
+      return res.status(400).json({ error: 'Missing required field: name' });
     }
 
     // Update the database with the new business information
     const { data, error } = await supabase
       .from('businesses')
-      .update({ name, address, phone })
+      .update({
+        name,
+        locations,
+        insurance_policies,
+        objections,
+        contact_email,
+        ai_knowledge_base,
+        platform,
+      })
       .eq('business_owner_id', business_owner_id)
       .single();
 
@@ -90,6 +94,7 @@ router.put('/update-business', async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
+
 
 
 
