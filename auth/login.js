@@ -27,24 +27,25 @@ async function upsertPage(pageData) {
   const pageAccessToken = pageData.access_token;
   const fetchedIgId = await fetchInstagramIdFromFacebook(pageData.id, pageAccessToken);
 
-  const { data: pageRow, error: pageError } = await supabase
-    .from('pages')
-    .upsert(
-      {
-        page_id: pageData.id,
-        name: pageData.name,
-        category: pageData.category || null,
-        page_access_token: pageAccessToken,
-        ig_id: fetchedIgId || null,
-      },
-      { onConflict: 'page_id' }
-    )
-    .select('id, page_id, ig_id')
-    .single();
+  // Upsert into `pages`
+const { data: pageRow, error: pageError } = await supabase
+  .from('pages')
+  .upsert(
+    {
+      page_id: fbPage.id, // Facebook Page ID (text)
+      name: fbPage.name,
+      category: fbPage.category || null,
+      page_access_token: fbPage.access_token,
+    },
+    { onConflict: 'page_id' }
+  )
+  .select('id, page_id') // Retrieve primary key and page_id
+  .single();
 
-  if (pageError) {
-    throw new Error(`Page upsert failed: ${pageError.message}`);
-  }
+if (pageError) {
+  throw new Error(`Page upsert failed: ${pageError.message}`);
+}
+
 
   return pageRow;
 }
@@ -129,15 +130,25 @@ router.post('/', loginLimiter, async (req, res) => {
       ig_id: primaryPage.ig_id || null,
     };
 
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(businessPayload, { onConflict: 'business_owner_id' })
-      .select()
-      .single();
+    // Upsert into `businesses`
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .upsert(
+    {
+      business_owner_id: owner.id, // FK to `business_owners`
+      name: `${owner.name}'s Business`,
+      page_id: pageRow.id, // Reference `pages.id` (primary key)
+      ig_id: pageRow.ig_id || null, // Optional Instagram ID
+    },
+    { onConflict: 'business_owner_id' }
+  )
+  .select()
+  .single();
 
-    if (businessError) {
-      throw new Error(`Business upsert failed: ${businessError.message}`);
-    }
+if (businessError) {
+  throw new Error(`Business upsert failed: ${businessError.message}`);
+}
+
 
     // 8. Link the Business ID in business_owners
     const { error: ownerUpdateError } = await supabase
