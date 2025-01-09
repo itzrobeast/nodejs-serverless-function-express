@@ -100,6 +100,11 @@ console.log('[DEBUG] Upserted Pages:', upsertedPages);
 // Use the first page for owner and business data
 const firstPage = upsertedPages[0];
 
+// Ensure the page_id exists in the Pages Table
+if (!firstPage.id) {
+  throw new Error('No valid page ID found for the business owner.');
+}
+
 // Upsert Business Owner
 const { data: owner, error: ownerError } = await supabase
   .from('business_owners')
@@ -141,7 +146,6 @@ if (businessError) {
 }
 console.log('[DEBUG] Business Upserted:', business);
 
-    
 
     // Handle Instagram Cleanup and Logic
     if (business.ig_id) {
