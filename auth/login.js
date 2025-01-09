@@ -72,12 +72,31 @@ router.post('/', loginLimiter, async (req, res) => {
       const fetchedIgId = await fetchInstagramIdFromFacebook(page.id, pageAccessToken);
       console.log('[DEBUG] Fetched IG ID:', fetchedIgId, 'for Page ID:', page.id);
 
-      upsertedPages.push({
-        ...page,
-        ig_id: fetchedIgId || null,
-      });
+      // Upsert the Page in Pages Table
+      const { error: pageUpsertError } = await supabase
+        .from('pages')
+        .upsert(
+          {
+            page_id: page.id,
+            name: page.name,
+            category: page.category || null,
+            page_access_token: pageAccessToken,
+            ig_id: fetchedIgId || null,
+          },
+          { onConflict: 'page_id' } // Ensure page_id uniqueness
+        );
+
+      if (pageUpsertError) {
+        console.error('[ERROR] Page upsert failed:', pageUpsertError.message);
+        throw new Error(`Page upsert failed: ${pageUpsertError.message}`);
+      }
+
+      upsertedPages.push({ ...page, ig_id: fetchedIgId || null });
     }
 
+    console.log('[DEBUG] Upserted Pages:', upsertedPages);
+
+    // Use the first page for owner and business data
     const firstPage = upsertedPages[0];
 
     // Upsert Business Owner
@@ -88,7 +107,7 @@ router.post('/', loginLimiter, async (req, res) => {
           fb_id,
           name,
           email,
-          page_id: firstPage.id,
+          page_id: firstPage.id, // This will now always exist in the `pages` table
           ig_id: firstPage.ig_id || null,
           user_access_token: finalAccessToken,
         },
@@ -98,10 +117,13 @@ router.post('/', loginLimiter, async (req, res) => {
       .single();
 
     if (ownerError) {
+      console.error('[ERROR] User upsert failed:', ownerError.message);
       throw new Error(`User upsert failed: ${ownerError.message}`);
     }
 
-    // Construct Business Payload
+    console.log('[DEBUG] Business Owner Upserted:', owner);
+
+    // Upsert Business
     const businessPayload = {
       business_owner_id: owner.id,
       name: `${name}'s Business`,
@@ -109,7 +131,6 @@ router.post('/', loginLimiter, async (req, res) => {
       ig_id: firstPage.ig_id || null,
     };
 
-    // Upsert Business
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .upsert(businessPayload, { onConflict: 'business_owner_id' })
@@ -117,56 +138,35 @@ router.post('/', loginLimiter, async (req, res) => {
       .single();
 
     if (businessError) {
+      console.error('[ERROR] Business upsert failed:', businessError.message);
       throw new Error(`Business upsert failed: ${businessError.message}`);
     }
 
+    console.log('[DEBUG] Business Upserted:', business);
+
     // Handle Instagram Cleanup and Logic
- if (!business.ig_id) {
-  console.log('[DEBUG] Business does not have an Instagram ID. Skipping Instagram logic...');
-} else {
-  console.log('[DEBUG] Handling Instagram logic for ig_id:', business.ig_id);
+    if (business.ig_id) {
+      console.log('[DEBUG] Business has an Instagram ID. Handling Instagram-specific logic...');
+      const { error: cleanUsersError } = await supabase
+        .from('instagram_users')
+        .delete()
+        .eq('ig_id', business.ig_id);
 
-  try {
-    // Clean up old Instagram-related records
-    const { error: cleanUsersError } = await supabase
-      .from('instagram_users')
-      .delete()
-      .eq('ig_id', business.ig_id);
+      if (cleanUsersError) {
+        console.warn('[WARN] Failed to clean Instagram users:', cleanUsersError.message);
+      }
 
-    if (cleanUsersError) {
-      console.warn('[WARN] Failed to clean Instagram users:', cleanUsersError.message);
+      const { error: cleanConversationsError } = await supabase
+        .from('instagram_conversations')
+        .delete()
+        .eq('ig_id', business.ig_id);
+
+      if (cleanConversationsError) {
+        console.warn('[WARN] Failed to clean Instagram conversations:', cleanConversationsError.message);
+      }
+    } else {
+      console.log('[DEBUG] Business does not have an Instagram ID. Skipping Instagram-specific logic.');
     }
-
-    const { error: cleanConversationsError } = await supabase
-      .from('instagram_conversations')
-      .delete()
-      .eq('ig_id', business.ig_id);
-
-    if (cleanConversationsError) {
-      console.warn('[WARN] Failed to clean Instagram conversations:', cleanConversationsError.message);
-    }
-
-    // Upsert Instagram-specific data
-    const igConversationsPayload = {
-      ig_id: business.ig_id,
-      conversation_data: {}, // Add actual data if available
-    };
-
-    const { error: igConversationsError } = await supabase
-      .from('instagram_conversations')
-      .upsert(igConversationsPayload)
-      .select();
-
-    if (igConversationsError) {
-      throw new Error(`Failed to upsert Instagram conversations: ${igConversationsError.message}`);
-    }
-
-    console.log('[DEBUG] Successfully upserted Instagram conversations for ig_id:', business.ig_id);
-  } catch (err) {
-    console.error('[ERROR] Instagram logic failed:', err.message);
-  }
-}
-
 
     // Link Business ID to Business Owner
     await supabase.from('business_owners').update({ business_id: business.id }).eq('id', owner.id);
@@ -207,4 +207,7 @@ router.post('/', loginLimiter, async (req, res) => {
 });
 
 export default router;
+
+
+
 
