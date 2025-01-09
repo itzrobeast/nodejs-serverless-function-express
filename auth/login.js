@@ -22,7 +22,6 @@ const loginSchema = Joi.object({
   accessToken: Joi.string().required(),
 });
 
-// Helper: Upsert a single page and return its primary key
 // Helper: Upsert a single page and return its data
 async function upsertPage(pageData, businessId = null) {
   const pageAccessToken = pageData.access_token;
@@ -37,18 +36,18 @@ async function upsertPage(pageData, businessId = null) {
         category: pageData.category || null,
         page_access_token: pageAccessToken,
         ig_id: fetchedIgId || null, // Optional Instagram ID
-        business_id: businessId,
+        business_id: businessId,   // Link to business_id if provided
       },
       { onConflict: 'page_id' }
     )
-    .select('id, page_id, business_id')
+    .select('id, page_id, business_id, ig_id')
     .single();
 
   if (error) {
     throw new Error(`Page upsert failed: ${error.message}`);
   }
 
-  return data; // Returning the data directly (no "pageRow" terminology)
+  return data;
 }
 
 // Main POST handler
@@ -93,17 +92,6 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error('No Facebook pages found for this user.');
     }
 
-    const upsertedPages = [];
-    for (const page of pagesData.data) {
-      const upsertedPage = await upsertPage(page, business.id); // Upserting each page
-      upsertedPages.push(upsertedPage); // Store the returned data
-    }
-
-    const primaryPage = upsertedPages[0]; // Use the first page for reference
-    if (!primaryPage?.id) {
-      throw new Error('No valid primary page ID found.');
-    }
-
     // Upsert Business Owner
     const { data: owner, error: ownerError } = await supabase
       .from('business_owners')
@@ -112,8 +100,6 @@ router.post('/', loginLimiter, async (req, res) => {
           fb_id,
           name,
           email,
-          page_id: primaryPage.page_id, // Use page_id directly
-          ig_id: primaryPage.ig_id || null,
           user_access_token: finalAccessToken,
         },
         { onConflict: 'fb_id' }
@@ -132,8 +118,6 @@ router.post('/', loginLimiter, async (req, res) => {
         {
           business_owner_id: owner.id,
           name: `${name}'s Business`,
-          page_id: primaryPage.page_id, // Use page_id directly
-          ig_id: primaryPage.ig_id || null,
         },
         { onConflict: 'business_owner_id' }
       )
@@ -154,6 +138,13 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error(
         `Failed to update business_id in business_owners: ${ownerUpdateError.message}`
       );
+    }
+
+    // Upsert Pages and Associate with Business
+    const upsertedPages = [];
+    for (const page of pagesData.data) {
+      const upsertedPage = await upsertPage(page, business.id); // Pass business.id
+      upsertedPages.push(upsertedPage);
     }
 
     // Set Secure Cookies
