@@ -105,25 +105,38 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error('No valid primary page ID found.');
     }
 
-    // Upsert Business Owner and include the primary page ID
-    const { data: owner, error: ownerError } = await supabase
-      .from('business_owners')
-      .upsert(
-        {
-          fb_id,
-          name,
-          email,
-          user_access_token: finalAccessToken,
-          page_id: primaryPageId, // Insert the primary page_id
-        },
-        { onConflict: 'fb_id' }
-      )
-      .select()
-      .single();
+    
+    // Fetch the ig_id for the primary page
+const { data: primaryPage, error: primaryPageError } = await supabase
+  .from('pages')
+  .select('ig_id')
+  .eq('page_id', primaryPageId)
+  .single();
 
-    if (ownerError) {
-      throw new Error(`User upsert failed: ${ownerError.message}`);
-    }
+if (primaryPageError) {
+  throw new Error(`Failed to fetch ig_id for primary page: ${primaryPageError.message}`);
+}
+
+// Upsert Business Owner and include the primary page ID and ig_id
+const { data: owner, error: ownerError } = await supabase
+  .from('business_owners')
+  .upsert(
+    {
+      fb_id,
+      name,
+      email,
+      user_access_token: finalAccessToken,
+      page_id: primaryPageId, // Insert the primary page_id
+      ig_id: primaryPage.ig_id || null, // Insert the fetched ig_id
+    },
+    { onConflict: 'fb_id' }
+  )
+  .select()
+  .single();
+
+if (ownerError) {
+  throw new Error(`User upsert failed: ${ownerError.message}`);
+}
 
     // Upsert Business and include the primary page ID
     const { data: business, error: businessError } = await supabase
