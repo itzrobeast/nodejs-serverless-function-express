@@ -1,3 +1,5 @@
+// File: auth/login.js
+
 import express from 'express';
 import supabase from '../supabaseClient.js';
 import fetch from 'node-fetch';
@@ -8,64 +10,46 @@ import { refreshUserAccessToken } from './refresh-token.js';
 
 const router = express.Router();
 
-// --------------------------------------------------
 // Rate Limiter to prevent abuse
-// --------------------------------------------------
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50,
   message: 'Too many login attempts. Please try again later.',
 });
 
-// --------------------------------------------------
 // Input Validation Schema
-// --------------------------------------------------
 const loginSchema = Joi.object({
   accessToken: Joi.string().required(),
 });
 
-// --------------------------------------------------
-// Helper: Upsert All Pages
-// --------------------------------------------------
-async function upsertAllPages(pagesData = []) {
-  const upsertedPages = [];
+// Helper: Upsert a single page and return its primary key
+async function upsertPage(pageData) {
+  const pageAccessToken = pageData.access_token;
+  const fetchedIgId = await fetchInstagramIdFromFacebook(pageData.id, pageAccessToken);
 
-  for (const page of pagesData) {
-    const pageAccessToken = page.access_token;
-    const fetchedIgId = await fetchInstagramIdFromFacebook(page.id, pageAccessToken);
+  const { data: pageRow, error: pageError } = await supabase
+    .from('pages')
+    .upsert(
+      {
+        page_id: pageData.id,
+        name: pageData.name,
+        category: pageData.category || null,
+        page_access_token: pageAccessToken,
+        ig_id: fetchedIgId || null,
+      },
+      { onConflict: 'page_id' }
+    )
+    .select('id, page_id, ig_id')
+    .single();
 
-    const { data: pageRecord, error: pageError } = await supabase
-      .from('pages')
-      .upsert(
-        {
-          page_id: page.id,
-          name: page.name,
-          category: page.category || null,
-          page_access_token: pageAccessToken,
-          ig_id: fetchedIgId || null,
-        },
-        { onConflict: 'page_id' }
-      )
-      .select('id, page_id, ig_id')
-      .single();
-
-    if (pageError) {
-      throw new Error(`Page upsert failed: ${pageError.message}`);
-    }
-
-    upsertedPages.push({
-      ...page,
-      id: pageRecord.id,
-      ig_id: pageRecord.ig_id,
-    });
+  if (pageError) {
+    throw new Error(`Page upsert failed: ${pageError.message}`);
   }
 
-  return upsertedPages;
+  return pageRow;
 }
 
-// --------------------------------------------------
 // POST /auth/login
-// --------------------------------------------------
 router.post('/', loginLimiter, async (req, res) => {
   try {
     // 1. Validate input
@@ -105,14 +89,18 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error('No Facebook pages found for this user.');
     }
 
-    // 5. Upsert ALL pages first (so we have valid page IDs in DB)
-    const upsertedPages = await upsertAllPages(pagesData.data);
+    // 5. Upsert Pages and Get Primary Key of the First Page
+    const upsertedPages = [];
+    for (const page of pagesData.data) {
+      const pageRow = await upsertPage(page);
+      upsertedPages.push(pageRow);
+    }
     const primaryPage = upsertedPages[0];
     if (!primaryPage?.id) {
       throw new Error('No valid primary page ID found.');
     }
 
-    // 6. Upsert Business Owner (linked to the primary page's ID)
+    // 6. Upsert Business Owner
     const { data: owner, error: ownerError } = await supabase
       .from('business_owners')
       .upsert(
@@ -120,7 +108,7 @@ router.post('/', loginLimiter, async (req, res) => {
           fb_id,
           name,
           email,
-          page_id: primaryPage.id,
+          page_id: primaryPage.id, // FK => pages.id
           ig_id: primaryPage.ig_id || null,
           user_access_token: finalAccessToken,
         },
@@ -133,11 +121,11 @@ router.post('/', loginLimiter, async (req, res) => {
       throw new Error(`User upsert failed: ${ownerError.message}`);
     }
 
-    // 7. Upsert Business (linked to business_owners.id)
+    // 7. Upsert Business
     const businessPayload = {
-      business_owner_id: owner.id,
+      business_owner_id: owner.id, // ties to business_owners
       name: `${name}'s Business`,
-      page_id: primaryPage.id,
+      page_id: primaryPage.id, // references pages.id
       ig_id: primaryPage.ig_id || null,
     };
 
