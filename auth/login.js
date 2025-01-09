@@ -28,24 +28,24 @@ async function upsertPage(pageData) {
   const fetchedIgId = await fetchInstagramIdFromFacebook(pageData.id, pageAccessToken);
 
   // Upsert into `pages`
-const { data: pageRow, error: pageError } = await supabase
-  .from('pages')
-  .upsert(
-    {
-      page_id: Page.id, // Facebook Page ID (text)
-      name: Page.name,
-      category: Page.category || null,
-      page_access_token: Page.access_token,
-    },
-    { onConflict: 'page_id' }
-  )
-  .select('id, page_id') // Retrieve primary key and page_id
-  .single();
+  const { data: pageRow, error: pageError } = await supabase
+    .from('pages')
+    .upsert(
+      {
+        page_id: pageData.id, // Facebook Page ID (text)
+        name: pageData.name,
+        category: pageData.category || null,
+        page_access_token: pageAccessToken,
+        ig_id: fetchedIgId || null, // Optional Instagram ID
+      },
+      { onConflict: 'page_id' }
+    )
+    .select('id, page_id, ig_id') // Retrieve primary key, page_id, and ig_id
+    .single();
 
-if (pageError) {
-  throw new Error(`Page upsert failed: ${pageError.message}`);
-}
-
+  if (pageError) {
+    throw new Error(`Page upsert failed: ${pageError.message}`);
+  }
 
   return pageRow;
 }
@@ -92,10 +92,10 @@ router.post('/', loginLimiter, async (req, res) => {
 
     // 5. Upsert Pages and Get Primary Key of the First Page
     const upsertedPages = [];
-    for (const page of pagesData.data) {
-      const pageRow = await upsertPage(page);
-      upsertedPages.push(pageRow);
-    }
+for (const page of pagesData.data) {
+  const pageRow = await upsertPage(page); // Pass the correct variable
+  upsertedPages.push(pageRow);
+}
     const primaryPage = upsertedPages[0];
     if (!primaryPage?.id) {
       throw new Error('No valid primary page ID found.');
