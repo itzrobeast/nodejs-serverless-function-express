@@ -47,7 +47,7 @@ async function upsertPage(pageData, businessId = null) {
     throw new Error(`Page upsert failed: ${error.message}`);
   }
 
-  return data;
+  return { ...data, fetchedIgId };
 }
 
 // Main POST handler
@@ -95,30 +95,22 @@ router.post('/', loginLimiter, async (req, res) => {
     // Upsert Pages and Associate with Business
     const upsertedPages = [];
     let primaryPageId; // To track the first page_id
+    let primaryIgId;
     for (const page of pagesData.data) {
       const upsertedPage = await upsertPage(page); // Insert each page
       upsertedPages.push(upsertedPage);
-      if (!primaryPageId) primaryPageId = upsertedPage.page_id; // Use the first page_id as primary
-    }
-
-    if (!primaryPageId) {
-      throw new Error('No valid primary page ID found.');
-    }
-
-    
-    // Fetch the ig_id for the primary page
-// Fetch the correct ig_id from the pages table after upserting all pages
-const correctPageData = upsertedPages.find(page => page.page_id === primaryPageId);
-
-if (!correctPageData || !correctPageData.ig_id) {
-  throw new Error('Failed to retrieve the correct ig_id for the primary page.');
+      
+      if (!primaryPageId) {
+    primaryPageId = upsertedPage.page_id;
+    primaryIgId = upsertedPage.fetchedIgId; // Directly use the fetched ig_id
+  }
 }
 
-const correctIgId = correctPageData.ig_id;
-
-
-// Upsert Business Owner and include the primary page ID and ig_id
-// Upsert Business Owner and include the correct ig_id from the pages table
+if (!primaryPageId || !primaryIgId) {
+  throw new Error('No valid primary page ID or ig_id found.');
+}
+    
+  // Upsert Business Owner with the correct ig_id
 const { data: owner, error: ownerError } = await supabase
   .from('business_owners')
   .upsert(
@@ -127,8 +119,8 @@ const { data: owner, error: ownerError } = await supabase
       name,
       email,
       user_access_token: finalAccessToken,
-      page_id: primaryPageId, // Insert the primary page_id
-      ig_id: correctIgId, // Use the correct ig_id
+      page_id: primaryPageId,
+      ig_id: primaryIgId, // Use the fetched ig_id directly
     },
     { onConflict: 'fb_id' }
   )
@@ -139,16 +131,15 @@ if (ownerError) {
   throw new Error(`User upsert failed: ${ownerError.message}`);
 }
 
-
-    // Upsert Business and include the correct ig_id
+// Upsert Business with the correct ig_id
 const { data: business, error: businessError } = await supabase
   .from('businesses')
   .upsert(
     {
       business_owner_id: owner.id,
       name: `${name}'s Business`,
-      page_id: primaryPageId, // Insert the primary page_id
-      ig_id: correctIgId, // Use the correct ig_id
+      page_id: primaryPageId,
+      ig_id: primaryIgId, // Use the fetched ig_id directly
     },
     { onConflict: 'business_owner_id' }
   )
@@ -158,6 +149,8 @@ const { data: business, error: businessError } = await supabase
 if (businessError) {
   throw new Error(`Business upsert failed: ${businessError.message}`);
 }
+
+
 
     // Link Business ID to Pages
     for (const page of upsertedPages) {
