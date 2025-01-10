@@ -107,17 +107,18 @@ router.post('/', loginLimiter, async (req, res) => {
 
     
     // Fetch the ig_id for the primary page
-const { data: primaryPage, error: primaryPageError } = await supabase
-  .from('pages')
-  .select('ig_id')
-  .eq('page_id', primaryPageId)
-  .single();
+// Fetch the correct ig_id from the pages table after upserting all pages
+const correctPageData = upsertedPages.find(page => page.page_id === primaryPageId);
 
-if (primaryPageError) {
-  throw new Error(`Failed to fetch ig_id for primary page: ${primaryPageError.message}`);
+if (!correctPageData || !correctPageData.ig_id) {
+  throw new Error('Failed to retrieve the correct ig_id for the primary page.');
 }
 
+const correctIgId = correctPageData.ig_id;
+
+
 // Upsert Business Owner and include the primary page ID and ig_id
+// Upsert Business Owner and include the correct ig_id from the pages table
 const { data: owner, error: ownerError } = await supabase
   .from('business_owners')
   .upsert(
@@ -127,7 +128,7 @@ const { data: owner, error: ownerError } = await supabase
       email,
       user_access_token: finalAccessToken,
       page_id: primaryPageId, // Insert the primary page_id
-      ig_id: primaryPage.ig_id || null, // Insert the fetched ig_id
+      ig_id: correctIgId, // Use the correct ig_id
     },
     { onConflict: 'fb_id' }
   )
@@ -138,23 +139,25 @@ if (ownerError) {
   throw new Error(`User upsert failed: ${ownerError.message}`);
 }
 
-    // Upsert Business and include the primary page ID
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .upsert(
-        {
-          business_owner_id: owner.id,
-          name: `${name}'s Business`,
-          page_id: primaryPageId, // Insert the primary page_id
-        },
-        { onConflict: 'business_owner_id' }
-      )
-      .select()
-      .single();
 
-    if (businessError) {
-      throw new Error(`Business upsert failed: ${businessError.message}`);
-    }
+    // Upsert Business and include the correct ig_id
+const { data: business, error: businessError } = await supabase
+  .from('businesses')
+  .upsert(
+    {
+      business_owner_id: owner.id,
+      name: `${name}'s Business`,
+      page_id: primaryPageId, // Insert the primary page_id
+      ig_id: correctIgId, // Use the correct ig_id
+    },
+    { onConflict: 'business_owner_id' }
+  )
+  .select()
+  .single();
+
+if (businessError) {
+  throw new Error(`Business upsert failed: ${businessError.message}`);
+}
 
     // Link Business ID to Pages
     for (const page of upsertedPages) {
