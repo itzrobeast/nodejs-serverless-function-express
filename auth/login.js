@@ -95,20 +95,21 @@ router.post('/', loginLimiter, async (req, res) => {
     // Upsert Pages and Associate with Business
     const upsertedPages = [];
     let primaryPageId; // To track the first page_id
-    let primaryIgId;
+    let primaryIgId = null; // Allow null ig_id
+    
     for (const page of pagesData.data) {
       const upsertedPage = await upsertPage(page); // Insert each page
       upsertedPages.push(upsertedPage);
       
       if (!primaryPageId) {
     primaryPageId = upsertedPage.page_id;
-    primaryIgId = upsertedPage.fetchedIgId; // Directly use the fetched ig_id
+    primaryIgId = upsertedPage.fetchedIgId || null;
   }
 }
 
-if (!primaryPageId || !primaryIgId) {
-  throw new Error('No valid primary page ID or ig_id found.');
-}
+if (!primaryPageId) {
+      throw new Error('No valid primary page ID found.');
+    }
     
   // Upsert Business Owner with the correct ig_id
 const { data: owner, error: ownerError } = await supabase
