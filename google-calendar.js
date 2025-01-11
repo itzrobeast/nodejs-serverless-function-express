@@ -1,87 +1,87 @@
 import fetch from 'node-fetch';
 import { google } from 'googleapis';
 import supabase from './supabaseClient.js';
+import express from 'express';
 
+const router = express.Router();
 
-
+// Initialize Google OAuth Client
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.BASE_URL}/auth/google/callback` // Redirect URI
+  `${process.env.BASE_URL}/auth/google/callback`
 );
 
-// Generate OAuth URL
-export const generateAuthUrl = () => {
-  return oauth2Client.generateAuthUrl({
+// Route to initiate Google OAuth flow
+router.get('/auth/google', (req, res) => {
+  const { businessId } = req.query;
+
+  const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: ['https://www.googleapis.com/auth/calendar'],
+    state: businessId,
   });
-};
 
-// Handle OAuth callback
-export const handleGoogleCallback = async (code, businessId) => {
-  const { tokens } = await oauth2Client.getToken(code);
+  res.redirect(authUrl);
+});
 
-  // Store tokens in Supabase
-  const { error } = await supabase
-    .from('google_calendar')
-    .upsert({
-      business_id: businessId,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      token_expiry: tokens.expiry_date,
-    });
+// OAuth callback route
+router.get('/auth/google/callback', async (req, res) => {
+  const { code, state: businessId } = req.query;
 
-  if (error) {
-    console.error('Error storing Google tokens:', error);
-    throw new Error('Failed to store Google Calendar tokens');
-  }
-
-  return tokens;
-};
-
-
-
-
-
-// Decode and initialize Google credentials from the environment variable
-const serviceAccount = (() => {
   try {
-    return JSON.parse(
-      Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT, 'base64').toString('utf8')
-    );
+    const { tokens } = await oauth2Client.getToken(code);
+
+    // Store tokens in Supabase
+    const { error } = await supabase
+      .from('google_calendar')
+      .upsert({
+        business_id: businessId,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_expiry: tokens.expiry_date,
+      });
+
+    if (error) {
+      console.error('Error storing Google tokens:', error);
+      throw new Error('Failed to store Google Calendar tokens');
+    }
+
+    res.redirect('/calendar');
   } catch (error) {
-    console.error('Failed to parse Google service account credentials:', error);
-    throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT environment variable');
+    console.error('Error during OAuth callback:', error);
+    res.status(500).send('Authentication failed');
   }
-})();
+});
 
-// Function to generate a Google API access token
-async function getGoogleAccessToken() {
+// Function to fetch Google access token from Supabase
+async function getGoogleAccessToken(businessId) {
   try {
-    const jwtClient = new google.auth.JWT(
-      serviceAccount.client_email,
-      null,
-      serviceAccount.private_key,
-      ['https://www.googleapis.com/auth/calendar']
-    );
+    const { data, error } = await supabase
+      .from('google_calendar')
+      .select('access_token, refresh_token, token_expiry')
+      .eq('business_id', businessId)
+      .single();
 
-    await jwtClient.authorize();
-    return jwtClient.credentials.access_token;
+    if (error || !data) {
+      throw new Error('Google access token not found');
+    }
+
+    return data.access_token;
   } catch (error) {
-    console.error('Failed to generate Google API access token:', error.message, error.stack);
+    console.error('Failed to retrieve Google API access token:', error.message);
     throw new Error('Unable to authenticate with Google API');
   }
 }
 
 // Function to create a Google Calendar event
-export async function createGoogleCalendarEvent(eventDetails) {
+export async function createGoogleCalendarEvent(businessId, eventDetails) {
   try {
-    const accessToken = await getGoogleAccessToken();
+    const accessToken = await getGoogleAccessToken(businessId);
 
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${process.env.GOOGLE_CALENDAR_ID}/events`,
+      `https://www.googleapis.com/calendar/v3/calendars/${eventDetails.calendarId}/events`,
       {
         method: 'POST',
         headers: {
@@ -113,18 +113,18 @@ export async function createGoogleCalendarEvent(eventDetails) {
     console.log('Google Calendar event created successfully:', event);
     return event;
   } catch (error) {
-    console.error('Error creating Google Calendar event:', error.message, error.stack);
+    console.error('Error creating Google Calendar event:', error.message);
     throw error;
   }
 }
 
-// Function to fetch upcoming events from Google Calendar
-export async function getUpcomingEvents(maxResults = 10) {
+// Function to fetch upcoming Google Calendar events
+export async function getUpcomingEvents(businessId, maxResults = 10) {
   try {
-    const accessToken = await getGoogleAccessToken();
+    const accessToken = await getGoogleAccessToken(businessId);
 
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${process.env.GOOGLE_CALENDAR_ID}/events?maxResults=${maxResults}&orderBy=startTime&singleEvents=true`,
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=${maxResults}&orderBy=startTime&singleEvents=true`,
       {
         method: 'GET',
         headers: {
@@ -142,7 +142,9 @@ export async function getUpcomingEvents(maxResults = 10) {
     console.log('Fetched upcoming Google Calendar events successfully:', events.items);
     return events.items || [];
   } catch (error) {
-    console.error('Error fetching upcoming Google Calendar events:', error.message, error.stack);
+    console.error('Error fetching upcoming Google Calendar events:', error.message);
     throw error;
   }
 }
+
+export default router;
