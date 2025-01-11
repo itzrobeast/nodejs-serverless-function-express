@@ -411,12 +411,45 @@ export async function sendInstagramMessage(
 }
 
 
+/**
+ * Ensure a partition exists for a given business in the instagram_users table.
+ */
+async function ensureUserPartition(businessId) {
+  const partitionName = `instagram_users_${businessId}`;
+
+  try {
+    // Check if the partition exists
+    const { data, error: checkError } = await supabase
+      .rpc('check_partition_exists', { partition_name: partitionName });
+
+    if (checkError) {
+      console.error('[ERROR] Failed to check partition existence:', checkError.message);
+      return;
+    }
+
+    // If partition doesn't exist, create it
+    if (!data) {
+      const createPartitionQuery = `
+        CREATE TABLE IF NOT EXISTS ${partitionName}
+        PARTITION OF instagram_users
+        FOR VALUES IN (${businessId});
+      `;
+
+      const { error: createError } = await supabase.rpc('execute_sql', { sql_query: createPartitionQuery });
+
+      if (createError) {
+        console.error('[ERROR] Failed to create partition:', createError.message);
+      } else {
+        console.log(`[INFO] Partition created: ${partitionName}`);
+      }
+    }
+  } catch (error) {
+    console.error('[ERROR] Exception in ensureUserPartition:', error.message);
+  }
+}
 
 /**
- * Upsert Instagram user into the database.
- * @param {string} senderId - Instagram user ID.
- * @param {object} userInfo - Instagram user information (e.g., username).
- * @param {number} businessId - Associated business ID.
+ * Upsert Instagram user with automatic partition creation.
  */
 export async function upsertInstagramUser(senderId, userInfo, businessId, role = 'customer', location = null, igId) {
   try {
@@ -425,23 +458,25 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
       return;
     }
 
-     // Ensure senderId is valid
     if (!senderId) {
       console.error('[ERROR] Sender ID is required for upserting Instagram user.');
       return;
     }
 
+    // Ensure the partition exists for the business
+    await ensureUserPartition(businessId);
 
+    // Perform the upsert operation
     const { error } = await supabase
       .from('instagram_users')
       .upsert({
         sender_id: senderId,
         ig_id: igId,
-        business_id: businessId, // Associate the customer with the messaging business
+        business_id: businessId,
         username: userInfo?.username || null,
         role,
         location: location || null,
-        updated_at: new Date().toISOString(), 
+        updated_at: new Date().toISOString(),
       }, { onConflict: ['sender_id', 'business_id'] });
 
     if (error) {
@@ -453,8 +488,6 @@ export async function upsertInstagramUser(senderId, userInfo, businessId, role =
     console.error('[ERROR] Exception while upserting Instagram user:', err.message);
   }
 }
-
-
 
 /**
  * Parse user messages to extract field-value pairs in the format "key: value".
@@ -477,3 +510,8 @@ export function parseUserMessage(userMessage) {
     location,
   };
 }
+
+
+
+
+
