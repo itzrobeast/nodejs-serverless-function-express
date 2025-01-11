@@ -195,6 +195,60 @@ export async function fetchBusinessDetails(businessId) {
   }
 }
 
+
+
+/**
+ * Ensure a partition exists for the given business in the instagram_conversations table.
+ * This prevents errors when inserting messages if the partition is missing.
+ *
+ * @param {number} businessId - The business ID to create the partition for.
+ */
+export async function ensureConversationPartition(businessId) {
+  const partitionName = `instagram_conversations_business_${businessId}`;
+
+  try {
+    // ✅ Check if the partition exists
+    const { data, error: checkError } = await supabase
+      .rpc('check_partition_exists', { partition_name: partitionName });
+
+    if (checkError) {
+      console.error('[ERROR] Failed to check partition existence:', checkError.message);
+      return;
+    }
+
+    const partitionExists = data && data[0]?.exists;
+
+    // ✅ Create partition if it doesn't exist
+    if (!partitionExists) {
+      const createPartitionQuery = `
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT FROM pg_class WHERE relname = '${partitionName}'
+          ) THEN
+            EXECUTE 'CREATE TABLE ${partitionName} PARTITION OF instagram_conversations FOR VALUES IN (${businessId})';
+          END IF;
+        END $$;
+      `;
+
+      const { error: createError } = await supabase
+        .rpc('execute_sql', { sql_query: createPartitionQuery });
+
+      if (createError) {
+        console.error('[ERROR] Failed to create partition:', createError.message);
+      } else {
+        console.log(`[INFO] Partition created: ${partitionName}`);
+      }
+    } else {
+      console.log(`[INFO] Partition already exists: ${partitionName}`);
+    }
+  } catch (error) {
+    console.error('[ERROR] Exception in ensureConversationPartition:', error.message);
+  }
+}
+
+
+
 /**
  * Log a message into the database.
  * @param {object} params - Parameters for logging the message.
@@ -214,6 +268,9 @@ export async function logMessage({
   location = null,
 }) {
   try {
+     // ✅ Ensure the partition exists before logging
+    await ensureConversationPartition(businessId);
+    
     // Validate required fields
     if (!businessId || !senderId || !recipientId || !message || !type) {
       console.warn('[WARN] Missing required fields for logging message:', {
