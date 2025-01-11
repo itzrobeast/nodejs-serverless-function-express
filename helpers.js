@@ -204,7 +204,7 @@ export async function fetchBusinessDetails(businessId) {
  * @param {number} businessId - The business ID to create the partition for.
  */
 export async function ensureConversationPartition(businessId) {
-  const partitionName = `instagram_conversations_business_${businessId}`;
+  const partitionName = `instagram_conversations_${businessId}`;
 
   try {
     // ✅ Check if the partition exists
