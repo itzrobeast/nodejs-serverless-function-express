@@ -1,5 +1,49 @@
 import fetch from 'node-fetch';
 import { google } from 'googleapis';
+import supabase from './supabaseClient.js';
+
+
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  `${process.env.BASE_URL}/auth/google/callback` // Redirect URI
+);
+
+// Generate OAuth URL
+export const generateAuthUrl = () => {
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: ['https://www.googleapis.com/auth/calendar'],
+  });
+};
+
+// Handle OAuth callback
+export const handleGoogleCallback = async (code, businessId) => {
+  const { tokens } = await oauth2Client.getToken(code);
+
+  // Store tokens in Supabase
+  const { error } = await supabase
+    .from('google_calendar')
+    .upsert({
+      business_id: businessId,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_expiry: tokens.expiry_date,
+    });
+
+  if (error) {
+    console.error('Error storing Google tokens:', error);
+    throw new Error('Failed to store Google Calendar tokens');
+  }
+
+  return tokens;
+};
+
+
+
+
 
 // Decode and initialize Google credentials from the environment variable
 const serviceAccount = (() => {
