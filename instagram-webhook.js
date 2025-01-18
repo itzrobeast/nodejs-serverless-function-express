@@ -155,6 +155,9 @@ async function respondAndLog(
       }
     }
 
+    // Generate a unique message ID
+    const generatedMessageId = crypto.randomUUID();  // ✅ Always generate a message ID
+
     // Send the message using the valid token
     await sendInstagramMessage(
       senderId,
@@ -167,16 +170,16 @@ async function respondAndLog(
     // Log the "sent" message in the database
     await logMessage({
       businessId,
-      senderId: recipientId, // The "business" is effectively the sender now
+      senderId: recipientId, // Business is the sender
       recipientId: senderId,
       message: messageText,
       type: 'sent',
       role: 'business',
       igId,
       username: 'Business',
-      messageId: messageId || crypto.randomUUID(),
-      
+      messageId: generatedMessageId,  // ✅ Use the generated ID
     });
+
   } catch (err) {
     console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
   }
