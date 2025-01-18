@@ -291,27 +291,41 @@ router.post('/', async (req, res) => {
     if (object === 'instagram') {
       for (const event of entry) {
         console.log(`[DEBUG] Entry ID: ${event.id}, Timestamp: ${event.time}`);
+        console.log('[DEBUG] Full Event Payload:', JSON.stringify(event, null, 2));
 
+        // 1️⃣ Handle direct messaging events
         if (event.messaging) {
           for (const messageEvent of event.messaging) {
-            // Skip echo messages
-            if (messageEvent.message?.is_echo) {
-              console.log('[INFO] Skipping echo message:', messageEvent.message.mid);
+            const isDeleted = messageEvent.message?.is_deleted;
+            const isEcho = messageEvent.message?.is_echo;
+
+            if (isDeleted) {
+              console.log('[INFO] Deleted message detected:', messageEvent.message.mid);
+              const businessId = await fetchBusinessIdFromInstagramId(messageEvent.recipient?.id);
+              await handleUnsentMessage(messageEvent.message.mid, businessId);
               continue;
             }
 
-            // Skip read receipts
-            if (messageEvent.read) {
-              console.log('[INFO] Skipping read receipt for:', messageEvent.read.mid);
-              continue;
+            if (!isEcho) {
+              await processMessagingEvent(messageEvent);
             }
-
-            const uniqueEventKey = `${messageEvent.message?.mid}-${messageEvent.sender?.id}-${messageEvent.recipient?.id}-${messageEvent.timestamp}`;
-            console.log(`[DEBUG] Unique Event Key: ${uniqueEventKey}`);
-
-            // Process the messaging event
-            await processMessagingEvent(messageEvent);
           }
+        }
+
+        // 2️⃣ Handle data changes (including message deletions)
+        if (event.changes) {
+          for (const change of event.changes) {
+            if (change.field === 'messages' && change.value?.is_deleted) {
+              console.log('[INFO] Message deleted via change event:', change.value.mid);
+              const businessId = await fetchBusinessIdFromInstagramId(change.value.recipient_id);
+              await handleUnsentMessage(change.value.mid, businessId);
+            }
+          }
+        }
+
+        // 3️⃣ Handle standby events (when the app is not the primary receiver)
+        if (event.standby) {
+          console.log('[INFO] Standby event detected:', event.standby);
         }
       }
 
