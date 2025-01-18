@@ -199,45 +199,47 @@ export async function fetchBusinessDetails(businessId) {
 
 /**
  * Ensure a partition exists for the given business in the instagram_conversations table.
- * This prevents errors when inserting messages if the partition is missing.
- *
  * @param {number} businessId - The business ID to create the partition for.
  */
 export async function ensureConversationPartition(businessId) {
   const partitionName = `instagram_conversations_${businessId}`;
 
   try {
-    // ✅ Check if the partition exists
-    const { data, error: checkError } = await supabase
-      .rpc('check_partition_exists', { partition_name: partitionName });
+    // Check if the partition already exists in pg_class
+    const checkPartitionSQL = `
+      SELECT EXISTS (
+        SELECT 1 FROM pg_class WHERE relname = '${partitionName}'
+      );
+    `;
 
-    if (checkError) {
-      console.error('[ERROR] Failed to check partition existence:', checkError.message);
+    const { data: existsData, error: existsError } = await supabase.rpc('execute_sql', {
+      sql_query: checkPartitionSQL,
+    });
+
+    if (existsError) {
+      console.error('[ERROR] Failed to check partition existence:', existsError.message);
       return;
     }
 
-    const partitionExists = data && data[0]?.exists;
+    const partitionExists = existsData && existsData[0]?.exists;
 
-    // ✅ Create partition if it doesn't exist
+    // Create partition if it doesn't exist
     if (!partitionExists) {
-      const createPartitionQuery = `
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT FROM pg_class WHERE relname = '${partitionName}'
-          ) THEN
-            EXECUTE 'CREATE TABLE ${partitionName} PARTITION OF instagram_conversations FOR VALUES IN (${businessId})';
-          END IF;
-        END $$;
+      console.log(`[INFO] Creating partition: ${partitionName}`);
+      const createPartitionSQL = `
+        CREATE TABLE IF NOT EXISTS ${partitionName}
+        PARTITION OF instagram_conversations
+        FOR VALUES IN (${businessId});
       `;
 
-      const { error: createError } = await supabase
-        .rpc('execute_sql', { sql_query: createPartitionQuery });
+      const { error: createError } = await supabase.rpc('execute_sql', {
+        sql_query: createPartitionSQL,
+      });
 
       if (createError) {
-        console.error('[ERROR] Failed to create partition:', createError.message);
+        console.error(`[ERROR] Failed to create partition ${partitionName}:`, createError.message);
       } else {
-        console.log(`[INFO] Partition created: ${partitionName}`);
+        console.log(`[INFO] Partition created successfully: ${partitionName}`);
       }
     } else {
       console.log(`[INFO] Partition already exists: ${partitionName}`);
@@ -246,6 +248,8 @@ export async function ensureConversationPartition(businessId) {
     console.error('[ERROR] Exception in ensureConversationPartition:', error.message);
   }
 }
+
+
 
 
 
