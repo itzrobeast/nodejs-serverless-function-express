@@ -265,7 +265,7 @@ async function processMessagingEvent(messageEvent) {
 
     const assistantResponse = await assistantHandler({ userMessage, businessId });
     if (assistantResponse?.message) {
-      await logMessage({ businessId, senderId: recipientId, recipientId: senderId, message: assistantResponse.message, type: 'sent', role: 'business', igId: recipientId, username: 'Business' });
+      await logMessage({ businessId, senderId: recipientId, recipientId: senderId, message: assistantResponse.message, type: 'sent', role: 'business', igId: recipientId, username: 'Business', messageId: messageId || crypto.randomUUID() });
       await respondAndLog(businessId, senderId, recipientId, assistantResponse.message, recipientId, userInfo?.username || '', businessDetails);
     }
   } catch (err) {
