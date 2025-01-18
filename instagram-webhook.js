@@ -237,15 +237,7 @@ async function processMessagingEvent(messageEvent) {
       return;
     }
 
-    const lastMessage = lastUserMessages.get(`${senderId}-${recipientId}`);
-    if (lastMessage && lastMessage === userMessage) {
-      console.log(`[INFO] Skipping assistant response. User repeated text: "${userMessage}"`);
-      await logMessage({ businessId: null, senderId, recipientId, message: userMessage, type: 'received', role: 'customer' });
-      return;
-    }
-
-    lastUserMessages.set(`${senderId}-${recipientId}`, userMessage);
-    setTimeout(() => lastUserMessages.delete(`${senderId}-${recipientId}`), 5 * 60 * 1000);
+    
 
     if (!businessId) {
       console.log('[INFO] Message is from a customer; no known business ID. Logging normally.');
