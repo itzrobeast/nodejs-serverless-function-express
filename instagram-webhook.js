@@ -174,6 +174,7 @@ async function respondAndLog(
       role: 'business',
       igId,
       username: 'Business',
+      messageId: messageId || crypto.randomUUID(),
       
     });
   } catch (err) {
