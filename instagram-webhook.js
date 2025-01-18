@@ -130,7 +130,7 @@ async function respondAndLog(
   igId,
   username,
   businessDetails,
-  messageId
+  
 ) {
   try {
     if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
