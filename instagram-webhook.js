@@ -129,7 +129,8 @@ async function respondAndLog(
   messageText,
   igId,
   username,
-  businessDetails
+  businessDetails,
+  messageId  // 🔑 Accept messageId as a parameter
 ) {
   try {
     if (!businessId || !senderId || !recipientId || !messageText || !businessDetails) {
@@ -155,10 +156,7 @@ async function respondAndLog(
       }
     }
 
-    // Generate a unique message ID
-    const generatedMessageId = crypto.randomUUID();  // ✅ Always generate a message ID
-
-    // Send the message using the valid token
+    // Send the message
     await sendInstagramMessage(
       senderId,
       messageText,
@@ -170,20 +168,21 @@ async function respondAndLog(
     // Log the "sent" message in the database
     await logMessage({
       businessId,
-      senderId: recipientId, // Business is the sender
+      senderId: recipientId,  // Business is the sender
       recipientId: senderId,
       message: messageText,
       type: 'sent',
       role: 'business',
       igId,
       username: 'Business',
-      messageId: generatedMessageId,  // ✅ Use the generated ID
+      messageId: messageId || crypto.randomUUID()  // 🔑 Use the passed ID
     });
 
   } catch (err) {
     console.error(`[ERROR] Failed to respond and log message for businessId=${businessId}:`, err.message);
   }
 }
+
 
 
 
@@ -268,8 +267,8 @@ async function processMessagingEvent(messageEvent) {
 
     const assistantResponse = await assistantHandler({ userMessage, businessId });
     if (assistantResponse?.message) {
-      await logMessage({ businessId, senderId: recipientId, recipientId: senderId, message: assistantResponse.message, type: 'sent', role: 'business', igId: recipientId, username: 'Business', messageId: messageId || crypto.randomUUID() });
-      await respondAndLog(businessId, senderId, recipientId, assistantResponse.message, recipientId, userInfo?.username || '', businessDetails);
+      
+      await respondAndLog(businessId, senderId, recipientId, assistantResponse.message, recipientId, userInfo?.username || '', businessDetails, generatedMessageId );
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
