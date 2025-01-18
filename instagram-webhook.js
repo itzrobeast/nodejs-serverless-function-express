@@ -270,7 +270,7 @@ async function processMessagingEvent(messageEvent) {
     const assistantResponse = await assistantHandler({ userMessage, businessId });
     if (assistantResponse?.message) {
       
-      await respondAndLog(businessId, senderId, recipientId, assistantResponse.message, recipientId, userInfo?.username || '', businessDetails, generatedMessageId );
+      await respondAndLog(businessId, senderId, recipientId, assistantResponse.message, recipientId, userInfo?.username || '', businessDetails );
     }
   } catch (err) {
     console.error('[ERROR] Failed to process messaging event:', err.message);
