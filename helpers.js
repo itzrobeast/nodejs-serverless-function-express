@@ -293,7 +293,7 @@ export async function logMessage({
 }) {
   try {
      // ✅ Ensure the partition exists before logging
-    await ensureConversationPartition(businessId);
+    await ensureDynamicPartition('instagram_conversations', businessId);
     
     // Validate required fields
     if (!businessId || !senderId || !recipientId || !message || !type) {
