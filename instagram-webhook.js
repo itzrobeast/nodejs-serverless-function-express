@@ -14,6 +14,7 @@ import {
   sendInstagramMessage,
   upsertInstagramUser,
   handleUnsentMessage,
+  ensureDynamicPartition,
 } from './helpers.js';
 
 import {
