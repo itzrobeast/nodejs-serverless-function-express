@@ -197,21 +197,37 @@ export async function fetchBusinessDetails(businessId) {
 
 
 
+
+
+const partitionLocks = new Set();
+
 /**
- * Ensure a partition exists for the given business in the instagram_conversations table.
- * @param {number} businessId - The business ID to create the partition for.
+ * Ensure a partition exists for the given business in a dynamic parent table.
+ * Prevents duplicate creation attempts using a concurrency lock.
+ *
+ * @param {string} parentTable - The parent table name (e.g. "instagram_conversations").
+ * @param {number} businessId - The business ID (list-partition value).
  */
-export async function ensureConversationPartition(businessId) {
-  const partitionName = `instagram_conversations_${businessId}`;
+export async function ensureDynamicPartition(parentTable, businessId) {
+  // 1️⃣ Concurrency check: skip if another request is already creating the partition
+  if (partitionLocks.has(`${parentTable}:${businessId}`)) {
+    console.log(`[INFO] Partition creation for ${parentTable}, business ID ${businessId} is already in progress.`);
+    return;
+  }
+  partitionLocks.add(`${parentTable}:${businessId}`);
 
   try {
-    // Check if the partition already exists in pg_class
+    // Build dynamic partition name: e.g., "instagram_conversations_268"
+    const partitionName = `${parentTable}_${businessId}`;
+
+    // 2️⃣ Check if the partition already exists in pg_class
     const checkPartitionSQL = `
       SELECT EXISTS (
-        SELECT 1 FROM pg_class WHERE relname = '${partitionName}'
+        SELECT 1
+        FROM pg_class
+        WHERE relname = '${partitionName}'
       );
     `;
-
     const { data: existsData, error: existsError } = await supabase.rpc('execute_sql', {
       sql_query: checkPartitionSQL,
     });
@@ -223,12 +239,12 @@ export async function ensureConversationPartition(businessId) {
 
     const partitionExists = existsData && existsData[0]?.exists;
 
-    // Create partition if it doesn't exist
+    // 3️⃣ Create the partition only if it doesn't exist
     if (!partitionExists) {
       console.log(`[INFO] Creating partition: ${partitionName}`);
       const createPartitionSQL = `
         CREATE TABLE IF NOT EXISTS ${partitionName}
-        PARTITION OF instagram_conversations
+        PARTITION OF ${parentTable}
         FOR VALUES IN (${businessId});
       `;
 
@@ -245,9 +261,13 @@ export async function ensureConversationPartition(businessId) {
       console.log(`[INFO] Partition already exists: ${partitionName}`);
     }
   } catch (error) {
-    console.error('[ERROR] Exception in ensureConversationPartition:', error.message);
+    console.error('[ERROR] Exception in ensureDynamicPartition:', error.message);
+  } finally {
+    // 4️⃣ Always remove the lock
+    partitionLocks.delete(`${parentTable}:${businessId}`);
   }
 }
+
 
 
 
