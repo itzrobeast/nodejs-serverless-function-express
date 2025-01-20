@@ -202,25 +202,26 @@ export async function fetchBusinessDetails(businessId) {
 const partitionLocks = new Set();
 
 /**
- * Ensure a partition exists for the given business in a dynamic parent table.
+ * Ensure a partition exists for a given business in a dynamic parent table.
  * Prevents duplicate creation attempts using a concurrency lock.
  *
  * @param {string} parentTable - The parent table name (e.g. "instagram_conversations").
  * @param {number} businessId - The business ID (list-partition value).
  */
 export async function ensureDynamicPartition(parentTable, businessId) {
-  // 1️⃣ Concurrency check: skip if another request is already creating the partition
-  if (partitionLocks.has(`${parentTable}:${businessId}`)) {
-    console.log(`[INFO] Partition creation for ${parentTable}, business ID ${businessId} is already in progress.`);
+  // Prevent duplicate concurrent creation attempts
+  const partitionKey = `${parentTable}:${businessId}`;
+  if (partitionLocks.has(partitionKey)) {
+    console.log(`[INFO] Partition creation for ${partitionKey} is already in progress.`);
     return;
   }
-  partitionLocks.add(`${parentTable}:${businessId}`);
 
+  partitionLocks.add(partitionKey);
   try {
-    // Build dynamic partition name: e.g., "instagram_conversations_268"
+    // Generate partition name dynamically
     const partitionName = `${parentTable}_${businessId}`;
 
-    // 2️⃣ Check if the partition already exists in pg_class
+    // Check if the partition already exists
     const checkPartitionSQL = `
       SELECT EXISTS (
         SELECT 1
@@ -233,13 +234,11 @@ export async function ensureDynamicPartition(parentTable, businessId) {
     });
 
     if (existsError) {
-      console.error('[ERROR] Failed to check partition existence:', existsError.message);
+      console.error(`[ERROR] Failed to check existence of partition ${partitionName}:`, existsError.message);
       return;
     }
 
-    const partitionExists = existsData && existsData[0]?.exists;
-
-    // 3️⃣ Create the partition only if it doesn't exist
+    const partitionExists = existsData?.[0]?.exists;
     if (!partitionExists) {
       console.log(`[INFO] Creating partition: ${partitionName}`);
       const createPartitionSQL = `
@@ -247,7 +246,6 @@ export async function ensureDynamicPartition(parentTable, businessId) {
         PARTITION OF ${parentTable}
         FOR VALUES IN (${businessId});
       `;
-
       const { error: createError } = await supabase.rpc('execute_sql', {
         sql_query: createPartitionSQL,
       });
@@ -261,22 +259,15 @@ export async function ensureDynamicPartition(parentTable, businessId) {
       console.log(`[INFO] Partition already exists: ${partitionName}`);
     }
   } catch (error) {
-    console.error('[ERROR] Exception in ensureDynamicPartition:', error.message);
+    console.error(`[ERROR] Exception while ensuring partition: ${error.message}`);
   } finally {
-    // 4️⃣ Always remove the lock
-    partitionLocks.delete(`${parentTable}:${businessId}`);
+    partitionLocks.delete(partitionKey);
   }
 }
 
 
 
 
-
-
-/**
- * Log a message into the database.
- * @param {object} params - Parameters for logging the message.
- */
 export async function logMessage({
   businessId,
   senderId,
@@ -292,21 +283,10 @@ export async function logMessage({
   location = null,
 }) {
   try {
-     // ✅ Ensure the partition exists before logging
+    // Ensure the partition exists before inserting
     await ensureDynamicPartition('instagram_conversations', businessId);
-    
-    // Validate required fields
-    if (!businessId || !senderId || !recipientId || !message || !type) {
-      console.warn('[WARN] Missing required fields for logging message:', {
-        businessId,
-        senderId,
-        recipientId,
-        message,
-        type,
-      });
-      return;
-    }
 
+    // Log the message into the partition
     console.log('[DEBUG] Logging message with data:', {
       business_id: businessId,
       sender_id: senderId,
@@ -322,29 +302,6 @@ export async function logMessage({
       location,
     });
 
-    // Deduplication check
-    const { data: existingMessage, error: fetchError } = await supabase
-      .from('instagram_conversations')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('sender_id', senderId)
-      .eq('recipient_id', recipientId)
-      .eq('message', message)
-      .eq('message_type', type)
-      .eq('message_id', messageId)
-      .single();
-
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('[ERROR] Failed to check for duplicate message:', fetchError.message);
-      return;
-    }
-
-    if (existingMessage) {
-      console.log('[INFO] Duplicate message detected. Skipping log.');
-      return;
-    }
-
-    // Insert message
     const { error: insertError } = await supabase.from('instagram_conversations').insert([
       {
         business_id: businessId,
@@ -371,6 +328,11 @@ export async function logMessage({
     console.error('[ERROR] Exception while logging message:', err.message);
   }
 }
+
+
+
+
+
 
 /**
  * Handle unsent (deleted) messages.
