@@ -1,0 +1,22 @@
+import express from "express";
+
+const router = express.Router();
+
+const SETMORE_CLIENT_ID = process.env.SETMORE_CLIENT_ID;
+const SETMORE_REDIRECT_URI = process.env.SETMORE_REDIRECT_URI; // Your backend callback URL
+const SETMORE_AUTH_URL = "https://developer.setmore.com/api/v1/o/oauth2/authorize";
+
+router.get("/auth/setmore", (req, res) => {
+  const { businessId } = req.query;
+
+  if (!businessId) {
+    return res.status(400).send("Missing business ID");
+  }
+
+  const authorizationUrl = `${SETMORE_AUTH_URL}?client_id=${SETMORE_CLIENT_ID}&redirect_uri=${SETMORE_REDIRECT_URI}&response_type=code`;
+
+  // Redirect user to Setmore's authorization page
+  res.redirect(authorizationUrl);
+});
+
+export default router;
