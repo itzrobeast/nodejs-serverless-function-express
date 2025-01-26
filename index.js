@@ -102,11 +102,12 @@ const routes = [
   { path: '/auth/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
   { path: '/auth/logout', router: logoutRouter },
-  { path: '/vonage/inbound-call', router: express.Router().post('/', handleInboundCall) },
-  { path: '/vonage/event', router: express.Router().post('/', handleCallEvent) },
-  { path: '/vonage/fallback', router: express.Router().post('/', handleFallback) },
-  { path: '/vonage/inbound', router: express.Router().post('/', handleInboundMessage) },
-  { path: '/vonage/status', router: express.Router().post('/', handleCallStatus) },
+  { path: '/vonage/inbound-call', router: express.Router().route('/').get(handleInboundCall).post(handleInboundCall) },
+  { path: '/vonage/event', router: express.Router().route('/').get(handleCallEvent).post(handleCallEvent) },
+  { path: '/vonage/fallback', router: express.Router().route('/').get(handleFallback).post(handleFallback) },
+  { path: '/vonage/inbound', router: express.Router().route('/').get(handleInboundMessage).post(handleInboundMessage) },
+  { path: '/vonage/status', router: express.Router().route('/').get(handleCallStatus).post(handleCallStatus) },
+
 ];
 
 routes.forEach(({ path, router }) => {
