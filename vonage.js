@@ -10,41 +10,13 @@ const vonage = new Vonage({
 });
 
 /**
- * Assign a Vonage number dynamically to a business.
- */
-export const assignVonageNumberDynamically = async (businessId) => {
-  try {
-    const availableNumbers = await vonage.number.search({ country: 'US' });
-    if (!availableNumbers.numbers || availableNumbers.numbers.length === 0) {
-      throw new Error('No available numbers found');
-    }
-
-    const selectedNumber = availableNumbers.numbers[0].msisdn;
-
-    // Purchase the number
-    await vonage.number.buy({ country: 'US', msisdn: selectedNumber });
-
-    // Save to database
-    const { error } = await supabase
-      .from('vonage_numbers')
-      .insert([{ business_id: businessId, vonage_number: selectedNumber }]);
-    if (error) throw new Error(`Database error: ${error.message}`);
-
-    return selectedNumber;
-  } catch (error) {
-    console.error('[ERROR] Failed to assign Vonage number:', error.message);
-    throw error;
-  }
-};
-
-/**
- * Handle inbound calls and pass them to Mila for processing.
+ * Handle inbound calls (Answer URL).
  */
 export const handleInboundCall = async (req, res) => {
   try {
     const { to, from } = req.body;
 
-    // Find the business associated with the called number
+    // Fetch the business associated with the called number
     const { data: businessData, error: businessError } = await supabase
       .from('vonage_numbers')
       .select('business_id')
@@ -52,10 +24,11 @@ export const handleInboundCall = async (req, res) => {
       .single();
 
     if (businessError || !businessData) {
+      console.error('[ERROR] Business not found for number:', to);
       return res.json([{ action: 'talk', text: 'Sorry, we cannot process your call at this time.' }]);
     }
 
-    // Use assistantHandler to process the inbound call
+    // Use assistantHandler to generate Mila's response
     const assistantResponse = await assistantHandler({
       userMessage: `Inbound call received from ${from}. How should I assist?`,
       businessId: businessData.business_id,
@@ -75,53 +48,86 @@ export const handleInboundCall = async (req, res) => {
 };
 
 /**
- * Make an outbound call to a lead.
+ * Handle call events (Event URL).
  */
-export const makeOutboundCall = async (to, from, text) => {
+export const handleCallEvent = async (req, res) => {
   try {
-    await vonage.calls.create({
-      to: [{ type: 'phone', number: to }],
-      from: { type: 'phone', number: from },
-      ncco: [{ action: 'talk', text }],
-    });
-    console.log(`[INFO] Outbound call placed to ${to}`);
+    const { status, to, from } = req.body;
+    console.log(`[INFO] Call event: ${status}, To: ${to}, From: ${from}`);
+
+    // Optional: Log the event to the database
+    await supabase.from('call_events').insert([
+      {
+        status,
+        to,
+        from,
+        event_time: new Date(),
+      },
+    ]);
+
+    res.status(200).send('Event received');
   } catch (error) {
-    console.error('[ERROR] Failed to make outbound call:', error.message);
+    console.error('[ERROR] Failed to handle call event:', error.message);
+    res.status(500).send('Failed to handle call event');
   }
 };
 
 /**
- * Send an SMS to a lead.
+ * Handle fallback for Answer URL (Fallback URL).
  */
-export const sendSMS = async (to, text) => {
+export const handleFallback = async (req, res) => {
   try {
-    const response = await vonage.sms.send({
-      to,
-      from: process.env.VONAGE_PHONE_NUMBER,
-      text,
-    });
-    console.log(`[INFO] SMS sent to ${to}`);
-    return response;
+    console.error('[ERROR] Fallback URL triggered:', req.body);
+    return res.json([{ action: 'talk', text: 'We are unable to process your call at the moment. Please try again later.' }]);
   } catch (error) {
-    console.error('[ERROR] Failed to send SMS:', error.message);
-    throw error;
+    console.error('[ERROR] Failed to handle fallback:', error.message);
+    return res.status(500).send('Failed to handle fallback');
   }
 };
 
 /**
- * Place a voice call with Mila speaking a message.
+ * Handle inbound messages or events (Inbound URL).
  */
-export const makeCall = async (to, message) => {
+export const handleInboundMessage = async (req, res) => {
   try {
-    const response = await vonage.voice.createCall({
-      to: [{ type: 'phone', number: to }],
-      from: { type: 'phone', number: process.env.VONAGE_PHONE_NUMBER },
-      ncco: [{ action: 'talk', text: message }],
+    const { text, msisdn } = req.body;
+    console.log(`[INFO] Inbound message from ${msisdn}: ${text}`);
+
+    // Respond to the inbound message using Mila's assistant
+    const assistantResponse = await assistantHandler({
+      userMessage: text,
+      platform: 'sms',
     });
-    console.log(`[INFO] Call initiated to ${to}`);
-    return response;
+
+    return res.status(200).json({
+      message: assistantResponse.message || 'Thank you for your message!',
+    });
   } catch (error) {
-    console.error('[ERROR] Failed to make call:', error.message);
-    throw error;
+    console.error('[ERROR] Failed to handle inbound message:', error.message);
+    return res.status(500).send('Failed to handle inbound message');
+  }
+};
+
+/**
+ * Handle call status updates (Status URL).
+ */
+export const handleCallStatus = async (req, res) => {
+  try {
+    const { status, conversation_uuid } = req.body;
+    console.log(`[INFO] Call status update: ${status}, Conversation UUID: ${conversation_uuid}`);
+
+    // Optional: Log the status to the database
+    await supabase.from('call_status_updates').insert([
+      {
+        status,
+        conversation_uuid,
+        status_time: new Date(),
+      },
+    ]);
+
+    res.status(200).send('Status received');
+  } catch (error) {
+    console.error('[ERROR] Failed to handle call status:', error.message);
+    res.status(500).send('Failed to handle call status');
   }
 };
