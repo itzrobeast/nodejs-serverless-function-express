@@ -124,6 +124,21 @@ export const handleInboundCall = async (req, res) => {
 export const handleInputWebhook = async (req, res) => {
   try {
     console.log('[DEBUG] InputWebhook Body:', req.body);
+ 
+    const businessId = req.query.businessId; // Retrieve businessId from the query string
+
+    if (!businessId) {
+      console.error('[ERROR] Missing "businessId" in Input Webhook');
+      return res.json([
+        {
+          action: 'talk',
+          text: 'Sorry, something went wrong. Goodbye.',
+          language: 'en-US',
+          style: 14,
+        },
+      ]);
+    }
+
 
     // 2a) Check speech or DTMF
     let userText = '';
@@ -146,9 +161,7 @@ export const handleInputWebhook = async (req, res) => {
       detectedStyle = 3;
     }
 
-    // 2c) For multi-tenancy, you'd want to know which businessId. 
-    // For now, we just hardcode or store in a session.
-    const businessId = 1; // or retrieve from query or session
+
 
     // 2d) Send user text to the AI
     const assistantResponse = await assistantHandler({
