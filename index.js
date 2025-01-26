@@ -2,14 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import supabase from './supabaseClient.js';
+import bodyParser from 'body-parser';
 import rateLimit from 'express-rate-limit';
+import supabase from './supabaseClient.js';
 
 // Validate Critical Environment Variables
 if (
-  !process.env.FACEBOOK_APP_ID || 
-  !process.env.FACEBOOK_APP_SECRET || 
-  !process.env.SUPABASE_URL || 
+  !process.env.FACEBOOK_APP_ID ||
+  !process.env.FACEBOOK_APP_SECRET ||
+  !process.env.SUPABASE_URL ||
   !process.env.SUPABASE_SERVICE_ROLE_KEY
 ) {
   console.error('[CRITICAL] Missing environment variables. Ensure FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, SUPABASE_URL, and SUPABASE_SERVICE_ROLE_KEY are set.');
@@ -17,7 +18,6 @@ if (
 }
 
 // Import route handlers
-//import setupBusinessRouter from './setup-business.js';
 import assistantRouter from './assistant.js';
 import instagramWebhookRouter from './instagram-webhook.js';
 import leadgenWebhookRouter from './leadgen-webhook.js';
@@ -27,47 +27,43 @@ import retrieveLeadsRouter from './retrieve-leads.js';
 import verifySessionRouter from './auth/verify-session.js';
 import refreshTokenRouter from './auth/refresh-token.js';
 import loginRouter from './auth/login.js';
-import { handleInboundCall } from './vonage.js';
 import logoutRouter from './auth/logout.js';
-
+import {
+  handleInboundCall,
+  handleCallEvent,
+  handleFallback,
+  handleInboundMessage,
+  handleCallStatus,
+} from './vonage.js';
 
 const app = express();
-
+app.use(bodyParser.json());
 
 // Trust proxy settings for Vercel and other platforms
 app.set('trust proxy', 1); // Trust first proxy (necessary for X-Forwarded-For)
 
+// Rate limiter for login attempts
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // limit each IP
   message: 'Too many login attempts, try again later.',
 });
 
-app.use('/auth/login', loginLimiter); // Apply rate limiter
-
-app.use('/auth/logout', logoutRouter);
-
-
 // Middleware
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: false, // Disable CSP to allow inline styles/scripts if needed
   })
 );
-
-
 app.use(cookieParser());
 app.use(express.json());
 
-app.post('/api/inbound-call', handleInboundCall);
-
+// CORS configuration
 app.use(
   cors({
     origin: (origin, callback) => {
       console.log(`[DEBUG] CORS Origin Header: ${origin}`);
-      const allowedOrigins = [
-        'https://mila-verse.vercel.app',
-      ];
+      const allowedOrigins = ['https://mila-verse.vercel.app'];
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -75,11 +71,9 @@ app.use(
         callback(new Error('Not allowed by CORS'));
       }
     },
-    credentials: true,
+    credentials: true, // Allow credentials (cookies, authorization headers, etc.)
   })
 );
-
-
 
 // Validate Supabase initialization
 if (!supabase) {
@@ -87,7 +81,7 @@ if (!supabase) {
   process.exit(1);
 }
 
-// Debugging middleware
+// Debugging middleware for development
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
     console.log(`[DEBUG] Request: ${req.method} ${req.url}`);
@@ -98,7 +92,6 @@ if (process.env.NODE_ENV === 'development') {
 
 // Route Handlers
 const routes = [
-  //{ path: '/setup-business', router: setupBusinessRouter },
   { path: '/assistant', router: assistantRouter },
   { path: '/instagram-webhook', router: instagramWebhookRouter },
   { path: '/leadgen-webhook', router: leadgenWebhookRouter },
@@ -110,6 +103,10 @@ const routes = [
   { path: '/auth/login', router: loginRouter },
   { path: '/auth/logout', router: logoutRouter },
   { path: '/api/inbound-call', router: express.Router().post('/', handleInboundCall) },
+  { path: '/vonage/event', router: express.Router().post('/', handleCallEvent) },
+  { path: '/vonage/fallback', router: express.Router().post('/', handleFallback) },
+  { path: '/vonage/inbound', router: express.Router().post('/', handleInboundMessage) },
+  { path: '/vonage/status', router: express.Router().post('/', handleCallStatus) },
 ];
 
 routes.forEach(({ path, router }) => {
@@ -150,13 +147,11 @@ app.use((err, req, res, next) => {
 // Graceful Shutdown
 process.on('SIGINT', async () => {
   console.log('[INFO] SIGINT signal received: closing server...');
-  // Add async cleanup tasks if needed
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('[INFO] SIGTERM signal received: closing server...');
-  // Add async cleanup tasks if needed
   process.exit(0);
 });
 
