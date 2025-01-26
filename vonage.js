@@ -1,5 +1,6 @@
 /*****************************************************/
-/** vonage.js -- TALK + INPUT WITH BILINGUAL SUPPORT **/
+/** vonage.js -- TALK + INPUT WITH BUSINESS ID       **/
+/** (No Omissions)                                   **/
 /*****************************************************/
 import { Vonage } from '@vonage/server-sdk';
 import supabase from './supabaseClient.js';
@@ -7,7 +8,7 @@ import { assistantHandler } from './assistant.js';
 
 /**
  * Initialize Vonage SDK.
- * Ensure these env variables:
+ * Ensure these environment variables:
  *  - VONAGE_API_KEY
  *  - VONAGE_API_SECRET
  *  - VONAGE_APPLICATION_ID
@@ -23,9 +24,9 @@ const vonage = new Vonage({
 /**********************************************************************
  * 1) Answer URL - handleInboundCall
  *
- *  - We greet the caller based on any immediate Spanish detection
- *    (optional—often you greet in English by default).
- *  - Then we do "input" so the user can speak or DTMF.
+ *   - We greet the caller in English (by default).
+ *   - We do "input" so Vonage will listen for speech/DTMF,
+ *     then POST to our "input webhook" with the businessId param appended.
  **********************************************************************/
 export const handleInboundCall = async (req, res) => {
   try {
@@ -47,7 +48,7 @@ export const handleInboundCall = async (req, res) => {
       ]);
     }
 
-    // Lookup the business associated with this Vonage number
+    // 1a) Lookup the business associated with this Vonage number
     const { data: businessData, error: businessError } = await supabase
       .from('vonage_numbers')
       .select('business_id')
@@ -69,29 +70,24 @@ export const handleInboundCall = async (req, res) => {
     const businessId = businessData.business_id;
     console.log(`[INFO] Found businessId: ${businessId}`);
 
-    // For the initial greeting, we might default to English
-    // If you want immediate language detection from some param, you'd do that here
-    let initialLanguage = 'en-US';
-    let initialStyle = 14;
+    // 1b) Construct the initial "talk + input" NCCO
+    // We'll pass "businessId" in the eventUrl query param
+    const eventUrlWithBusinessId = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
 
-    // Construct an NCCO with talk + input
     const ncco = [
       {
         action: 'talk',
         text: 'Hello, this is Mila. How can I assist you today?',
-        language: initialLanguage,
-        style: initialStyle,
+        language: 'en-US',
+        style: 14,
       },
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        // The separate input webhook where subsequent user input is posted:
-        eventUrl: [
-          'https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook'
-        ],
+        eventUrl: [eventUrlWithBusinessId],
         speech: {
-          endOnSilence: 1, // seconds
-          language: initialLanguage,
+          endOnSilence: 1, // seconds of silence to consider speech ended
+          language: 'en-US',
         },
         dtmf: {
           maxDigits: 1,
@@ -117,16 +113,17 @@ export const handleInboundCall = async (req, res) => {
 /**********************************************************************
  * 2) Input Webhook - handleInputWebhook
  *
- *  - After user speaks or presses digits, Vonage posts here.
- *  - We detect Spanish or English from user input, pass text to the AI,
- *    then respond with talk + input for a multi-turn conversation.
+ *   - After the user speaks or presses digits, Vonage sends us a POST
+ *     with the "businessId" param in req.query (thanks to the eventUrl above).
+ *   - We detect Spanish vs. English from the recognized text and pass
+ *     it to our AI assistant. Then we respond with talk + input again.
  **********************************************************************/
 export const handleInputWebhook = async (req, res) => {
   try {
     console.log('[DEBUG] InputWebhook Body:', req.body);
- 
-    const businessId = req.query.businessId; // Retrieve businessId from the query string
 
+    // 2a) Retrieve businessId from the query string
+    const { businessId } = req.query;
     if (!businessId) {
       console.error('[ERROR] Missing "businessId" in Input Webhook');
       return res.json([
@@ -139,29 +136,27 @@ export const handleInputWebhook = async (req, res) => {
       ]);
     }
 
-
-    // 2a) Check speech or DTMF
+    // 2b) Check speech or DTMF
     let userText = '';
-    if (req.body.speech && req.body.speech.results && req.body.speech.results.length > 0) {
-      // Speech
+    if (req.body.speech?.results?.length > 0) {
+      // The recognized speech
       userText = req.body.speech.results[0].text;
-    } else if (req.body.dtmf && req.body.dtmf.digits) {
-      // DTMF
+    } else if (req.body.dtmf?.digits) {
+      // The user pressed a digit
       userText = `DTMF digit: ${req.body.dtmf.digits}`;
     } else {
       console.warn('[WARN] No speech or dtmf input found');
     }
+
     console.log(`[INFO] User input: ${userText}`);
 
-    // 2b) Basic Spanish detection: if user text has accented chars
+    // 2c) Basic Spanish detection: if user text has accented chars
     let detectedLanguage = 'en-US';
     let detectedStyle = 14;
     if (userText && /[áéíóúñ]/i.test(userText)) {
       detectedLanguage = 'es-US';
       detectedStyle = 3;
     }
-
-
 
     // 2d) Send user text to the AI
     const assistantResponse = await assistantHandler({
@@ -171,11 +166,13 @@ export const handleInputWebhook = async (req, res) => {
     });
     console.log('[DEBUG] Assistant says:', assistantResponse.message);
 
-    // 2e) If user wants to "book appointment," handle that logic here if integrated
-    // For demonstration, we just repeat AI's response in TTS
+    // 2e) TTS message (the AI’s response)
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
 
-    // 2f) Return new NCCO: talk + input again, using the detected language
+    // 2f) Return new NCCO: talk + input again
+    //    Keep the conversation going
+    const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
+
     const ncco = [
       {
         action: 'talk',
@@ -186,9 +183,7 @@ export const handleInputWebhook = async (req, res) => {
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [
-          'https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook'
-        ],
+        eventUrl: [nextEventUrl],
         speech: {
           endOnSilence: 1,
           language: detectedLanguage,
@@ -215,7 +210,7 @@ export const handleInputWebhook = async (req, res) => {
 };
 
 /**********************************************************************
- * 3) Call Event
+ * 3) Call Event - handleCallEvent
  **********************************************************************/
 export const handleCallEvent = async (req, res) => {
   try {
@@ -230,7 +225,7 @@ export const handleCallEvent = async (req, res) => {
 };
 
 /**********************************************************************
- * 4) Fallback
+ * 4) Fallback - handleFallback
  **********************************************************************/
 export const handleFallback = async (req, res) => {
   try {
@@ -248,7 +243,7 @@ export const handleFallback = async (req, res) => {
 };
 
 /**********************************************************************
- * 5) Inbound SMS
+ * 5) Inbound SMS - handleInboundMessage
  **********************************************************************/
 export const handleInboundMessage = async (req, res) => {
   try {
@@ -268,7 +263,7 @@ export const handleInboundMessage = async (req, res) => {
 };
 
 /**********************************************************************
- * 6) Call Status
+ * 6) Call Status - handleCallStatus
  **********************************************************************/
 export const handleCallStatus = async (req, res) => {
   try {
