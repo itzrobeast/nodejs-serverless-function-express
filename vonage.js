@@ -14,7 +14,15 @@ const vonage = new Vonage({
  */
 export const handleInboundCall = async (req, res) => {
   try {
+    console.log('[DEBUG] Inbound Call Request Body:', req.body); // Log the full request body
+
     const { to, from } = req.body;
+
+    if (!to || !from) {
+      console.error('[ERROR] Missing "to" or "from" in the request payload:', req.body);
+      return res.json([{ action: 'talk', text: 'Sorry, we cannot process your call due to missing information.' }]);
+    }
+
     console.log(`[INFO] Inbound call received: From ${from}, To ${to}`);
 
     // Fetch the business associated with the called number
