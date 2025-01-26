@@ -15,6 +15,7 @@ const vonage = new Vonage({
 export const handleInboundCall = async (req, res) => {
   try {
     const { to, from } = req.body;
+    console.log(`[INFO] Inbound call received: From ${from}, To ${to}`);
 
     // Fetch the business associated with the called number
     const { data: businessData, error: businessError } = await supabase
@@ -52,7 +53,7 @@ export const handleInboundCall = async (req, res) => {
  */
 export const handleCallEvent = async (req, res) => {
   try {
-    const { status, to, from } = req.body;
+    const { status, to, from } = req.query; // Handle query parameters for GET
     console.log(`[INFO] Call event: ${status}, To: ${to}, From: ${from}`);
 
     // Optional: Log the event to the database
@@ -77,7 +78,7 @@ export const handleCallEvent = async (req, res) => {
  */
 export const handleFallback = async (req, res) => {
   try {
-    console.error('[ERROR] Fallback URL triggered:', req.body);
+    console.error('[ERROR] Fallback URL triggered:', req.query || req.body);
     return res.json([{ action: 'talk', text: 'We are unable to process your call at the moment. Please try again later.' }]);
   } catch (error) {
     console.error('[ERROR] Failed to handle fallback:', error.message);
@@ -90,7 +91,7 @@ export const handleFallback = async (req, res) => {
  */
 export const handleInboundMessage = async (req, res) => {
   try {
-    const { text, msisdn } = req.body;
+    const { text, msisdn } = req.body || req.query;
     console.log(`[INFO] Inbound message from ${msisdn}: ${text}`);
 
     // Respond to the inbound message using Mila's assistant
@@ -113,7 +114,7 @@ export const handleInboundMessage = async (req, res) => {
  */
 export const handleCallStatus = async (req, res) => {
   try {
-    const { status, conversation_uuid } = req.body;
+    const { status, conversation_uuid } = req.body || req.query;
     console.log(`[INFO] Call status update: ${status}, Conversation UUID: ${conversation_uuid}`);
 
     // Optional: Log the status to the database
