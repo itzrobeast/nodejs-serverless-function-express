@@ -14,12 +14,15 @@ const vonage = new Vonage({
  */
 export const handleInboundCall = async (req, res) => {
   try {
-    console.log('[DEBUG] Inbound Call Request Body:', req.body); // Log the full request body
+    // Extract `to` and `from` from either the body or query parameters
+    const to = req.body.to || req.query.to;
+    const from = req.body.from || req.query.from;
 
-    const { to, from } = req.body;
+    console.log('[DEBUG] Request Body:', req.body);
+    console.log('[DEBUG] Request Query:', req.query);
 
     if (!to || !from) {
-      console.error('[ERROR] Missing "to" or "from" in the request payload:', req.body);
+      console.error('[ERROR] Missing "to" or "from" in the request payload or query parameters.');
       return res.json([{ action: 'talk', text: 'Sorry, we cannot process your call due to missing information.' }]);
     }
 
