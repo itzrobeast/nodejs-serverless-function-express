@@ -90,6 +90,29 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 
+
+const inboundCallRouter = express.Router();
+inboundCallRouter.get('/', handleInboundCall);
+inboundCallRouter.post('/', handleInboundCall);
+
+const callEventRouter = express.Router();
+callEventRouter.get('/', handleCallEvent);
+callEventRouter.post('/', handleCallEvent);
+
+const fallbackRouter = express.Router();
+fallbackRouter.get('/', handleFallback);
+fallbackRouter.post('/', handleFallback);
+
+const inboundMessageRouter = express.Router();
+inboundMessageRouter.get('/', handleInboundMessage);
+inboundMessageRouter.post('/', handleInboundMessage);
+
+const callStatusRouter = express.Router();
+callStatusRouter.get('/', handleCallStatus);
+callStatusRouter.post('/', handleCallStatus);
+
+
+
 // Route Handlers
 const routes = [
   { path: '/assistant', router: assistantRouter },
@@ -102,12 +125,12 @@ const routes = [
   { path: '/auth/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
   { path: '/auth/logout', router: logoutRouter },
-  { path: '/vonage/inbound-call', router: express.Router().route('/').get(handleInboundCall).post(handleInboundCall) },
-  { path: '/vonage/event', router: express.Router().route('/').get(handleCallEvent).post(handleCallEvent) },
-  { path: '/vonage/fallback', router: express.Router().route('/').get(handleFallback).post(handleFallback) },
-  { path: '/vonage/inbound', router: express.Router().route('/').get(handleInboundMessage).post(handleInboundMessage) },
-  { path: '/vonage/status', router: express.Router().route('/').get(handleCallStatus).post(handleCallStatus) },
-
+  { path: '/vonage/inbound-call', router: inboundCallRouter },
+  { path: '/vonage/event', router: callEventRouter },
+  { path: '/vonage/fallback', router: fallbackRouter },
+  { path: '/vonage/inbound', router: inboundMessageRouter },
+  { path: '/vonage/status', router: callStatusRouter },
+  
 ];
 
 routes.forEach(({ path, router }) => {
