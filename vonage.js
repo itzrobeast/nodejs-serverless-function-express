@@ -77,8 +77,8 @@ export const handleInboundCall = async (req, res) => {
     // Step 5: Prompt the user for input in their language
     const promptText =
       detectedLanguage === 'es-US'
-        ? '¡Hola! Este es el recepcionista de inteligencia artificial. ¿Cómo puedo ayudarle hoy?'
-        : 'Hello! This is the AI receptionist. How can I assist you today?';
+        ? '¡Hola! Este es Mila. ¿Cómo puedo ayudarle hoy?'
+        : 'Hello! This is Mila. How can I assist you today?';
 
     return res.json([
       {
