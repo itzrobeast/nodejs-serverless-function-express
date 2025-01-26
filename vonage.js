@@ -16,9 +16,23 @@ export const handleInboundCall = async (req, res) => {
   try {
     const { to, from, speech } = req.body;
 
+  console.log('[DEBUG] Request Body:', req.body);
     console.log(`[INFO] Inbound call received: From ${from}, To ${to}`);
-    if (speech?.text) console.log(`[INFO] Transcription: ${speech.text}`);
 
+    if (!to) {
+      console.error('[ERROR] "to" field is undefined in the request body');
+      return res.json([
+        {
+          action: 'talk',
+          language: 'en-US',
+          style: 14,
+          text: 'We could not process your call because of a technical issue. Please try again later.',
+        },
+      ]);
+    }
+
+
+    
     // Step 1: Fetch the business associated with the called number
     const { data: businessData, error: businessError } = await supabase
       .from('vonage_numbers')
