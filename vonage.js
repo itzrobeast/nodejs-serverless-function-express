@@ -78,7 +78,7 @@ export const handleInboundCall = async (req, res) => {
     const ncco = [
       {
         action: 'talk',
-        text: 'Hello, this is Mila, your virtual assistant. Please say something or press a key.',
+        text: 'Hello, this is Mila. How can I assist you today?',
         language: initialLanguage,
         style: initialStyle,
       },
