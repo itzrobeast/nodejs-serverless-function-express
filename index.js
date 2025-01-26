@@ -57,6 +57,7 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
 
 // CORS configuration
 app.use(
