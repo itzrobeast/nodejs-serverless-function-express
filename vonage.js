@@ -16,8 +16,7 @@ export const handleInboundCall = async (req, res) => {
   try {
     const { to, from, speech } = req.body;
 
-    // Debugging incoming call details
-    console.log(`[INFO] Inbound call received: From ${from} to ${to}`);
+    console.log(`[INFO] Inbound call received: From ${from}, To ${to}`);
     if (speech?.text) console.log(`[INFO] Transcription: ${speech.text}`);
 
     // Step 1: Fetch the business associated with the called number
@@ -32,6 +31,8 @@ export const handleInboundCall = async (req, res) => {
       return res.json([
         {
           action: 'talk',
+          language: 'en-US',
+          style: 14,
           text: 'Sorry, we cannot process your call at this time. Please try again later.',
         },
       ]);
@@ -39,9 +40,16 @@ export const handleInboundCall = async (req, res) => {
 
     const businessId = businessData.business_id;
 
-    // Step 2: Handle AI processing if transcription is available
+    // Step 2: Detect language from transcription (simple example)
+    let detectedLanguage = 'en-US'; // Default to English
+    if (speech?.text?.match(/[áéíóúñ]/i)) {
+      detectedLanguage = 'es-US'; // Switch to Spanish if specific characters are detected
+    }
+
+    console.log(`[INFO] Detected language: ${detectedLanguage}`);
+
+    // Step 3: Process AI response if transcription is available
     if (speech?.text) {
-      // Use AI assistant to process the transcribed text
       const assistantResponse = await assistantHandler({
         userMessage: speech.text,
         businessId,
@@ -50,20 +58,34 @@ export const handleInboundCall = async (req, res) => {
 
       console.log('[DEBUG] Assistant response:', assistantResponse.message);
 
-      // Step 3: Respond with the AI-generated message using TTS
+      // Step 4: Respond in the detected language
+      const responseText =
+        detectedLanguage === 'es-US'
+          ? `Respuesta en español: ${assistantResponse.message || '¿Cómo puedo ayudarle?'}`
+          : assistantResponse.message || 'How can I assist you?';
+
       return res.json([
         {
           action: 'talk',
-          text: assistantResponse.message || 'I’m here to help! How can I assist you?',
+          language: detectedLanguage,
+          style: detectedLanguage === 'es-US' ? 3 : 14, // Use different styles for Spanish/English
+          text: responseText,
         },
       ]);
     }
 
-    // Step 4: If no transcription yet, prompt the caller
+    // Step 5: Prompt the user for input in their language
+    const promptText =
+      detectedLanguage === 'es-US'
+        ? '¡Hola! Este es el recepcionista de inteligencia artificial. ¿Cómo puedo ayudarle hoy?'
+        : 'Hello! This is the AI receptionist. How can I assist you today?';
+
     return res.json([
       {
         action: 'talk',
-        text: 'Hello! This is Mila. How can I assist you today?',
+        language: detectedLanguage,
+        style: detectedLanguage === 'es-US' ? 3 : 14, // Use Spanish or English style
+        text: promptText,
       },
     ]);
   } catch (error) {
@@ -71,6 +93,8 @@ export const handleInboundCall = async (req, res) => {
     return res.json([
       {
         action: 'talk',
+        language: 'en-US',
+        style: 14,
         text: 'We are unable to process your call at this time. Please try again later.',
       },
     ]);
