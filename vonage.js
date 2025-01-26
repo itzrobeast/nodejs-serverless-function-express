@@ -87,7 +87,7 @@ export const handleInboundCall = async (req, res) => {
         type: ['speech', 'dtmf'],
         // The separate input webhook where subsequent user input is posted:
         eventUrl: [
-          'https://your-domain.com/vonage/input-webhook'
+          'https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook'
         ],
         speech: {
           endOnSilence: 1, // seconds
@@ -174,7 +174,7 @@ export const handleInputWebhook = async (req, res) => {
         action: 'input',
         type: ['speech', 'dtmf'],
         eventUrl: [
-          'https://your-domain.com/vonage/input-webhook'
+          'https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook'
         ],
         speech: {
           endOnSilence: 1,
