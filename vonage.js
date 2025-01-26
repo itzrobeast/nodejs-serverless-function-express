@@ -14,21 +14,13 @@ const vonage = new Vonage({
  */
 export const handleInboundCall = async (req, res) => {
   try {
-    // Extract `to` and `from` from either the body or query parameters
-    const to = req.body.to || req.query.to;
-    const from = req.body.from || req.query.from;
+    const { to, from, speech } = req.body;
 
-    console.log('[DEBUG] Request Body:', req.body);
-    console.log('[DEBUG] Request Query:', req.query);
+    // Debugging incoming call details
+    console.log(`[INFO] Inbound call received: From ${from} to ${to}`);
+    if (speech?.text) console.log(`[INFO] Transcription: ${speech.text}`);
 
-    if (!to || !from) {
-      console.error('[ERROR] Missing "to" or "from" in the request payload or query parameters.');
-      return res.json([{ action: 'talk', text: 'Sorry, we cannot process your call due to missing information.' }]);
-    }
-
-    console.log(`[INFO] Inbound call received: From ${from}, To ${to}`);
-
-    // Fetch the business associated with the called number
+    // Step 1: Fetch the business associated with the called number
     const { data: businessData, error: businessError } = await supabase
       .from('vonage_numbers')
       .select('business_id')
@@ -37,25 +29,51 @@ export const handleInboundCall = async (req, res) => {
 
     if (businessError || !businessData) {
       console.error('[ERROR] Business not found for number:', to);
-      return res.json([{ action: 'talk', text: 'Sorry, we cannot process your call at this time.' }]);
+      return res.json([
+        {
+          action: 'talk',
+          text: 'Sorry, we cannot process your call at this time. Please try again later.',
+        },
+      ]);
     }
 
-    // Use assistantHandler to generate Mila's response
-    const assistantResponse = await assistantHandler({
-      userMessage: `Inbound call received from ${from}. How should I assist?`,
-      businessId: businessData.business_id,
-      platform: 'phone',
-    });
+    const businessId = businessData.business_id;
 
+    // Step 2: Handle AI processing if transcription is available
+    if (speech?.text) {
+      // Use AI assistant to process the transcribed text
+      const assistantResponse = await assistantHandler({
+        userMessage: speech.text,
+        businessId,
+        platform: 'phone',
+      });
+
+      console.log('[DEBUG] Assistant response:', assistantResponse.message);
+
+      // Step 3: Respond with the AI-generated message using TTS
+      return res.json([
+        {
+          action: 'talk',
+          text: assistantResponse.message || 'I’m here to help! How can I assist you?',
+        },
+      ]);
+    }
+
+    // Step 4: If no transcription yet, prompt the caller
     return res.json([
       {
         action: 'talk',
-        text: assistantResponse.message || 'Thank you for calling. How can I help you today?',
+        text: 'Hello! This is Mila. How can I assist you today?',
       },
     ]);
   } catch (error) {
     console.error('[ERROR] Failed to process inbound call:', error.message);
-    return res.json([{ action: 'talk', text: 'Unable to process your call. Please try again later.' }]);
+    return res.json([
+      {
+        action: 'talk',
+        text: 'We are unable to process your call at this time. Please try again later.',
+      },
+    ]);
   }
 };
 
