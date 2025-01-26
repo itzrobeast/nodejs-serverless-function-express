@@ -102,7 +102,7 @@ const routes = [
   { path: '/auth/refresh-token', router: refreshTokenRouter },
   { path: '/auth/login', router: loginRouter },
   { path: '/auth/logout', router: logoutRouter },
-  { path: '/api/inbound-call', router: express.Router().post('/', handleInboundCall) },
+  { path: '/vonage/inbound-call', router: express.Router().post('/', handleInboundCall) },
   { path: '/vonage/event', router: express.Router().post('/', handleCallEvent) },
   { path: '/vonage/fallback', router: express.Router().post('/', handleFallback) },
   { path: '/vonage/inbound', router: express.Router().post('/', handleInboundMessage) },
