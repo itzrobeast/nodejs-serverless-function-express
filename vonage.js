@@ -120,9 +120,9 @@ export const handleInboundCall = async (req, res) => {
  **********************************************************************/
 export const handleInputWebhook = async (req, res) => {
   try {
-    console.log('[DEBUG] InputWebhook Body:', req.body);
+    console.time('Vonage InputWebhook Total Time');
 
-    // 2a) Retrieve businessId from the query string
+    console.log('[DEBUG] InputWebhook Body:', req.body);
     const { businessId } = req.query;
     if (!businessId) {
       console.error('[ERROR] Missing "businessId" in Input Webhook');
@@ -136,49 +136,36 @@ export const handleInputWebhook = async (req, res) => {
       ]);
     }
 
-    // 2b) Check speech or DTMF
     let userText = '';
     if (req.body.speech?.results?.length > 0) {
-      // The recognized speech
       userText = req.body.speech.results[0].text;
     } else if (req.body.dtmf?.digits) {
-      // The user pressed a digit
       userText = `DTMF digit: ${req.body.dtmf.digits}`;
     } else {
       console.warn('[WARN] No speech or dtmf input found');
     }
 
     console.log(`[INFO] User input: ${userText}`);
+    console.time('AssistantHandler Processing Time');
 
-    // 2c) Basic Spanish detection: if user text has accented chars
-    let detectedLanguage = 'en-US';
-    let detectedStyle = 14;
-    if (userText && /[áéíóúñ]/i.test(userText)) {
-      detectedLanguage = 'es-US';
-      detectedStyle = 3;
-    }
-
-    // 2d) Send user text to the AI
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
       platform: 'phone',
     });
-    console.log('[DEBUG] Assistant says:', assistantResponse.message);
 
-    // 2e) TTS message (the AI’s response)
+    console.timeEnd('AssistantHandler Processing Time');
+
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
-
-    // 2f) Return new NCCO: talk + input again
-    //    Keep the conversation going
     const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
 
     const ncco = [
       {
         action: 'talk',
         text: ttsMessage,
-        language: detectedLanguage,
-        style: detectedStyle,
+        language: 'en-US',
+        style: 14,
+        bargeIn: true, // Allow interruption
       },
       {
         action: 'input',
@@ -186,7 +173,7 @@ export const handleInputWebhook = async (req, res) => {
         eventUrl: [nextEventUrl],
         speech: {
           endOnSilence: 1,
-          language: detectedLanguage,
+          language: 'en-US',
         },
         dtmf: {
           maxDigits: 1,
@@ -195,6 +182,7 @@ export const handleInputWebhook = async (req, res) => {
       },
     ];
 
+    console.timeEnd('Vonage InputWebhook Total Time');
     return res.json(ncco);
   } catch (err) {
     console.error('[ERROR] handleInputWebhook:', err.message);
@@ -208,6 +196,7 @@ export const handleInputWebhook = async (req, res) => {
     ]);
   }
 };
+
 
 /**********************************************************************
  * 3) Call Event - handleCallEvent
