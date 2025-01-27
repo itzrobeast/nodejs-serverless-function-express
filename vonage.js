@@ -6,6 +6,7 @@ import { Vonage } from '@vonage/server-sdk';
 import supabase from './supabaseClient.js';
 import { assistantHandler } from './assistant.js';
 import { logConversation } from './logConversation.js';
+import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 
 /**
@@ -26,10 +27,11 @@ const vonage = new Vonage({
 /**********************************************************************
  * 1) Answer URL - handleInboundCall
  *
- *   - We greet the caller in English (by default).
- *   - We do "input" so Vonage will listen for speech/DTMF,
- *     then POST to our "input webhook" with the businessId param appended.
+ *   - Greet the caller with the business name.
+ *   - Assign a consistent "conversation_id" for the call.
+ *   - Include "businessId" in the eventUrl for tracking.
  **********************************************************************/
+
 export const handleInboundCall = async (req, res) => {
   try {
     const to = req.body.to || req.query.to;
@@ -72,7 +74,8 @@ export const handleInboundCall = async (req, res) => {
     const businessId = businessData.business_id;
     console.log(`[INFO] Found businessId: ${businessId}`);
 
- const { data: businessInfo, error: businessInfoError } = await supabase
+    // 1b) Fetch the business name
+    const { data: businessInfo, error: businessInfoError } = await supabase
       .from('businesses')
       .select('name')
       .eq('id', businessId)
@@ -93,13 +96,27 @@ export const handleInboundCall = async (req, res) => {
     const businessName = businessInfo.name;
     console.log(`[INFO] Business name: ${businessName}`);
 
+    // 1c) Generate a unique "conversation_id" for this call
+    const conversationId = uuidv4();
 
+    // 1d) Log the start of the conversation in the database
+    await supabase.from('inbound_calls').insert([
+      {
+        conversation_id: conversationId,
+        sender_phone: from,
+        receiver_phone: to,
+        business_id: businessId,
+        message: 'Conversation started',
+        message_type: 'system',
+        role: 'system',
+        timestamp: new Date().toISOString(),
+      },
+    ]);
 
+    console.log(`[INFO] Logged new conversation: ${conversationId}`);
 
-    
-    // 1b) Construct the initial "talk + input" NCCO
-    // We'll pass "businessId" in the eventUrl query param
-    const eventUrlWithBusinessId = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
+    // 1e) Construct the NCCO with "talk" and "input" actions
+    const eventUrlWithParams = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
 
     const ncco = [
       {
@@ -111,7 +128,7 @@ export const handleInboundCall = async (req, res) => {
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [eventUrlWithBusinessId],
+        eventUrl: [eventUrlWithParams],
         speech: {
           endOnSilence: 0.5, // seconds of silence to consider speech ended
           language: 'en-US',
@@ -138,6 +155,8 @@ export const handleInboundCall = async (req, res) => {
     ]);
   }
 };
+
+
 
 /**********************************************************************
  * 2) Input Webhook - handleInputWebhook
