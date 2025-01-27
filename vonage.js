@@ -146,8 +146,8 @@ export const handleInboundCall = async (req, res) => {
 export const handleInputWebhook = async (req, res) => {
   try {
     console.time('Vonage InputWebhook Total Time');
-
     console.log('[DEBUG] InputWebhook Body:', req.body);
+
     const { businessId } = req.query;
     if (!businessId) {
       console.error('[ERROR] Missing "businessId" in Input Webhook');
@@ -163,11 +163,11 @@ export const handleInputWebhook = async (req, res) => {
 
     let userText = '';
     if (req.body.speech?.results?.length > 0) {
-      userText = req.body.speech.results[0].text;
+      userText = req.body.speech.results[0].text.toLowerCase(); // Normalize text
     } else if (req.body.dtmf?.digits) {
       userText = `DTMF digit: ${req.body.dtmf.digits}`;
     } else {
-      console.warn('[WARN] No speech or dtmf input found');
+      console.warn('[WARN] No speech or DTMF input found');
     }
 
     console.log(`[INFO] User input: ${userText}`);
@@ -207,6 +207,35 @@ export const handleInputWebhook = async (req, res) => {
       },
     ];
 
+    // If the user is asking about bookings, send them a text message
+    if (userText.includes('book') || userText.includes('appointment')) {
+      const { data: businessInfo, error: businessError } = await supabase
+        .from('businesses')
+        .select('appointment_booking_link')
+        .eq('id', businessId)
+        .single();
+
+      if (businessError || !businessInfo?.appointment_booking_link) {
+        console.error('[ERROR] Failed to fetch booking link:', businessError?.message || 'No data');
+      } else {
+        const bookingLink = businessInfo.appointment_booking_link;
+        const from = req.body.to; // The Vonage number
+        const to = req.body.from; // The caller's number
+
+        console.log(`[INFO] Sending booking link to ${to}`);
+
+        vonage.messages.sendSms(from, to, `Here’s the link to book your appointment: ${bookingLink}`, (err, responseData) => {
+          if (err) {
+            console.error('[ERROR] Failed to send SMS:', err.message);
+          } else if (responseData.messages[0].status === '0') {
+            console.log('[INFO] SMS sent successfully:', responseData.messages[0].messageId);
+          } else {
+            console.error('[ERROR] Failed to send SMS. Error:', responseData.messages[0]['error-text']);
+          }
+        });
+      }
+    }
+
     console.timeEnd('Vonage InputWebhook Total Time');
     return res.json(ncco);
   } catch (err) {
@@ -221,6 +250,7 @@ export const handleInputWebhook = async (req, res) => {
     ]);
   }
 };
+
 
 
 /**********************************************************************
