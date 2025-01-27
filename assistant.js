@@ -25,7 +25,7 @@ redis.connect()
   .then(() => console.log('[INFO] Connected to Redis successfully via Upstash'))
   .catch((err) => console.error('[ERROR] Redis connection failed:', err.message));
 
-export default redis;
+export { redis };
 
 /**********************************************************
  * 1) Initialize OpenAI
