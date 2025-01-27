@@ -12,8 +12,8 @@ import { createClient } from 'redis'; // For Upstash or other cloud Redis
  *    - If you're using a different Redis provider, adjust below.
  **********************************************************/
 const redis = createClient({
-  url: process.env.REDIS_URL,       // e.g., "rediss://<your-id>.upstash.io"
-  password: process.env.REDIS_AUTH, // your Upstash token
+  url: process.env.KV_URL, 
+  password: process.env.KV_REST_API_TOKEN, 
   socket: {
     tls: true,
     rejectUnauthorized: false,      // Accept self-signed cert in Upstash
