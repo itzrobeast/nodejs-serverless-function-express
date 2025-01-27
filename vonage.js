@@ -224,15 +224,16 @@ export const handleInputWebhook = async (req, res) => {
 
         console.log(`[INFO] Sending booking link to ${to}`);
 
-        vonage.messages.sendSms(from, to, `Here’s the link to book your appointment: ${bookingLink}`, (err, responseData) => {
-          if (err) {
-            console.error('[ERROR] Failed to send SMS:', err.message);
-          } else if (responseData.messages[0].status === '0') {
-            console.log('[INFO] SMS sent successfully:', responseData.messages[0].messageId);
-          } else {
-            console.error('[ERROR] Failed to send SMS. Error:', responseData.messages[0]['error-text']);
-          }
-        });
+        try {
+          await vonage.sms.send({
+            to,
+            from,
+            text: `Here’s the link to book your appointment: ${bookingLink}`,
+          });
+          console.log('[INFO] SMS sent successfully');
+        } catch (smsError) {
+          console.error('[ERROR] Failed to send SMS:', smsError.message);
+        }
       }
     }
 
@@ -250,6 +251,7 @@ export const handleInputWebhook = async (req, res) => {
     ]);
   }
 };
+
 
 
 
