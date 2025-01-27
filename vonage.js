@@ -113,6 +113,8 @@ export const handleInboundCall = async (req, res) => {
         speech: {
           endOnSilence: 0.5, // seconds of silence to consider speech ended
           language: 'en-US',
+          noiseCancellation: true, // Enable noise suppression (if supported by Vonage STT)
+          vad: { enable: true }, // Enable Voice Activity Detection (if supported)
         },
         dtmf: {
           maxDigits: 1,
@@ -171,6 +173,21 @@ export const handleInputWebhook = async (req, res) => {
     }
 
     console.log(`[INFO] User input: ${userText}`);
+
+    // **Filter out short or irrelevant inputs**
+    if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
+      console.log('[DEBUG] Ignored background noise or filler word');
+      return res.json([
+        {
+          action: 'talk',
+          text: 'Can you please repeat that?',
+          language: 'en-US',
+          style: 14,
+        },
+      ]); // Send a polite response to ask for repetition
+    }
+
+    
     console.time('AssistantHandler Processing Time');
 
     const assistantResponse = await assistantHandler({
