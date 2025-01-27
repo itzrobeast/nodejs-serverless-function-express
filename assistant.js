@@ -430,9 +430,9 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
       ],
       functions,
       function_call: 'auto',
-      max_tokens: 400, // Adjust for speed/cost
+      max_tokens: 370, // Adjust for speed/cost
       temperature: 0.7,
-      stream: false,   // If you want streaming, set to true & handle streams
+      stream: true,   // If you want streaming, set to true & handle streams
     });
 
     // 7e) Extract AI's response
