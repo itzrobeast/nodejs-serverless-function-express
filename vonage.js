@@ -176,17 +176,47 @@ export const handleInputWebhook = async (req, res) => {
 
     // **Filter out short or irrelevant inputs**
     if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
+      const maxRetries = 3; // Set maximum retry attempts
+      const currentRetries = parseInt(retryCount, 10) || 0;
+
+      if (currentRetries < maxRetries) {
+        const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&retryCount=${currentRetries + 1}`;
+        console.log(`[DEBUG] Retry attempt ${currentRetries + 1}`);
+        
       console.log('[DEBUG] Ignored background noise or filler word');
       return res.json([
-        {
-          action: 'talk',
-          text: 'Can you please repeat that?',
-          language: 'en-US',
-          style: 14,
-        },
-      ]); // Send a polite response to ask for repetition
+          {
+            action: 'talk',
+            text: 'I didn’t quite catch that. Can you please repeat your question?',
+            language: 'en-US',
+            style: 14,
+          },
+          {
+            action: 'input',
+            type: ['speech', 'dtmf'],
+            eventUrl: [nextEventUrl],
+            speech: {
+              endOnSilence: 0.5,
+              language: 'en-US',
+            },
+            dtmf: {
+              maxDigits: 1,
+              submitOnHash: false,
+            },
+          },
+        ]);
+      } else {
+        console.log('[INFO] Max retries reached. Ending call.');
+        return res.json([
+          {
+            action: 'talk',
+            text: 'I’m sorry, I still didn’t get that. Please feel free to call us back later. Goodbye!',
+            language: 'en-US',
+            style: 14,
+          },
+        ]);
+      }
     }
-
     
     console.time('AssistantHandler Processing Time');
 
