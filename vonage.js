@@ -219,8 +219,8 @@ export const handleInputWebhook = async (req, res) => {
         console.error('[ERROR] Failed to fetch booking link:', businessError?.message || 'No data');
       } else {
         const bookingLink = businessInfo.appointment_booking_link;
-        const from = req.body.to; // The Vonage number
-        const to = req.body.from; // The caller's number
+        const from = `+${req.body.to}`; // The Vonage number
+        const to = `+${req.body.from}`; // The caller's number 
 
         console.log(`[INFO] Sending booking link to ${to}`);
 
