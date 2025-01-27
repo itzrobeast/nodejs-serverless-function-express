@@ -34,6 +34,7 @@ import {
   handleFallback,
   handleInboundMessage,
   handleCallStatus,
+  handleProcessingWebhook, 
   handleInputWebhook,
 } from './vonage.js';
 import inboundCallsRouter from './inbound-calls.js';
@@ -125,6 +126,11 @@ const inputWebhookRouter = express.Router();
 inputWebhookRouter.post('/', handleInputWebhook);
 inputWebhookRouter.get('/', handleInputWebhook);
 
+const processingWebhookRouter = express.Router();
+processingWebhookRouter.get('/', handleProcessingWebhook);
+processingWebhookRouter.post('/', handleProcessingWebhook);
+
+
 // Route Handlers
 const routes = [
   { path: '/assistant', router: assistantRouter },
@@ -143,6 +149,7 @@ const routes = [
   { path: '/vonage/inbound', router: inboundMessageRouter },
   { path: '/vonage/status', router: callStatusRouter },
   { path: '/vonage/input-webhook', router: inputWebhookRouter },
+  { path: '/vonage/processing-webhook', router: processingWebhookRouter },
   { path: '/inbound-calls', router: inboundCallsRouter },
 ];
 
