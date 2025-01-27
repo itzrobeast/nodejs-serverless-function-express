@@ -36,6 +36,7 @@ import {
   handleCallStatus,
   handleInputWebhook,
 } from './vonage.js';
+import inboundCallsRouter from './inbound-calls.js';
 
 const app = express();
 app.use(bodyParser.json());
@@ -135,6 +136,7 @@ const routes = [
   { path: '/vonage/inbound', router: inboundMessageRouter },
   { path: '/vonage/status', router: callStatusRouter },
   { path: '/vonage/input-webhook', router: inputWebhookRouter },
+  { path: '/inbound-calls', router: inboundCallsRouter },
 ];
 
 routes.forEach(({ path, router }) => {
