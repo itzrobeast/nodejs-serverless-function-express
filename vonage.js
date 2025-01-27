@@ -164,59 +164,62 @@ export const handleInputWebhook = async (req, res) => {
     }
 
     let userText = '';
-    if (req.body.speech?.results?.length > 0) {
-      userText = req.body.speech.results[0].text.toLowerCase(); // Normalize text
-    } else if (req.body.dtmf?.digits) {
-      userText = `DTMF digit: ${req.body.dtmf.digits}`;
-    } else {
-      console.warn('[WARN] No speech or DTMF input found');
-    }
+if (req.body.speech?.results?.length > 0 && req.body.speech.results[0]?.text) {
+  userText = req.body.speech.results[0].text.toLowerCase(); // Normalize text
+} else if (req.body.dtmf?.digits) {
+  userText = `DTMF digit: ${req.body.dtmf.digits}`;
+} else {
+  console.warn('[WARN] No valid speech or DTMF input found');
+  userText = ''; // Ensure userText is initialized
+}
 
-    console.log(`[INFO] User input: ${userText}`);
+console.log(`[INFO] User input: ${userText}`);
 
-    // **Filter out short or irrelevant inputs**
-    if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
-      const maxRetries = 3; // Set maximum retry attempts
-      const currentRetries = parseInt(retryCount, 10) || 0;
+// **Filter out short or irrelevant inputs**
+if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
+  const maxRetries = 3; // Set maximum retry attempts
+  const currentRetries = parseInt(req.query.retryCount || 0, 10); // Safely parse retryCount from query
 
-      if (currentRetries < maxRetries) {
-        const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&retryCount=${currentRetries + 1}`;
-        console.log(`[DEBUG] Retry attempt ${currentRetries + 1}`);
-        
-      console.log('[DEBUG] Ignored background noise or filler word');
-      return res.json([
-          {
-            action: 'talk',
-            text: 'I didn’t quite catch that. Can you please repeat your question?',
-            language: 'en-US',
-            style: 14,
-          },
-          {
-            action: 'input',
-            type: ['speech', 'dtmf'],
-            eventUrl: [nextEventUrl],
-            speech: {
-              endOnSilence: 0.5,
-              language: 'en-US',
-            },
-            dtmf: {
-              maxDigits: 1,
-              submitOnHash: false,
-            },
-          },
-        ]);
-      } else {
-        console.log('[INFO] Max retries reached. Ending call.');
-        return res.json([
-          {
-            action: 'talk',
-            text: 'I’m sorry, I still didn’t get that. Please feel free to call us back later. Goodbye!',
-            language: 'en-US',
-            style: 14,
-          },
-        ]);
-      }
-    }
+  if (currentRetries < maxRetries) {
+    const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&retryCount=${currentRetries + 1}`;
+    console.log(`[DEBUG] Retry attempt ${currentRetries + 1}`);
+    console.log('[DEBUG] Ignored background noise or filler word');
+
+    return res.json([
+      {
+        action: 'talk',
+        text: 'I didn’t quite catch that. Can you please repeat your question?',
+        language: 'en-US',
+        style: 14,
+      },
+      {
+        action: 'input',
+        type: ['speech', 'dtmf'],
+        eventUrl: [nextEventUrl],
+        speech: {
+          endOnSilence: 0.5,
+          language: 'en-US',
+        },
+        dtmf: {
+          maxDigits: 1,
+          submitOnHash: false,
+        },
+      },
+    ]);
+  } else {
+    console.log('[INFO] Max retries reached. Ending call.');
+    return res.json([
+      {
+        action: 'talk',
+        text: 'I’m sorry, I still didn’t get that. Please feel free to call us back later. Goodbye!',
+        language: 'en-US',
+        style: 14,
+      },
+    ]);
+  }
+}
+
+
     
     console.time('AssistantHandler Processing Time');
 
