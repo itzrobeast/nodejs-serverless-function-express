@@ -20,10 +20,12 @@ const redis = createClient({
   },
 });
 
-// For serverless, you may conditionally connect or handle in a top-level await
-redis.connect().catch((err) => {
-  console.error('[ERROR] Redis connection failed:', err.message);
-});
+// Connect to Redis
+redis.connect()
+  .then(() => console.log('[INFO] Connected to Redis successfully via Upstash'))
+  .catch((err) => console.error('[ERROR] Redis connection failed:', err.message));
+
+export default redis;
 
 /**********************************************************
  * 1) Initialize OpenAI
