@@ -70,6 +70,31 @@ export const handleInboundCall = async (req, res) => {
     const businessId = businessData.business_id;
     console.log(`[INFO] Found businessId: ${businessId}`);
 
+ const { data: businessInfo, error: businessInfoError } = await supabase
+      .from('businesses')
+      .select('name')
+      .eq('id', businessId)
+      .single();
+
+    if (businessInfoError || !businessInfo) {
+      console.error('[ERROR] Failed to fetch business name:', businessInfoError?.message || 'No data');
+      return res.json([
+        {
+          action: 'talk',
+          text: 'Sorry, we cannot process your call at this time.',
+          language: 'en-US',
+          style: 14,
+        },
+      ]);
+    }
+
+    const businessName = businessInfo.name;
+    console.log(`[INFO] Business name: ${businessName}`);
+
+
+
+
+    
     // 1b) Construct the initial "talk + input" NCCO
     // We'll pass "businessId" in the eventUrl query param
     const eventUrlWithBusinessId = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
@@ -77,7 +102,7 @@ export const handleInboundCall = async (req, res) => {
     const ncco = [
       {
         action: 'talk',
-        text: 'Hello, this is Mila. How can I assist you today?',
+        text: 'Hello, this is Mila from ${businessName}. How can I assist you today?',
         language: 'en-US',
         style: 14,
       },
