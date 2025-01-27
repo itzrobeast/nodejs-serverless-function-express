@@ -178,9 +178,5 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-process.on('SIGTERM', async () => {
-  console.log('[INFO] SIGTERM signal received: closing server...');
-  process.exit(0);
-});
 
 export default app;
