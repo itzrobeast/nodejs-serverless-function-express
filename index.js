@@ -63,7 +63,7 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
 
-app.use('/api/session', sessionRouter);
+app.use('/session', sessionRouter);
 
 
 // CORS configuration
