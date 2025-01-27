@@ -441,7 +441,7 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
     // 6d) Call OpenAI’s Chat Completion with function calling
     const openaiResponse = await openai.chat.completions.create({
       // For the latest model, you could replace 'gpt-4' with 'openai.o1' or another
-      model: 'gpt-4',
+      model: 'gpt-3.5-turbo',
       // If you want to leverage the new 'reasoning_effort' param (supported in new models like o1),
       // you can uncomment the following line (and switch model to openai.o1 if supported):
       // reasoning_effort: 2,
@@ -451,7 +451,7 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
       ],
       functions,
       function_call: 'auto', // Let the model decide if/when to call a function
-      max_tokens: 750,
+      max_tokens: 500,
       temperature: 0.7,
     });
 
