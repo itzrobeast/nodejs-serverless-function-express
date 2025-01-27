@@ -53,19 +53,6 @@ const loginLimiter = rateLimit({
   message: 'Too many login attempts, try again later.',
 });
 
-// Middleware
-app.use(
-  helmet({
-    contentSecurityPolicy: false, // Disable CSP to allow inline styles/scripts if needed
-  })
-);
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
-
-app.use('/session', sessionRouter);
-
-
 // CORS configuration
 app.use(
   cors({
@@ -82,6 +69,21 @@ app.use(
     credentials: true, // Allow credentials (cookies, authorization headers, etc.)
   })
 );
+
+
+// Middleware
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Disable CSP to allow inline styles/scripts if needed
+  })
+);
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
+
+app.use('/session', sessionRouter);
+
+
 
 // Validate Supabase initialization
 if (!supabase) {
