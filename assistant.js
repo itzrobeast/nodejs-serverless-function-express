@@ -243,7 +243,7 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
         { role: 'system', content: systemMessage },
         { role: 'user', content: cleanMessage },
       ],
-      max_tokens: 500,
+      max_tokens: 400,
       temperature: 0.7,
     });
 
