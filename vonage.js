@@ -246,6 +246,17 @@ if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
     console.timeEnd('AssistantHandler Processing Time');
 
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
+
+    // **Log AI Response**
+    await logConversation({
+      businessId,
+      senderPhone: req.body.to, // AI (business number)
+      receiverPhone: req.body.from, // Customer number
+      message: ttsMessage,
+      messageType: 'text',
+      role: 'business',
+    });
+    
     const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
 
     const ncco = [
