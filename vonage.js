@@ -185,64 +185,18 @@ export const handleInputWebhook = async (req, res) => {
     }
 
     let userText = '';
-if (req.body.speech?.results?.length > 0 && req.body.speech.results[0]?.text) {
-  userText = req.body.speech.results[0].text.toLowerCase(); // Normalize text
-} else if (req.body.dtmf?.digits) {
-  userText = `DTMF digit: ${req.body.dtmf.digits}`;
-} else {
-  console.warn('[WARN] No valid speech or DTMF input found');
-  userText = ''; // Ensure userText is initialized
-}
+    if (req.body.speech?.results?.length > 0 && req.body.speech.results[0]?.text) {
+      userText = req.body.speech.results[0].text.toLowerCase();
+    } else if (req.body.dtmf?.digits) {
+      userText = `DTMF digit: ${req.body.dtmf.digits}`;
+    } else {
+      console.warn('[WARN] No valid speech or DTMF input found');
+      userText = '';
+    }
 
-console.log(`[INFO] User input: ${userText}`);
+    console.log(`[INFO] User input: ${userText}`);
 
-    
-// **Filter out short or irrelevant inputs**
-if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
-  const maxRetries = 3; // Set maximum retry attempts
-  const currentRetries = parseInt(req.query.retryCount || 0, 10); // Safely parse retryCount from query
-
-  if (currentRetries < maxRetries) {
-    const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&retryCount=${currentRetries + 1}`;
-    console.log(`[DEBUG] Retry attempt ${currentRetries + 1}`);
-    console.log('[DEBUG] Ignored background noise or filler word');
-
-    return res.json([
-      {
-        action: 'talk',
-        text: 'I didn’t quite catch that. Can you please repeat your question?',
-        language: 'en-US',
-        style: 14,
-      },
-      {
-        action: 'input',
-        type: ['speech', 'dtmf'],
-        eventUrl: [nextEventUrl],
-        speech: {
-          endOnSilence: 0.5,
-          language: 'en-US',
-        },
-        dtmf: {
-          maxDigits: 1,
-          submitOnHash: false,
-        },
-      },
-    ]);
-  } else {
-    console.log('[INFO] Max retries reached. Ending call.');
-    return res.json([
-      {
-        action: 'talk',
-        text: 'I’m sorry, I still didn’t get that. Please feel free to call us back later. Goodbye!',
-        language: 'en-US',
-        style: 14,
-      },
-    ]);
-  }
-}
-
-
-// Log the conversation into the `inbound_calls` table
+    // Log the conversation into the `inbound_calls` table
     await logConversation({
       businessId,
       senderPhone: req.body.from,
@@ -252,16 +206,29 @@ if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
       role: 'customer',
     });
 
+    // **First NCCO: Typing sound**
+    const typingSoundUrl = 'https://drive.google.com/file/d/1V9sB8azco1aPqdah8S6JVN1YwEXufmOW/view?usp=sharing'; // Replace with your sound file URL
+    const processingWebhookUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}`;
 
-    
+    const typingNcco = [
+      {
+        action: 'stream',
+        streamUrl: [typingSoundUrl],
+        loop: 0, // Loops until the next NCCO is triggered
+      },
+      {
+        action: 'notify',
+        payload: { userText }, // Pass userText to the next webhook
+        eventUrl: [processingWebhookUrl],
+      },
+    ];
+
     console.time('AssistantHandler Processing Time');
-
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
       platform: 'phone',
     });
-
     console.timeEnd('AssistantHandler Processing Time');
 
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
@@ -275,10 +242,9 @@ if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
       messageType: 'text',
       role: 'business',
     });
-    
-    const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
 
-    const ncco = [
+    // **Second NCCO: AI Response**
+    const aiResponseNcco = [
       {
         action: 'talk',
         text: ttsMessage,
@@ -289,12 +255,12 @@ if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [nextEventUrl],
+        eventUrl: [`https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`],
         speech: {
           endOnSilence: 0.5,
           language: 'en-US',
-          noiseCancellation: true, // Enable noise suppression (if supported by Vonage STT)
-          vad: { enable: true }, // Enable Voice Activity Detection (if supported)
+          noiseCancellation: true,
+          vad: { enable: true },
         },
         dtmf: {
           maxDigits: 1,
@@ -303,41 +269,20 @@ if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
       },
     ];
 
-    // If the user is asking about bookings, send them a text message
-    if (userText.includes('book') || userText.includes('appointment')) {
-      const { data: businessInfo, error: businessError } = await supabase
-        .from('businesses')
-        .select('appointment_booking_link')
-        .eq('id', businessId)
-        .single();
+    // Return typing sound first
+    res.json(typingNcco);
 
-      if (businessError || !businessInfo?.appointment_booking_link) {
-        console.error('[ERROR] Failed to fetch booking link:', businessError?.message || 'No data');
-      } else {
-        const bookingLink = businessInfo.appointment_booking_link;
-        const from = `+${req.body.to}`; // The Vonage number
-        const to = `+${req.body.from}`; // The caller's number 
-
-        console.log(`[INFO] Sending booking link to ${to}`);
-
-        try {
-          await vonage.sms.send({
-            to,
-            from,
-            text: `Here’s the link to book your appointment: ${bookingLink}`,
-          });
-          console.log('[INFO] SMS sent successfully');
-        } catch (smsError) {
-          console.error('[ERROR] Failed to send SMS:', smsError.message);
-        }
-      }
-    }
-
-    console.timeEnd('Vonage InputWebhook Total Time');
-    return res.json(ncco);
+    // Delayed execution of AI response
+    setTimeout(() => {
+      fetch(`https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/next-ncco`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiResponseNcco, from: req.body.to, to: req.body.from }),
+      });
+    }, 3000); // Adjust delay time as needed
   } catch (err) {
     console.error('[ERROR] handleInputWebhook:', err.message);
-    return res.json([
+    res.json([
       {
         action: 'talk',
         text: 'Sorry, something went wrong. Goodbye.',
@@ -347,7 +292,6 @@ if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
     ]);
   }
 };
-
 
 
 
