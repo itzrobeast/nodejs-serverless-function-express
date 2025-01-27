@@ -86,7 +86,7 @@ export const handleInboundCall = async (req, res) => {
         type: ['speech', 'dtmf'],
         eventUrl: [eventUrlWithBusinessId],
         speech: {
-          endOnSilence: 1, // seconds of silence to consider speech ended
+          endOnSilence: 0.5, // seconds of silence to consider speech ended
           language: 'en-US',
         },
         dtmf: {
@@ -172,7 +172,7 @@ export const handleInputWebhook = async (req, res) => {
         type: ['speech', 'dtmf'],
         eventUrl: [nextEventUrl],
         speech: {
-          endOnSilence: 1,
+          endOnSilence: 0.5,
           language: 'en-US',
         },
         dtmf: {
