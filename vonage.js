@@ -102,7 +102,7 @@ export const handleInboundCall = async (req, res) => {
     const ncco = [
       {
         action: 'talk',
-        text: 'Hello, this is Mila from ${businessName}. How can I assist you today?',
+        text: `Hello, this is Mila from ${businessName}. How can I assist you today?`,
         language: 'en-US',
         style: 14,
       },
