@@ -41,7 +41,7 @@ import sessionRouter from './session.js';
 
 
 const app = express();
-app.use(bodyParser.json());
+
 
 // Trust proxy settings for Vercel and other platforms
 app.set('trust proxy', 1); // Trust first proxy (necessary for X-Forwarded-For)
@@ -80,7 +80,7 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
-
+app.use(bodyParser.json());
 app.use('/session', sessionRouter);
 
 
