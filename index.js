@@ -37,6 +37,8 @@ import {
   handleInputWebhook,
 } from './vonage.js';
 import inboundCallsRouter from './inbound-calls.js';
+import sessionRouter from './session.js';
+
 
 const app = express();
 app.use(bodyParser.json());
@@ -60,6 +62,9 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
+
+app.use('/api/session', sessionRouter);
+
 
 // CORS configuration
 app.use(
