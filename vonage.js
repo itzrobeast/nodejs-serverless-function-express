@@ -5,6 +5,8 @@
 import { Vonage } from '@vonage/server-sdk';
 import supabase from './supabaseClient.js';
 import { assistantHandler } from './assistant.js';
+import { logConversation } from './logConversation.js';
+
 
 /**
  * Initialize Vonage SDK.
@@ -175,6 +177,7 @@ if (req.body.speech?.results?.length > 0 && req.body.speech.results[0]?.text) {
 
 console.log(`[INFO] User input: ${userText}`);
 
+    
 // **Filter out short or irrelevant inputs**
 if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
   const maxRetries = 3; // Set maximum retry attempts
@@ -218,6 +221,17 @@ if (userText.length < 3 || /^[uhm]+$/i.test(userText)) {
     ]);
   }
 }
+
+
+// Log the conversation into the `inbound_calls` table
+    await logConversation({
+      businessId,
+      senderPhone: req.body.from,
+      receiverPhone: req.body.to,
+      message: userText,
+      messageType: req.body.speech ? 'speech' : req.body.dtmf ? 'dtmf' : 'other',
+      role: 'customer',
+    });
 
 
     
