@@ -1,31 +1,56 @@
-/***************************/
-/** assistant.js (Final)  **/
-/***************************/
-
+/**********************************************************/
+/** assistant.js -- Master Code with Redis + Setmore + AI **/
+/**********************************************************/
 import OpenAI from 'openai';
 import axios from 'axios';
 import supabase from './supabaseClient.js';
+import { createClient } from 'redis'; // For Upstash or other cloud Redis
 
-/**
- * Initialize the OpenAI client.
- * Make sure your environment has OPENAI_API_KEY set.
- */
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+/**********************************************************
+ * 0) Redis (Upstash) Setup
+ *    - Make sure you have REDIS_URL and REDIS_AUTH in env.
+ *    - If you're using a different Redis provider, adjust below.
+ **********************************************************/
+const redis = createClient({
+  url: process.env.REDIS_URL,       // e.g., "rediss://<your-id>.upstash.io"
+  password: process.env.REDIS_AUTH, // your Upstash token
+  socket: {
+    tls: true,
+    rejectUnauthorized: false,      // Accept self-signed cert in Upstash
+  },
 });
 
-/**
- * ----------------------------------------------------------------------------
- * 1) Fetch Business Configuration
- * ----------------------------------------------------------------------------
- * This only fetches the core "business" fields that you want the AI to know:
- * - name, locations, insurance policies, knowledge base, etc.
- *
- * NOTE: We no longer fetch setmore_access_token from 'businesses'
- * because it's now stored in 'setmore_integrations'.
- */
+// For serverless, you may conditionally connect or handle in a top-level await
+redis.connect().catch((err) => {
+  console.error('[ERROR] Redis connection failed:', err.message);
+});
+
+/**********************************************************
+ * 1) Initialize OpenAI
+ **********************************************************/
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, // must be set in your environment
+});
+
+/**********************************************************
+ * 2) Fetch Business Config with Redis Caching
+ *    - We store minimal but essential fields from the 'businesses' table.
+ *    - This logic can be expanded if you want more fields.
+ **********************************************************/
 const getBusinessConfig = async (businessId) => {
   try {
+    console.time(`Fetch BusinessConfig for Business ${businessId}`);
+
+    // 1. Attempt to fetch from Redis cache first
+    const cacheKey = `business:${businessId}`;
+    const cachedConfig = await redis.get(cacheKey);
+    if (cachedConfig) {
+      console.timeEnd(`Fetch BusinessConfig for Business ${businessId}`);
+      console.log(`[INFO] Cache hit for businessId=${businessId}`);
+      return JSON.parse(cachedConfig);
+    }
+
+    // 2. If not in cache, query Supabase
     const { data, error } = await supabase
       .from('businesses')
       .select(`
@@ -43,28 +68,28 @@ const getBusinessConfig = async (businessId) => {
       .single();
 
     if (error) {
-      console.error('[ERROR] Fetching business configuration failed:', error.message);
+      console.error(`[ERROR] Fetching business config failed: ${error.message}`);
       return null;
     }
-
     if (!data) {
-      console.warn('[WARN] No data returned for businessId:', businessId);
+      console.warn(`[WARN] No data returned for businessId=${businessId}`);
       return null;
     }
 
+    // 3. Store the result in Redis (1 hour TTL)
+    await redis.set(cacheKey, JSON.stringify(data), { EX: 3600 });
+    console.timeEnd(`Fetch BusinessConfig for Business ${businessId}`);
     return data;
   } catch (err) {
-    console.error('[ERROR] Unexpected error fetching business config:', err.message);
+    console.error(`[ERROR] Unexpected error in getBusinessConfig: ${err.message}`);
     return null;
   }
 };
 
-/**
- * ----------------------------------------------------------------------------
- * 2) System Prompt Creation
- * ----------------------------------------------------------------------------
- * Dynamically creates a robust system prompt that includes business-specific info.
- */
+/**********************************************************
+ * 3) Create System Message
+ *    - Insert the business info into a prompt that instructs the AI.
+ **********************************************************/
 const createSystemMessage = (businessConfig) => {
   const {
     name,
@@ -76,9 +101,8 @@ const createSystemMessage = (businessConfig) => {
     financing_link,
     appointment_booking_link,
     custom_links,
-  } = businessConfig;
+  } = businessConfig || {};
 
-  // Convert JSON fields to readable strings where needed
   const locationsStr = locations ? JSON.stringify(locations) : 'Not provided';
   const customLinksStr = custom_links ? JSON.stringify(custom_links) : 'Not provided';
 
@@ -104,21 +128,17 @@ Keep responses concise and relevant to user queries.
 `;
 };
 
+/**********************************************************
+ * 4) Setmore Token Management
+ *    - Each business may have a row in 'setmore_integrations'
+ *      with refresh_token, access_token, token_expires_at.
+ **********************************************************/
 /**
- * ----------------------------------------------------------------------------
- * 3) Setmore Token Management
- * ----------------------------------------------------------------------------
- * We'll store and retrieve tokens from the 'setmore_integrations' table.
- * This example shows a basic "check + refresh if expired" approach.
- */
-
-/**
- * Refresh the Setmore access token using the refresh token,
- * then update setmore_integrations with the new token and expiration.
+ * Refresh the Setmore token if expired, store new tokens in DB
  */
 const refreshSetmoreToken = async (businessId) => {
   try {
-    // 1. Fetch refresh token from setmore_integrations
+    // 4a) Fetch refresh token from 'setmore_integrations'
     const { data, error } = await supabase
       .from('setmore_integrations')
       .select('id, refresh_token')
@@ -129,12 +149,9 @@ const refreshSetmoreToken = async (businessId) => {
       console.error('[ERROR] Missing Setmore refresh token or supabase error:', error?.message);
       return null;
     }
-
     const { id: integrationId, refresh_token } = data;
 
-    // 2. Make the refresh request to Setmore
-    //    This is the example endpoint from the Setmore docs. 
-    //    Adjust to your environment if necessary.
+    // 4b) Call Setmore's refresh endpoint
     const url = `https://developer.setmore.com/api/v1/o/oauth2/token?refreshToken=${refresh_token}`;
     const response = await axios.get(url);
 
@@ -145,26 +162,26 @@ const refreshSetmoreToken = async (businessId) => {
 
     const { access_token, expires_in } = response.data.data.token;
 
-    // 3. Calculate new expiration time
+    // 4c) Compute new expiration time, minus a 1-hour buffer
     const now = new Date();
-    const bufferMs = 60 * 60 * 1000; // 1 hour buffer
+    const bufferMs = 60 * 60 * 1000;
     const expirationDate = new Date(now.getTime() + expires_in * 1000 - bufferMs);
 
-    // 4. Update setmore_integrations with the new token
+    // 4d) Store new token in DB
     const { error: updateError } = await supabase
       .from('setmore_integrations')
       .update({
         access_token,
         token_expires_at: expirationDate.toISOString(),
       })
-      .match({ id: integrationId });
+      .eq('id', integrationId);
 
     if (updateError) {
-      console.error('[ERROR] Updating new token in DB failed:', updateError.message);
+      console.error('[ERROR] Failed to update new token in DB:', updateError.message);
       return null;
     }
 
-    console.log('[INFO] Successfully refreshed Setmore token for businessId:', businessId);
+    console.log(`[INFO] Refreshed Setmore token for businessId=${businessId}`);
     return access_token;
   } catch (err) {
     console.error('[ERROR] refreshSetmoreToken:', err.message);
@@ -173,13 +190,10 @@ const refreshSetmoreToken = async (businessId) => {
 };
 
 /**
- * Get a valid access token for the given business. This will:
- * 1) Check if the token is expired or near-expired -> refresh if needed
- * 2) Return the valid token
+ * Retrieve valid Setmore access token, refreshing if needed.
  */
 const getSetmoreAccessToken = async (businessId) => {
   try {
-    // Pull current token + expiration from setmore_integrations
     const { data, error } = await supabase
       .from('setmore_integrations')
       .select('id, access_token, token_expires_at')
@@ -187,29 +201,27 @@ const getSetmoreAccessToken = async (businessId) => {
       .single();
 
     if (error || !data) {
-      console.error('[ERROR] Could not load setmore integration for business:', businessId, error?.message);
+      console.error(`[ERROR] Could not load setmore integration for business=${businessId}`, error?.message);
       return null;
     }
 
-    const { access_token, token_expires_at } = data;
+    const { id, access_token, token_expires_at } = data;
     if (!access_token) {
-      console.warn('[WARN] No access_token found in setmore_integrations for business:', businessId);
+      console.warn(`[WARN] No access_token found for business=${businessId}`);
       return null;
     }
 
-    // Check if token is near or past expiration
+    // Check if near or past expiration
+    const now = new Date();
     if (token_expires_at) {
-      const now = new Date();
       const expiresAt = new Date(token_expires_at);
       if (expiresAt < now) {
-        // It's expired, so refresh
-        console.log('[INFO] Setmore token expired, refreshing now...');
+        console.log('[INFO] Setmore token expired. Refreshing...');
         const newToken = await refreshSetmoreToken(businessId);
-        return newToken; // May be null if refresh fails
+        return newToken; // Possibly null if refresh fails
       }
     }
 
-    // Token is valid, just return it
     return access_token;
   } catch (err) {
     console.error('[ERROR] getSetmoreAccessToken:', err.message);
@@ -217,40 +229,28 @@ const getSetmoreAccessToken = async (businessId) => {
   }
 };
 
-/**
- * ----------------------------------------------------------------------------
- * 4) API Wrappers for Setmore
- * ----------------------------------------------------------------------------
- */
-
-/**
- * 4a) Fetch available slots from Setmore (example).
- * Replace endpoint & payload with your actual approach from Setmore docs.
- */
+/**********************************************************
+ * 5) Setmore API Wrappers: fetchAvailableSlots, bookSetmoreAppointment
+ **********************************************************/
 const fetchSetmoreSlotsAPI = async (accessToken) => {
-  // Example endpoint - you must adjust to your actual usage
-  // e.g. POST to /api/v1/bookingapi/slots with staff_key, service_key, etc.
   try {
+    // This is an example endpoint. Adjust to your actual usage
+    // Possibly a POST to '/api/v1/bookingapi/slots' with staff_key, service_key, etc.
     const response = await axios.get('https://api.setmore.com/v1/bookingapi/availability', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (response.data && response.data.data) {
+
+    if (response.data?.data) {
       return response.data.data;
     }
-    console.error('[ERROR] Unexpected data structure from Setmore slots API.');
+    console.error('[ERROR] Unexpected data from fetchSetmoreSlotsAPI:', response.data);
     return [];
   } catch (err) {
-    console.error('[ERROR] Failed to fetch slots from Setmore:', err.message);
+    console.error('[ERROR] fetchSetmoreSlotsAPI:', err.message);
     return [];
   }
 };
 
-/**
- * 4b) Book an appointment with Setmore (example).
- * Replace endpoint & payload with your actual usage from Setmore docs.
- */
 const bookSetmoreAppointmentAPI = async ({
   accessToken,
   serviceId,
@@ -259,7 +259,7 @@ const bookSetmoreAppointmentAPI = async ({
   appointmentDate,
 }) => {
   try {
-    // Example endpoint - replace with actual Setmore booking endpoint & payload
+    // This is an example endpoint. Adjust to your actual usage
     const response = await axios.post(
       'https://api.setmore.com/v1/bookingapi/appointments',
       {
@@ -271,38 +271,32 @@ const bookSetmoreAppointmentAPI = async ({
         start_time: appointmentDate,
       },
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
 
-    if (response.data && response.data.data) {
+    if (response.data?.data) {
       return 'Your appointment has been successfully booked!';
     } else {
       console.error('[ERROR] Failed booking response from Setmore:', response.data);
       return 'Unable to confirm booking. Please try again later.';
     }
   } catch (err) {
-    console.error('[ERROR] Error booking appointment with Setmore:', err.message);
+    console.error('[ERROR] bookSetmoreAppointmentAPI:', err.message);
     return 'Something went wrong during booking. Please try again later.';
   }
 };
 
 /**
- * 4c) Helper function to fetch available slots for a given business from Setmore.
- * In real usage, you might require staff_key, service_key, etc. from the user.
+ * 5a) Higher-level fetchAvailableSlots
  */
 const fetchAvailableSlots = async (businessId) => {
   try {
-    // 1. Get (or refresh) a valid access token
     const accessToken = await getSetmoreAccessToken(businessId);
     if (!accessToken) {
-      console.error('[ERROR] Unable to retrieve valid Setmore token.');
+      console.error('[ERROR] No valid Setmore token for slots');
       return [];
     }
-
-    // 2. Fetch from the actual Setmore endpoint
     const slots = await fetchSetmoreSlotsAPI(accessToken);
     return slots;
   } catch (err) {
@@ -312,7 +306,7 @@ const fetchAvailableSlots = async (businessId) => {
 };
 
 /**
- * 4d) Helper function to book an appointment for a given business.
+ * 5b) Higher-level bookSetmoreAppointment
  */
 const bookSetmoreAppointment = async ({
   businessId,
@@ -322,14 +316,11 @@ const bookSetmoreAppointment = async ({
   serviceId,
 }) => {
   try {
-    // 1. Get (or refresh) a valid token
     const accessToken = await getSetmoreAccessToken(businessId);
     if (!accessToken) {
-      console.error('[ERROR] No valid token for booking. businessId=', businessId);
+      console.error(`[ERROR] Could not get Setmore token for business=${businessId}`);
       return 'Unable to process your appointment booking request right now.';
     }
-
-    // 2. Make the Setmore API call
     const resultMessage = await bookSetmoreAppointmentAPI({
       accessToken,
       serviceId,
@@ -344,15 +335,11 @@ const bookSetmoreAppointment = async ({
   }
 };
 
-/**
- * ----------------------------------------------------------------------------
- * 5) Provide Link Function
- * ----------------------------------------------------------------------------
- * This function returns specific links from the business config
- * (e.g., financing, appointment booking, or custom links).
- */
+/**********************************************************
+ * 6) Provide Link Function
+ **********************************************************/
 const provideLink = (businessConfig, linkType) => {
-  const { financing_link, appointment_booking_link, custom_links } = businessConfig;
+  const { financing_link, appointment_booking_link, custom_links } = businessConfig || {};
 
   switch (linkType) {
     case 'financing':
@@ -360,39 +347,36 @@ const provideLink = (businessConfig, linkType) => {
     case 'appointment':
       return appointment_booking_link || 'No appointment booking link is currently available.';
     default:
-      // Check if there's a custom link that matches linkType
       return custom_links?.[linkType] || 'No relevant link found for that request.';
   }
 };
 
-/**
- * ----------------------------------------------------------------------------
- * 6) The Main Assistant Handler
- * ----------------------------------------------------------------------------
- * Integrates everything: fetching business config, creating system message,
- * calling OpenAI with function calling, and handling function calls.
- */
+/**********************************************************
+ * 7) The Main Assistant Handler
+ *    - Gathers business config
+ *    - Creates system prompt
+ *    - Calls OpenAI with function calling
+ *    - Possibly calls Setmore wrappers if the AI triggers them
+ **********************************************************/
 export const assistantHandler = async ({ userMessage, businessId }) => {
   try {
-    console.log(`[DEBUG] Processing message for business ID: ${businessId}`);
-    console.log(`[DEBUG] User message: "${userMessage}"`);
+    console.log(`[DEBUG] assistantHandler -> businessId=${businessId}, userMessage="${userMessage}"`);
 
-    // Basic validation
     if (!userMessage || typeof userMessage !== 'string') {
-      console.error('[ERROR] Invalid user message:', userMessage);
+      console.error('[ERROR] Invalid user message');
       return { message: 'I couldn’t understand your message. Could you please rephrase it?' };
     }
 
-    // 6a) Fetch business configuration
+    // 7a) Fetch business config (cached in Redis)
     const businessConfig = await getBusinessConfig(businessId);
     if (!businessConfig) {
       return { message: 'Unable to retrieve business details. Please try again later.' };
     }
 
-    // 6b) Create the dynamic system message
+    // 7b) Build system prompt from config
     const systemMessage = createSystemMessage(businessConfig);
 
-    // 6c) Define all possible functions for function calling
+    // 7c) Define the possible function calls
     const functions = [
       {
         name: 'fetch_available_slots',
@@ -409,8 +393,8 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
         parameters: {
           type: 'object',
           properties: {
-            customerName: { type: 'string', description: 'The name of the customer.' },
-            customerContact: { type: 'string', description: 'The customer’s contact info (email or phone).' },
+            customerName: { type: 'string', description: 'Customer name.' },
+            customerContact: { type: 'string', description: 'Customer contact info (phone/email).' },
             appointmentDate: {
               type: 'string',
               format: 'date-time',
@@ -429,8 +413,7 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
           properties: {
             linkType: {
               type: 'string',
-              description:
-                'The type of link requested: "financing", "appointment", or a key in custom_links.',
+              description: 'The type of link requested: "financing", "appointment", or a key in custom_links.',
             },
           },
           required: ['linkType'],
@@ -438,47 +421,41 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
       },
     ];
 
-    // 6d) Call OpenAI’s Chat Completion with function calling
+    // 7d) Create the Chat Completion with function calling
     const openaiResponse = await openai.chat.completions.create({
-      // For the latest model, you could replace 'gpt-4' with 'openai.o1' or another
       model: 'gpt-3.5-turbo',
-      // If you want to leverage the new 'reasoning_effort' param (supported in new models like o1),
-      // you can uncomment the following line (and switch model to openai.o1 if supported):
-      // reasoning_effort: 2,
       messages: [
         { role: 'system', content: systemMessage },
         { role: 'user', content: userMessage },
       ],
       functions,
-      function_call: 'auto', // Let the model decide if/when to call a function
-      max_tokens: 500,
+      function_call: 'auto',
+      max_tokens: 400, // Adjust for speed/cost
       temperature: 0.7,
+      stream: false,   // If you want streaming, set to true & handle streams
     });
 
-    // 6e) Extract the relevant choice and check if function call is requested
+    // 7e) Extract AI's response
     const choice = openaiResponse.choices?.[0];
     let responseMessage = choice?.message?.content?.trim() || "I'm here to help!";
 
+    // 7f) If the AI wants to call a function, handle it
     if (choice?.message?.function_call) {
       const { name: functionName, arguments: args } = choice.message.function_call;
-      // Be sure to parse arguments from JSON
       const parsedArgs = args ? JSON.parse(args) : {};
 
       switch (functionName) {
         case 'fetch_available_slots': {
-          // In a real use-case, you might also require staff_key, service_key, etc.
-          // For this example, we'll just fetch some generic "availability."
           const slots = await fetchAvailableSlots(businessId);
           if (slots.length > 0) {
-            // Example formatting: listing date/time if that’s how your data looks
-            const slotTimes = slots.map((slot) => slot.start_time || 'Unknown time');
-            responseMessage = `Here are the available slots: ${slotTimes.join(', ')}`;
+            // Example: listing time from each slot
+            const times = slots.map((s) => s.start_time || 'Unknown');
+            responseMessage = `Here are the available slots: ${times.join(', ')}`;
           } else {
             responseMessage = 'No slots are currently available.';
           }
           break;
         }
-
         case 'book_appointment': {
           const { customerName, customerContact, appointmentDate, serviceId } = parsedArgs;
           responseMessage = await bookSetmoreAppointment({
@@ -490,31 +467,33 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
           });
           break;
         }
-
         case 'provide_link': {
           const { linkType } = parsedArgs;
           responseMessage = provideLink(businessConfig, linkType);
           break;
         }
-
         default:
-          console.error(`[WARN] Unknown function call: ${functionName}`);
-          responseMessage = "I’m sorry, but I’m not sure how to handle that request.";
+          console.warn(`[WARN] AI requested unknown function: ${functionName}`);
+          responseMessage = "I'm sorry, I’m not sure how to handle that request.";
       }
     }
 
-    // 6f) Enforce Instagram (or any platform) character limit, e.g., 1000 chars
+    // 7g) Ensure final text under 1000 chars (e.g., Instagram limit)
     const maxLength = 1000;
     if (responseMessage.length > maxLength) {
       responseMessage = `${responseMessage.substring(0, maxLength - 3)}...`;
     }
 
-    console.log(`[DEBUG] Final AI response: "${responseMessage}"`);
+    console.log(`[DEBUG] Final AI response to user: "${responseMessage}"`);
     return { message: responseMessage };
-  } catch (error) {
-    console.error('[ERROR] Failed to process assistant request:', error);
+  } catch (err) {
+    console.error('[ERROR] assistantHandler:', err.message);
     return { message: 'Something went wrong. Please try again later.' };
   }
 };
 
+/**********************************************************
+ * 8) Default Export
+ *    - If you'd rather do named exports, adjust accordingly.
+ **********************************************************/
 export default assistantHandler;
