@@ -216,6 +216,8 @@ export const handleInputWebhook = async (req, res) => {
         speech: {
           endOnSilence: 0.5,
           language: 'en-US',
+          noiseCancellation: true, // Enable noise suppression (if supported by Vonage STT)
+          vad: { enable: true }, // Enable Voice Activity Detection (if supported)
         },
         dtmf: {
           maxDigits: 1,
