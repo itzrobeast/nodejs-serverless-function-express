@@ -261,21 +261,24 @@ export const handleProcessingWebhook = async (req, res) => {
     const { businessId, conversationId } = req.query;
     const userText = req.body?.payload?.userText || 'No input';
 
-    console.log(`[INFO] handleProcessingWebhook -> userText="${userText}" businessId=${businessId}`);
+    console.log(`[INFO] handleProcessingWebhook triggered for conversationId=${conversationId}`);
+    console.log(`[DEBUG] Payload userText="${userText}"`);
 
-    // 3a) Call the AI assistant
-    console.time('[PERF] AI assistantHandler');
+    // Send acknowledgment to Vonage immediately
+    res.status(200).json([{ action: 'talk', text: 'Processing your request. Please wait.', language: 'en-US', style: 14 }]);
+
+    // Process AI response asynchronously
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
       platform: 'phone',
     });
-    console.timeEnd('[PERF] AI assistantHandler');
 
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
 
-    // 3b) Log the AI response
-    console.time('[PERF] DB: Log AI response');
+    console.log(`[INFO] AI Response: ${ttsMessage}`);
+
+    // Log AI response
     await logConversation({
       businessId,
       senderPhone: 'AI',
@@ -285,9 +288,8 @@ export const handleProcessingWebhook = async (req, res) => {
       role: 'business',
       conversationId,
     });
-    console.timeEnd('[PERF] DB: Log AI response');
 
-    // 3c) Return talk + input again to allow the user to continue
+    // Return talk + input via Vonage API
     const nextEventUrl =
       `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook` +
       `?businessId=${businessId}&conversationId=${conversationId}`;
@@ -298,7 +300,7 @@ export const handleProcessingWebhook = async (req, res) => {
         text: ttsMessage,
         language: 'en-US',
         style: 14,
-        bargeIn: true, // Let user interrupt if they speak mid-response
+        bargeIn: true,
       },
       {
         action: 'input',
@@ -307,8 +309,6 @@ export const handleProcessingWebhook = async (req, res) => {
         speech: {
           endOnSilence: 0.5,
           language: 'en-US',
-          // noiseCancellation: true,
-          // vad: { enable: true },
         },
         dtmf: {
           maxDigits: 1,
@@ -317,21 +317,14 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
+    await vonage.voice.updateCall(conversationId, { action: 'transfer', destination: { type: 'ncco', ncco: aiResponseNcco } });
     console.timeEnd('[PERF] handleProcessingWebhook total');
-    return res.json(aiResponseNcco);
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message);
     console.timeEnd('[PERF] handleProcessingWebhook total');
-    return res.json([
-      {
-        action: 'talk',
-        text: 'Sorry, something went wrong. Goodbye.',
-        language: 'en-US',
-        style: 14,
-      },
-    ]);
   }
 };
+
 
 /**********************************************************************
  * 4) handleCallEvent (Event URL)
