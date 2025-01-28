@@ -251,23 +251,29 @@ export const handleInputWebhook = async (req, res) => {
 
     // Log conversation
     await logConversation({
-      businessId,
-      senderPhone: from,
-      receiverPhone: to,
-      message: inputText,
-      messageType: 'speech',
-      role: 'customer',
-      conversationId,
-    });
-    await logConversation({
-      businessId,
-      senderPhone: 'AI',
-      receiverPhone: from,
-      message: ttsMessage,
-      messageType: 'text',
-      role: 'business',
-      conversationId,
-    });
+  businessId,
+  senderPhone: from,
+  receiverPhone: to,
+  message: inputText,
+  messageType: 'speech',
+  role: 'customer',
+  conversationId, // Ensure the conversation ID is passed
+}).catch((err) => {
+  console.error('[ERROR] Failed to log customer input:', err);
+});
+
+await logConversation({
+  businessId,
+  senderPhone: 'AI',
+  receiverPhone: from,
+  message: ttsMessage,
+  messageType: 'text',
+  role: 'business',
+  conversationId, // Ensure the conversation ID is passed
+}).catch((err) => {
+  console.error('[ERROR] Failed to log AI response:', err);
+});
+
 
     // NCCO for AI response and new input
     const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
