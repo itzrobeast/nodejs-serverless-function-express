@@ -396,16 +396,12 @@ console.log('[DEBUG] Final NCCO before updating call:', JSON.stringify(aiRespons
     
     console.log('[DEBUG] Attempting to update call with new NCCO');
     
-    try {
-  console.log('[DEBUG] Attempting to update call with new NCCO:', JSON.stringify(aiResponseNcco, null, 2));
-  await vonage.voice.updateCall(conversationId, {
-    action: 'transfer',
-    destination: { type: 'ncco', ncco: aiResponseNcco },
-  });
-  console.log('[INFO] Call successfully updated.');
-} catch (err) {
-  console.error('[ERROR] Failed to update call:', err.message);
-}
+ await vonage.voice.updateCall(conversationId, {
+  action: 'transfer',
+  destination: { type: 'ncco', ncco: aiResponseNcco },
+});
+console.log('[INFO] Call successfully updated.');
+
 
 
 
