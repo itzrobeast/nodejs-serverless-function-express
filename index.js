@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import bodyParser from 'body-parser';
 import rateLimit from 'express-rate-limit';
 import supabase from './supabaseClient.js';
 
@@ -54,6 +53,19 @@ const loginLimiter = rateLimit({
   message: 'Too many login attempts, try again later.',
 });
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
+
+// Middleware
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Disable CSP to allow inline styles/scripts if needed
+  })
+);
+
+app.use(cookieParser());
+
+
 // CORS configuration
 app.use(
   cors({
@@ -71,18 +83,8 @@ app.use(
   })
 );
 
-
-// Middleware
-app.use(
-  helmet({
-    contentSecurityPolicy: false, // Disable CSP to allow inline styles/scripts if needed
-  })
-);
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // For URL-encoded form data
-app.use(bodyParser.json());
 app.use('/session', sessionRouter);
+
 
 
 
