@@ -311,12 +311,18 @@ export const handleProcessingWebhook = async (req, res) => {
 
     // Extract conversationId correctly from req.body.payload
     const businessId = req.body?.businessId || req.query?.businessId;
-    const conversationId = req.body?.conversationId || req.query?.conversationId || req.body?.payload?.conversation_uuid;
+    const conversationId =
+  req.body?.conversationId ||
+  req.query?.conversationId ||
+  req.body?.payload?.conversation_uuid || // Notify payload
+  req.body?.conversation_uuid || // General fallback
+  null;
 
-    if (!conversationId) {
-      console.error('[ERROR] Missing conversationId in ProcessingWebhook');
-      return res.status(400).json({ error: 'Missing conversationId' });
-    }
+if (!conversationId) {
+  console.error('[ERROR] Missing conversationId in ProcessingWebhook');
+  return res.status(400).json({ error: 'Missing conversationId' });
+}
+
 
     // Respond immediately to avoid Vonage timeout
     res.status(200).json([
