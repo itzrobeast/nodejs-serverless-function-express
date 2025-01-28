@@ -306,14 +306,13 @@ export const handleFallback = async (req, res) => {
   ]);
 };
 
-
 /**
  * Handle inbound messages or events (Inbound URL).
  */
 export const handleInboundMessage = async (req, res) => {
   try {
     const { text, msisdn } = req.body || req.query;
-    console.log([INFO] Inbound message from ${msisdn}: ${text});
+    console.log(`[INFO] Inbound message from ${msisdn}: ${text}`);
 
     // Respond to the inbound message using Mila's assistant
     const assistantResponse = await assistantHandler({
@@ -329,8 +328,6 @@ export const handleInboundMessage = async (req, res) => {
     return res.status(500).send('Failed to handle inbound message');
   }
 };
-
-
 
 
 
