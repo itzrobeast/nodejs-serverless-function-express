@@ -148,7 +148,7 @@ export const handleInboundCall = async (req, res) => {
         type: ['speech', 'dtmf'],
         eventUrl: [inputWebhook],
         speech: {
-          endOnSilence: 0.5,
+          endOnSilence: 0.3,
           language: 'en-US',
         },
         dtmf: {
@@ -185,9 +185,12 @@ export const handleInputWebhook = async (req, res) => {
     console.log('[DEBUG] InputWebhook Body:', JSON.stringify(req.body, null, 2));
     console.log('[DEBUG] InputWebhook Query:', JSON.stringify(req.query, null, 2));
 
-    const { businessId, conversationId, retryCount = '0' } = req.query;
+    const { businessId, conversationId } = req.query;
+    const from = req.body?.from || 'Unknown';
+    const to = req.body?.to || 'Unknown';
+
     if (!businessId || !conversationId) {
-      console.error('[ERROR] Missing businessId or conversationId in Input Webhook');
+      console.error(`[ERROR] Missing businessId or conversationId in Input Webhook. From: ${from}, To: ${to}`);
       return res.json([
         {
           action: 'talk',
@@ -198,192 +201,79 @@ export const handleInputWebhook = async (req, res) => {
       ]);
     }
 
-    const from = req.body.from || req.query.from;
-    const to = req.body.to || req.query.to;
-    const speechText = req.body.speech?.results?.[0]?.text || '';
-    const dtmfDigits = req.body.dtmf?.digits || '';
-    let userText = speechText ? speechText.toLowerCase().trim() : (dtmfDigits ? `dtmf digit: ${dtmfDigits}` : '');
+    const userText = req.body?.speech?.results?.[0]?.text || '';
+    const dtmfDigits = req.body?.dtmf?.digits || '';
+    let inputText = userText.trim().toLowerCase() || (dtmfDigits ? `dtmf digit: ${dtmfDigits}` : 'No input');
+    console.log(`[DEBUG] Input from: ${from} -> ${to}, User Text: "${inputText}"`);
 
-    console.log('[DEBUG] userText (raw):', userText);
-
-    // Filtering short/filler input
-    let retries = parseInt(retryCount, 10);
-    const fillerRegex = /^[uhm]+$/i;
-    const minLength = 3;
-
-    if (!userText || userText.length < minLength || fillerRegex.test(userText)) {
-      // If invalid input, prompt user again up to 3 times
-      if (retries < 3) {
-        retries += 1;
-        console.log(`[INFO] Filler/noise. Retrying #${retries}`);
-        const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}&retryCount=${retries}`;
-
-        return res.json([
-          {
-            action: 'talk',
-            text: 'I didn’t catch that. Please speak clearly.',
-            language: 'en-US',
-            style: 14,
-          },
-          {
-            action: 'input',
-            type: ['speech', 'dtmf'],
-            eventUrl: [nextUrl],
-            speech: {
-              endOnSilence: 0.5,
-              language: 'en-US',
-            },
-            dtmf: {
-              maxDigits: 1,
-              submitOnHash: false,
-            },
-          },
-        ]);
-      } else {
-        console.log('[INFO] Exceeded max retries. Ending call.');
-        return res.json([
-          {
-            action: 'talk',
-            text: 'Sorry, I’m still not able to understand you. Please call back later. Goodbye.',
-            language: 'en-US',
-            style: 14,
-          },
-        ]);
-      }
-    }
-
-    // Valid input => log it
-    await logConversation({
-      businessId,
-      senderPhone: from,
-      receiverPhone: to,
-      message: userText,
-      messageType: speechText ? 'speech' : (dtmfDigits ? 'dtmf' : 'other'),
-      role: 'customer',
-      conversationId,
-    });
-
-    // Return typing sound + notify
-    const typingSoundUrl = 'https://f004.backblazeb2.com/file/typewriter-typing/typewriter.mp3';
-    const processingUrl =
-      `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook` +
-      `?businessId=${businessId}&conversationId=${conversationId}`;
-
-    const ncco = [
-  {
-    action: "notify",
-    payload: { userText },
-    eventUrl: [`${processingUrl}`],
-    eventMethod: "POST"
-  },
-  {
-    action: "stream",
-     streamUrl: [typingSoundUrl],
-    loop: 1  // Keep playing indefinitely
-  }
-];
-
-    console.log('[INFO] handleInputWebhook -> Returning typing + notify');
-    return res.json(ncco);
-  } catch (err) {
-    console.error('[ERROR] handleInputWebhook:', err.message);
-    return res.json([
-      {
-        action: 'talk',
-        text: 'Sorry, something went wrong. Goodbye.',
-        language: 'en-US',
-        style: 14,
-      },
-    ]);
-  }
-};
-
-/**********************************************************************
- * 3) handleProcessingWebhook (Processing URL)
- *
- *   - Immediately returns a minimal response so Vonage doesn't retry.
- *   - Asynchronously calls AI -> logs -> updateCall with new NCCO.
- **********************************************************************/
-export const handleProcessingWebhook = async (req, res) => {
-  try {
-    console.log('[DEBUG] handleProcessingWebhook Body:', JSON.stringify(req.body, null, 2));
-    console.log('[DEBUG] handleProcessingWebhook Query:', JSON.stringify(req.query, null, 2));
-
-    const businessId = req.body?.businessId || req.query?.businessId;
-    const conversationId =
-      req.body?.conversationId ||
-      req.query?.conversationId ||
-      req.body?.payload?.conversation_uuid ||
-      req.body?.conversation_uuid ||
-      null;
-
-    if (!conversationId) {
-      console.error('[ERROR] Missing conversationId in ProcessingWebhook');
-      return res.status(400).json({ error: 'Missing conversationId' });
-    }
-
-    const userText = req.body?.payload?.userText || 'No input';
-    console.log('[DEBUG] Processing for businessId:', businessId, 'userMessage:', userText);
-
-    // Step 1: Immediate NCCO with input to keep the call active
-    const initialNcco = [
-      {
-        action: 'talk',
-        text: 'Processing your request.',
-        language: 'en-US',
-        style: 14,
-        bargeIn: false, // Disable bargeIn for the initial processing message
-      },
-      {
-        action: 'input',
-        type: ['speech', 'dtmf'],
-        eventUrl: [
-          `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}&conversationId=${conversationId}`,
-        ],
-        speech: {
-          endOnSilence: 1.0,
+    // Filter out background noise or filler words
+    const fillerRegex = /^(uh|um|ah|hm|hmm|noise|silent|background|end_on_silence)$/i;
+    if (fillerRegex.test(inputText) || inputText.length < 3) {
+      console.log('[INFO] Detected noise/filler input. Ignoring...');
+      return res.json([
+        {
+          action: 'talk',
+          text: 'I didn’t catch that. Could you repeat that, please?',
           language: 'en-US',
+          style: 14,
         },
-        dtmf: {
-          maxDigits: 1,
-          submitOnHash: false,
+        {
+          action: 'input',
+          type: ['speech', 'dtmf'],
+          eventUrl: [
+            `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`,
+          ],
+          speech: {
+            endOnSilence: 0.3,
+            language: 'en-US',
+          },
+          dtmf: {
+            maxDigits: 1,
+            submitOnHash: false,
+          },
         },
-      },
-    ];
+      ]);
+    }
 
-    console.log('[DEBUG] Returning initial NCCO for processing response');
-    res.json(initialNcco);
-
-    // Step 2: Process AI response asynchronously
+    // Generate AI response
     const assistantResponse = await assistantHandler({
-      userMessage: userText,
+      userMessage: inputText,
       businessId,
       platform: 'phone',
     });
 
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
-    console.log('[INFO] AI says:', ttsMessage);
+    console.log(`[INFO] AI Response to ${from}: ${ttsMessage}`);
 
-    // Log AI response
+    // Log conversation
+    await logConversation({
+      businessId,
+      senderPhone: from,
+      receiverPhone: to,
+      message: inputText,
+      messageType: 'speech',
+      role: 'customer',
+      conversationId,
+    });
     await logConversation({
       businessId,
       senderPhone: 'AI',
-      receiverPhone: 'Customer',
+      receiverPhone: from,
       message: ttsMessage,
       messageType: 'text',
       role: 'business',
       conversationId,
     });
 
-    // Step 3: Prepare NCCO for AI response
+    // NCCO for AI response and new input
     const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
-    const aiResponseNcco = [
+    const ncco = [
       {
         action: 'talk',
         text: ttsMessage,
         language: 'en-US',
         style: 14,
-        bargeIn: true, // Allow user to interrupt during AI response
+        bargeIn: true, // Enable barge-in for user interruptions
       },
       {
         action: 'input',
@@ -400,17 +290,22 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    // Step 4: Update the call with the AI response
-    console.log('[DEBUG] Attempting to update call with AI response NCCO');
-    await vonage.voice.updateCall(conversationId, {
-      action: 'transfer',
-      destination: { type: 'ncco', ncco: aiResponseNcco },
-    });
-    console.log('[INFO] Call successfully updated with AI response.');
+    console.log('[INFO] Returning AI response NCCO');
+    return res.json(ncco);
   } catch (err) {
-    console.error('[ERROR] handleProcessingWebhook:', err.message, err.stack);
+    console.error(`[ERROR] handleInputWebhook for call from ${req.body?.from || 'Unknown'} to ${req.body?.to || 'Unknown'}: ${err.message}`);
+    return res.json([
+      {
+        action: 'talk',
+        text: 'Sorry, something went wrong. Goodbye.',
+        language: 'en-US',
+        style: 14,
+      },
+    ]);
   }
 };
+
+
 
 /**********************************************************************
  * 4) handleCallEvent (Event URL)
