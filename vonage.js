@@ -326,10 +326,7 @@ export const handleProcessingWebhook = async (req, res) => {
     const userText = req.body?.payload?.userText || 'No input';
     console.log('[DEBUG] Processing for businessId:', businessId, 'userMessage:', userText);
 
-    // Respond immediately to Vonage to prevent retries
-    res.status(200).json({ status: 'Processing request' });
-
-    // Process AI response asynchronously
+    // Respond immediately with AI response
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -350,20 +347,20 @@ export const handleProcessingWebhook = async (req, res) => {
       conversationId,
     });
 
-    // Build the next NCCO
-    const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
-    const aiResponseNcco = [
+    // Respond directly with the AI message
+    const ncco = [
       {
         action: 'talk',
         text: ttsMessage,
         language: 'en-US',
         style: 14,
-        bargeIn: true,
       },
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [nextUrl],
+        eventUrl: [
+          `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}&conversationId=${conversationId}`,
+        ],
         speech: {
           endOnSilence: 0.5,
           language: 'en-US',
@@ -375,25 +372,13 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    console.log('[DEBUG] Final NCCO:', JSON.stringify(aiResponseNcco, null, 2));
-
-    // Update the call with the new NCCO
-    try {
-      await vonage.voice.updateCall(conversationId, {
-        action: 'transfer',
-        destination: { type: 'ncco', ncco: aiResponseNcco },
-      });
-      console.log('[INFO] Call successfully updated with AI response.');
-    } catch (err) {
-      console.error('[ERROR] Failed to update call with NCCO:', err.message, err.stack);
-    }
+    console.log('[DEBUG] Returning simple response NCCO:', JSON.stringify(ncco, null, 2));
+    return res.json(ncco);
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message, err.stack);
+    return res.status(500).json({ error: 'An error occurred processing the webhook' });
   }
 };
-
-
-
 
 
 /**********************************************************************
