@@ -4,8 +4,8 @@
 import { Vonage } from '@vonage/server-sdk';
 import supabase from './supabaseClient.js';
 import { assistantHandler } from './assistant.js';
-import { logConversation } from './logConversation.js';
-import { v4 as uuidv4 } from 'uuid';
+import { logConversation } from './logConversation.js'; // Your custom DB logging
+// import { v4 as uuidv4 } from 'uuid'; // No longer needed for conversation_id
 
 /**
  * Initialize Vonage SDK with environment variables:
@@ -24,15 +24,21 @@ const vonage = new Vonage({
 /**********************************************************************
  * 1) Answer URL - handleInboundCall
  *
- *   - Looks up the business by Vonage number (businessId, name).
- *   - Creates a conversationId for multi-turn logging.
- *   - Logs "conversation started."
- *   - Returns an NCCO with talk + input.
+ *   - Uses the REAL Vonage conversation_uuid from req.body.conversation_uuid
+ *   - Logs the conversation start in inbound_calls with that ID.
+ *   - Returns talk + input with business info.
  **********************************************************************/
 export const handleInboundCall = async (req, res) => {
   try {
     const to = req.body.to || req.query.to;
     const from = req.body.from || req.query.from;
+
+    // The real conversation UUID from Vonage
+    const conversationId = req.body.conversation_uuid; 
+    // If it's not present, fallback or handle error
+    if (!conversationId) {
+      console.error('[ERROR] Missing conversation_uuid from Vonage');
+    }
 
     if (!to || !from) {
       console.error('[ERROR] Missing "to" or "from" in inbound call');
@@ -46,7 +52,7 @@ export const handleInboundCall = async (req, res) => {
       ]);
     }
 
-    // 1a) Find businessId from vonage_numbers
+    // 1a) Find the business for the called Vonage number
     const { data: businessData, error: businessError } = await supabase
       .from('vonage_numbers')
       .select('business_id')
@@ -66,15 +72,15 @@ export const handleInboundCall = async (req, res) => {
     }
     const businessId = businessData.business_id;
 
-    // 1b) Fetch the business name
-    const { data: businessInfo, error: businessInfoError } = await supabase
+    // 1b) Fetch the business name for greeting
+    const { data: bizInfo, error: bizError } = await supabase
       .from('businesses')
       .select('name')
       .eq('id', businessId)
       .single();
 
-    if (businessInfoError || !businessInfo) {
-      console.error('[ERROR] Failed to fetch business name:', businessInfoError?.message || 'No data');
+    if (bizError || !bizInfo) {
+      console.error('[ERROR] Failed to fetch business name:', bizError?.message || 'No data');
       return res.json([
         {
           action: 'talk',
@@ -84,15 +90,12 @@ export const handleInboundCall = async (req, res) => {
         },
       ]);
     }
-    const businessName = businessInfo.name || 'our business';
+    const businessName = bizInfo.name || 'our business';
 
-    // 1c) Create a conversationId
-    const conversationId = uuidv4();
-
-    // 1d) Log conversation start
+    // 1c) Log "conversation started" in inbound_calls
     await supabase.from('inbound_calls').insert([
       {
-        conversation_id: conversationId,
+        conversation_id: conversationId,   // Use REAL conversation_uuid
         sender_phone: from,
         receiver_phone: to,
         business_id: businessId,
@@ -103,7 +106,8 @@ export const handleInboundCall = async (req, res) => {
       },
     ]);
 
-    // 1e) Construct talk + input
+    // 1d) Build talk + input
+    // Pass the REAL conversationId in the eventUrl
     const eventUrlWithParams =
       `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook` +
       `?businessId=${businessId}&conversationId=${conversationId}`;
@@ -120,7 +124,7 @@ export const handleInboundCall = async (req, res) => {
         type: ['speech', 'dtmf'],
         eventUrl: [eventUrlWithParams],
         speech: {
-          endOnSilence: 0.2,
+          endOnSilence: 0.5,
           language: 'en-US',
         },
         dtmf: {
@@ -145,11 +149,12 @@ export const handleInboundCall = async (req, res) => {
 };
 
 /**********************************************************************
- * 2) Input Webhook - handleInputWebhook
+ * 2) handleInputWebhook
  *
- *   - The user has spoken or pressed digits.
- *   - Log their input.
- *   - Return a typing sound (stream) + notify action calls /processing-webhook.
+ *   - Called after user speaks or presses digits.
+ *   - We filter out short/irrelevant noise or filler words (like "um", "uh").
+ *   - If valid input, we play a typing sound + notify the processing webhook.
+ *   - If invalid, we prompt user to repeat, up to max retries.
  **********************************************************************/
 export const handleInputWebhook = async (req, res) => {
   try {
@@ -166,34 +171,91 @@ export const handleInputWebhook = async (req, res) => {
       ]);
     }
 
-    // Extract speech or dtmf
     const from = req.body.from;
     const to = req.body.to;
+
+    // Vonage speech + dtmf
     const userSpeech = req.body.speech?.results?.[0]?.text || '';
     const userDtmf = req.body.dtmf?.digits || '';
-    const userText = userSpeech
-      ? userSpeech.toLowerCase()
+    let userText = userSpeech
+      ? userSpeech.toLowerCase().trim()
       : userDtmf
-      ? `DTMF digit: ${userDtmf}`
+      ? `dtmf digit: ${userDtmf}`
       : '';
 
-    console.log('[DEBUG] InputWebhook request:', JSON.stringify(req.body, null, 2));
-    console.log('[DEBUG] userText:', userText);
+    console.log('[DEBUG] InputWebhook body:', JSON.stringify(req.body, null, 2));
+    console.log('[DEBUG] userText before filter:', userText);
 
-    // Log user message if it’s not empty
-    if (userText.trim()) {
+    // 2a) Filter out short or filler words
+    // e.g. if userText < 3 chars or matches "um", "uh", "hmm" etc.
+    const fillerRegex = /^[uhm]+$/i;
+    const minLength = 3;
+
+    let retryCount = parseInt(req.query.retryCount || '0', 10);
+
+    if (
+      userText.length < minLength ||
+      fillerRegex.test(userText)
+    ) {
+      // we handle "invalid / noise"
+      if (retryCount < 3) {
+        // Prompt user again
+        retryCount += 1;
+        const nextEventUrl =
+          `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook` +
+          `?businessId=${businessId}&conversationId=${conversationId}&retryCount=${retryCount}`;
+
+        console.log(`[DEBUG] Noise or short input detected. Retry #${retryCount}`);
+
+        return res.json([
+          {
+            action: 'talk',
+            text: 'I didn’t catch that. Please say your request clearly.',
+            language: 'en-US',
+            style: 14,
+          },
+          {
+            action: 'input',
+            type: ['speech', 'dtmf'],
+            eventUrl: [nextEventUrl],
+            speech: {
+              endOnSilence: 0.5,
+              language: 'en-US',
+            },
+            dtmf: {
+              maxDigits: 1,
+              submitOnHash: false,
+            },
+          },
+        ]);
+      } else {
+        // Exceeded max retries
+        console.log('[INFO] Exceeded max noise retries, ending call.');
+        return res.json([
+          {
+            action: 'talk',
+            text: 'Sorry, I’m still not able to understand. Please call back later.',
+            language: 'en-US',
+            style: 14,
+          },
+        ]);
+      }
+    }
+
+    // 2b) Log user input since it's valid
+    if (userText) {
       await logConversation({
         businessId,
         senderPhone: from,
         receiverPhone: to,
         message: userText,
-        messageType: userSpeech ? 'speech' : userDtmf ? 'dtmf' : 'other',
+        messageType: userSpeech ? 'speech' : 'dtmf',
         role: 'customer',
         conversationId,
       });
     }
 
-    // Return typing sound + notify
+    // 2c) Return an NCCO: Stream typing + notify to processing-webhook
     const typingSoundUrl = 'https://f004.backblazeb2.com/file/typewriter-typing/typewriter.mp3';
     const processingWebhookUrl =
       `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook` +
@@ -201,20 +263,18 @@ export const handleInputWebhook = async (req, res) => {
 
     const typingNcco = [
       {
-        // The user hears continuous typing until replaced by the next NCCO
         action: 'stream',
         streamUrl: [typingSoundUrl],
-        loop: 0, // infinite
+        loop: 0, // indefinite
       },
       {
-        // The notify action calls /processing-webhook asynchronously
         action: 'notify',
         payload: { userText },
         eventUrl: [processingWebhookUrl],
       },
     ];
 
-    res.json(typingNcco);
+    return res.json(typingNcco);
   } catch (err) {
     console.error('[ERROR] handleInputWebhook:', err.message);
     return res.json([
@@ -229,22 +289,22 @@ export const handleInputWebhook = async (req, res) => {
 };
 
 /**********************************************************************
- * 3) Processing Webhook - handleProcessingWebhook
+ * 3) handleProcessingWebhook
  *
- *   - Called by notify while typing is playing.
- *   - Immediately responds with a placeholder TTS so Vonage doesn't time out.
- *   - Asynchronously calls the AI -> logs -> updates the call with a new NCCO.
+ *   - Immediately responds with a placeholder so Vonage doesn't retry.
+ *   - Asynchronously calls AI -> logs -> uses real conversationId
+ *     with vonage.voice.updateCall(...) to switch the call to the new NCCO.
  **********************************************************************/
 export const handleProcessingWebhook = async (req, res) => {
   try {
-    console.log('[INFO] handleProcessingWebhook triggered');
-    console.log('[DEBUG] Request body:', req.body);
-
     const { businessId, conversationId } = req.query;
     const userText = req.body?.payload?.userText || 'No input';
 
-    // 1) Immediately send a minimal response to Vonage
-    // so it doesn't retry or time out
+    console.log(`[INFO] handleProcessingWebhook triggered for conversationId=${conversationId}`);
+    console.log(`[DEBUG] userText="${userText}"`);
+
+    // Acknowledge immediately
+    // This frees Vonage from waiting for a final NCCO here
     res.status(200).json([
       {
         action: 'talk',
@@ -254,7 +314,7 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ]);
 
-    // 2) Asynchronously process AI
+    // Now do AI logic asynchronously
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -262,9 +322,9 @@ export const handleProcessingWebhook = async (req, res) => {
     });
 
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
-    console.log(`[INFO] AI Response: ${ttsMessage}`);
+    console.log(`[INFO] AI says: ${ttsMessage}`);
 
-    // 3) Log AI response
+    // Log AI response
     await logConversation({
       businessId,
       senderPhone: 'AI',
@@ -275,7 +335,7 @@ export const handleProcessingWebhook = async (req, res) => {
       conversationId,
     });
 
-    // 4) Build the new NCCO with talk + input for the next turn
+    // Build new NCCO
     const nextEventUrl =
       `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook` +
       `?businessId=${businessId}&conversationId=${conversationId}`;
@@ -286,14 +346,14 @@ export const handleProcessingWebhook = async (req, res) => {
         text: ttsMessage,
         language: 'en-US',
         style: 14,
-        bargeIn: true, // Let user interrupt
+        bargeIn: true,
       },
       {
         action: 'input',
         type: ['speech', 'dtmf'],
         eventUrl: [nextEventUrl],
         speech: {
-          endOnSilence: 0.2,
+          endOnSilence: 0.5,
           language: 'en-US',
         },
         dtmf: {
@@ -303,27 +363,20 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    // 5) Transfer the live call to the new NCCO
-    // conversationId = call's conversation_uuid from Vonage (must match)
-    // If it doesn't match exactly, consider storing the real call UUID
-    // or using the 'uuid' property from the inbound request to update the call.
-    try {
-      await vonage.voice.updateCall(conversationId, {
-        action: 'transfer',
-        destination: { type: 'ncco', ncco: aiResponseNcco },
-      });
-      console.log('[INFO] Successfully updated call with new NCCO');
-    } catch (updateErr) {
-      console.error('[ERROR] Failed to update call with new NCCO:', updateErr.message);
-    }
+    // Transfer the call to the new NCCO using the REAL conversationId from Vonage
+    await vonage.voice.updateCall(conversationId, {
+      action: 'transfer',
+      destination: { type: 'ncco', ncco: aiResponseNcco },
+    });
+    console.log('[INFO] Successfully updated call with new NCCO');
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message);
   }
 };
 
 /**********************************************************************
- * 4) Call Event - handleCallEvent
- *   - Logs call life-cycle events (answered, completed, etc.).
+ * 4) handleCallEvent (Event URL)
+ *   - Logs events like answered, completed, etc.
  **********************************************************************/
 export const handleCallEvent = async (req, res) => {
   try {
@@ -341,8 +394,8 @@ export const handleCallEvent = async (req, res) => {
 };
 
 /**********************************************************************
- * 5) Fallback - handleFallback
- *   - Called if Answer URL times out or fails. Simple TTS error.
+ * 5) handleFallback (Fallback URL)
+ *   - Called if Answer URL fails or times out.
  **********************************************************************/
 export const handleFallback = async (req, res) => {
   try {
@@ -360,8 +413,8 @@ export const handleFallback = async (req, res) => {
 };
 
 /**********************************************************************
- * 6) Inbound Message - handleInboundMessage
- *   - For inbound SMS or messages. Just pass to assistantHandler.
+ * 6) handleInboundMessage (Inbound URL)
+ *   - For inbound SMS or messages. We pass it to the AI and respond.
  **********************************************************************/
 export const handleInboundMessage = async (req, res) => {
   try {
@@ -383,7 +436,7 @@ export const handleInboundMessage = async (req, res) => {
 };
 
 /**********************************************************************
- * 7) Call Status - handleCallStatus
+ * 7) handleCallStatus (Status URL)
  *   - Additional call progress or final statuses are posted here.
  **********************************************************************/
 export const handleCallStatus = async (req, res) => {
