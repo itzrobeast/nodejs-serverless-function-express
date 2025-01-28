@@ -325,19 +325,34 @@ export const handleProcessingWebhook = async (req, res) => {
     const userText = req.body?.payload?.userText || 'No input';
     console.log('[DEBUG] Processing for businessId:', businessId, 'userMessage:', userText);
 
-    // Step 1: Immediate "Processing your request" response
-    const processingNcco = [
+    // Step 1: Immediate NCCO with input to keep the call active
+    const initialNcco = [
       {
         action: 'talk',
         text: 'Processing your request. Please wait.',
         language: 'en-US',
         style: 14,
-        bargeIn: false, // Disable bargeIn for this initial message
+        bargeIn: false, // Disable bargeIn for the initial processing message
+      },
+      {
+        action: 'input',
+        type: ['speech', 'dtmf'],
+        eventUrl: [
+          `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}&conversationId=${conversationId}`,
+        ],
+        speech: {
+          endOnSilence: 1.0,
+          language: 'en-US',
+        },
+        dtmf: {
+          maxDigits: 1,
+          submitOnHash: false,
+        },
       },
     ];
 
-    console.log('[DEBUG] Returning immediate processing response NCCO');
-    res.json(processingNcco);
+    console.log('[DEBUG] Returning initial NCCO for processing response');
+    res.json(initialNcco);
 
     // Step 2: Process AI response asynchronously
     const assistantResponse = await assistantHandler({
@@ -361,21 +376,21 @@ export const handleProcessingWebhook = async (req, res) => {
     });
 
     // Step 3: Prepare NCCO for AI response
-    const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+    const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const aiResponseNcco = [
       {
         action: 'talk',
         text: ttsMessage,
         language: 'en-US',
         style: 14,
-        bargeIn: true, // Allow bargeIn for user to interrupt and respond
+        bargeIn: true, // Allow user to interrupt during AI response
       },
       {
         action: 'input',
         type: ['speech', 'dtmf'],
         eventUrl: [nextUrl],
         speech: {
-          endOnSilence: .2, // Slightly less sensitive to user pauses
+          endOnSilence: 0.3,
           language: 'en-US',
         },
         dtmf: {
@@ -385,7 +400,7 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    // Step 4: Transfer the call with the AI response
+    // Step 4: Update the call with the AI response
     console.log('[DEBUG] Attempting to update call with AI response NCCO');
     await vonage.voice.updateCall(conversationId, {
       action: 'transfer',
