@@ -410,6 +410,7 @@ setTimeout(async () => {
 
     // Update the call with the new NCCO
     try {
+      console.log('[DEBUG] Attempting to update call with new NCCO:', JSON.stringify(aiResponseNcco, null, 2));
       await vonage.voice.updateCall(conversationId, {
         action: 'transfer',
         destination: { type: 'ncco', ncco: aiResponseNcco },
