@@ -181,7 +181,7 @@ export const handleInputWebhook = async (req, res) => {
     });
 
     // Typing sound NCCO
-    const typingSoundUrl = 'https://f004.backblazeb2.com/file/typewriter-typing/typewriter-typing-68696.mp3';
+    const typingSoundUrl = 'https://f004.backblazeb2.com/file/typewriter-typing/typewriter.mp3';
     const processingWebhookUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}`;
 
     const typingNcco = [
