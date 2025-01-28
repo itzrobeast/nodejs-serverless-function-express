@@ -14,6 +14,7 @@ import supabase from './supabaseClient.js';
  * @param {string} [conversationData.email] - Email address (optional).
  * @param {string} [conversationData.location] - Location (optional).
  */
+
 export const logConversation = async ({
   businessId,
   senderPhone,
@@ -27,14 +28,15 @@ export const logConversation = async ({
   location = null,
 }) => {
   try {
-    // Ensure conversationId is provided
-    if (!conversationId) {
-      throw new Error('conversationId is required but not provided.');
-    }
+    // Validate required fields
+    if (!businessId) throw new Error('businessId is required but not provided.');
+    if (!conversationId) throw new Error('conversationId is required but not provided.');
+    if (!senderPhone) console.warn('[WARNING] senderPhone is not provided.');
 
+    // Insert conversation log
     const { error } = await supabase.from(`inbound_calls_${businessId}`).insert({
       business_id: businessId,
-      conversation_id: conversationId, // Explicitly set the conversationId
+      conversation_id: conversationId, // Explicitly set the conversation ID
       sender_phone: senderPhone,
       receiver_phone: receiverPhone,
       message,
@@ -43,15 +45,23 @@ export const logConversation = async ({
       caller_name: callerName,
       email,
       location,
-      timestamp: new Date().toISOString(), // Add timestamp for logging
+      timestamp: new Date().toISOString(), // Log the timestamp
     });
 
+    // Handle database errors
     if (error) {
-      console.error('[ERROR] Failed to log conversation:', error.message);
+      console.error('[ERROR] Failed to log conversation:', {
+        message: error.message,
+        details: error.details || null,
+        hint: error.hint || null,
+      });
     } else {
       console.log(`[INFO] Conversation logged successfully for Conversation ID: ${conversationId}`);
     }
   } catch (err) {
-    console.error('[ERROR] logConversation:', err.message);
+    console.error('[ERROR] logConversation:', {
+      message: err.message,
+      stack: err.stack,
+    });
   }
 };
