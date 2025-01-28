@@ -27,16 +27,20 @@ const vonage = new Vonage({
  * We handle both, plus check GET or POST.
  **********************************************************************/
 function getConversationId(req) {
-  // Typically 'conversation_uuid' is correct, but let's fallback to 'uuid'
-  return (
-    req.body.conversation_uuid ||
-    req.query.conversation_uuid ||
-    req.body.uuid ||
-    req.query.uuid ||
-    null
-  );
-}
+  // Extract 'conversation_uuid' or fallback to 'uuid' from the request body or query
+  const conversationId =
+    req.body?.conversation_uuid ||
+    req.query?.conversation_uuid ||
+    req.body?.uuid ||
+    req.query?.uuid ||
+    null;
 
+  if (!conversationId) {
+    console.error('[ERROR] Missing conversationId from Vonage');
+  }
+
+  return conversationId;
+}
 /**********************************************************************
  * 1) handleInboundCall (Answer URL)
  *
