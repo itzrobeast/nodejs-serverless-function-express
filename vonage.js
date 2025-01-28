@@ -309,7 +309,6 @@ export const handleProcessingWebhook = async (req, res) => {
     console.log('[DEBUG] handleProcessingWebhook Body:', JSON.stringify(req.body, null, 2));
     console.log('[DEBUG] handleProcessingWebhook Query:', JSON.stringify(req.query, null, 2));
 
-    // Extract conversationId and businessId
     const businessId = req.body?.businessId || req.query?.businessId;
     const conversationId =
       req.body?.conversationId ||
@@ -326,7 +325,21 @@ export const handleProcessingWebhook = async (req, res) => {
     const userText = req.body?.payload?.userText || 'No input';
     console.log('[DEBUG] Processing for businessId:', businessId, 'userMessage:', userText);
 
-    // Respond immediately with AI response
+    // Step 1: Immediate "Processing your request" response
+    const processingNcco = [
+      {
+        action: 'talk',
+        text: 'Processing your request. Please wait.',
+        language: 'en-US',
+        style: 14,
+        bargeIn: false, // Disable bargeIn for this initial message
+      },
+    ];
+
+    console.log('[DEBUG] Returning immediate processing response NCCO');
+    res.json(processingNcco);
+
+    // Step 2: Process AI response asynchronously
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -347,22 +360,22 @@ export const handleProcessingWebhook = async (req, res) => {
       conversationId,
     });
 
-    // Respond directly with the AI message
-    const ncco = [
+    // Step 3: Prepare NCCO for AI response
+    const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+    const aiResponseNcco = [
       {
         action: 'talk',
         text: ttsMessage,
         language: 'en-US',
         style: 14,
+        bargeIn: true, // Allow bargeIn for user to interrupt and respond
       },
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [
-          `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}&conversationId=${conversationId}`,
-        ],
+        eventUrl: [nextUrl],
         speech: {
-          endOnSilence: 0.5,
+          endOnSilence: .2, // Slightly less sensitive to user pauses
           language: 'en-US',
         },
         dtmf: {
@@ -372,14 +385,17 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    console.log('[DEBUG] Returning simple response NCCO:', JSON.stringify(ncco, null, 2));
-    return res.json(ncco);
+    // Step 4: Transfer the call with the AI response
+    console.log('[DEBUG] Attempting to update call with AI response NCCO');
+    await vonage.voice.updateCall(conversationId, {
+      action: 'transfer',
+      destination: { type: 'ncco', ncco: aiResponseNcco },
+    });
+    console.log('[INFO] Call successfully updated with AI response.');
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message, err.stack);
-    return res.status(500).json({ error: 'An error occurred processing the webhook' });
   }
 };
-
 
 /**********************************************************************
  * 4) handleCallEvent (Event URL)
