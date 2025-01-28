@@ -309,8 +309,9 @@ export const handleProcessingWebhook = async (req, res) => {
     console.log('[DEBUG] handleProcessingWebhook Body:', JSON.stringify(req.body, null, 2));
     console.log('[DEBUG] handleProcessingWebhook Query:', JSON.stringify(req.query, null, 2));
 
-    // Ensure we check both body and query for businessId and conversationId
-    const { businessId, conversationId } = req.body || req.query;
+    // Extract conversationId correctly from req.body.payload
+    const businessId = req.body?.businessId || req.query?.businessId;
+    const conversationId = req.body?.conversationId || req.query?.conversationId || req.body?.payload?.conversation_uuid;
 
     if (!conversationId) {
       console.error('[ERROR] Missing conversationId in ProcessingWebhook');
@@ -385,6 +386,7 @@ export const handleProcessingWebhook = async (req, res) => {
     console.error('[ERROR] handleProcessingWebhook:', err.message);
   }
 };
+
 
 
 
