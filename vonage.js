@@ -31,7 +31,7 @@ const vonage = new Vonage({
  **********************************************************************/
 export const handleInboundCall = async (req, res) => {
   try {
-    console.log('[DEBUG] handleInboundCall - Incoming Payload:', JSON.stringify(req.body, null, 2));
+    console.log('[DEBUG] Full InboundCall Payload:', JSON.stringify(req.body, null, 2));
 
     const to = req.body.to || req.query.to;
     const from = req.body.from || req.query.from;
