@@ -337,6 +337,22 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ]);
 
+    // Wait before executing the updateCall action
+setTimeout(async () => {
+  try {
+    console.log('[DEBUG] Attempting to update call with new NCCO:', JSON.stringify(aiResponseNcco, null, 2));
+    await vonage.voice.updateCall(conversationId, {
+      action: 'transfer',
+      destination: { type: 'ncco', ncco: aiResponseNcco },
+    });
+    console.log('[INFO] Call successfully updated.');
+  } catch (err) {
+    console.error('[ERROR] Failed to update call:', err.message, err.stack);
+  }
+}, 2000);
+
+
+
     // Handle AI response asynchronously
     const assistantResponse = await assistantHandler({
       userMessage: userText,
