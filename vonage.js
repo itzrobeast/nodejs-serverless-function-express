@@ -329,7 +329,7 @@ export const handleProcessingWebhook = async (req, res) => {
     const initialNcco = [
       {
         action: 'talk',
-        text: 'Processing your request. Please wait.',
+        text: 'Processing your request.',
         language: 'en-US',
         style: 14,
         bargeIn: false, // Disable bargeIn for the initial processing message
