@@ -309,18 +309,26 @@ export const handleProcessingWebhook = async (req, res) => {
     console.log('[DEBUG] handleProcessingWebhook Body:', JSON.stringify(req.body, null, 2));
     console.log('[DEBUG] handleProcessingWebhook Query:', JSON.stringify(req.query, null, 2));
 
-    const { businessId, conversationId } = req.query;
-    const userText = req.body?.payload?.userText || 'No input';
+    // Ensure we check both body and query for businessId and conversationId
+    const { businessId, conversationId } = req.body || req.query;
 
     if (!conversationId) {
       console.error('[ERROR] Missing conversationId in ProcessingWebhook');
-      return;
+      return res.status(400).json({ error: 'Missing conversationId' });
     }
 
     // Respond immediately to avoid Vonage timeout
-    res.status(200).json({ status: 'ok' });
+    res.status(200).json([
+      {
+        action: 'talk',
+        text: 'Processing your request. Please wait.',
+        language: 'en-US',
+        style: 14,
+      },
+    ]);
 
-    // Asynchronously handle AI response
+    // Process AI response
+    const userText = req.body?.payload?.userText || 'No input';
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -341,8 +349,9 @@ export const handleProcessingWebhook = async (req, res) => {
       conversationId,
     });
 
-    // Build the next NCCO
+    // Send AI response back to Vonage
     const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+
     const aiResponseNcco = [
       {
         action: 'talk',
@@ -366,7 +375,6 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    // Update the call with the new NCCO
     console.log('[DEBUG] Attempting to update call with new NCCO');
     await vonage.voice.updateCall(conversationId, {
       action: 'transfer',
@@ -377,6 +385,7 @@ export const handleProcessingWebhook = async (req, res) => {
     console.error('[ERROR] handleProcessingWebhook:', err.message);
   }
 };
+
 
 
 /**********************************************************************
