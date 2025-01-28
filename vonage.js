@@ -273,7 +273,7 @@ export const handleInputWebhook = async (req, res) => {
       {
         action: 'stream',
         streamUrl: [typingSoundUrl],
-        loop: 0, // indefinite
+        loop: 1, 
       },
       {
         action: 'notify',
