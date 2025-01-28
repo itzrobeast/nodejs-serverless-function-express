@@ -311,17 +311,22 @@ export const handleProcessingWebhook = async (req, res) => {
     const { businessId, conversationId } = req.query;
     const userText = req.body?.payload?.userText || 'No input';
 
-    // Respond immediately to avoid Vonage timeouts
+    if (!conversationId) {
+      console.error('[ERROR] Missing conversationId in ProcessingWebhook');
+      return;
+    }
+
+    // Respond immediately to avoid Vonage timeout
     res.status(200).json([
       {
         action: 'talk',
-        text: 'Processing your request, please hold.',
+        text: 'Processing your request. Please wait.',
         language: 'en-US',
         style: 14,
       },
     ]);
 
-    // Asynchronously call AI
+    // Asynchronously handle AI response
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -342,7 +347,7 @@ export const handleProcessingWebhook = async (req, res) => {
       conversationId,
     });
 
-    // Build new NCCO for the updated flow
+    // Build the next NCCO
     const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const aiResponseNcco = [
       {
@@ -367,18 +372,18 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    console.log('[DEBUG] Attempting updateCall with conversationId:', conversationId);
-
-    // Transfer call to new NCCO using conversationId from Vonage
+    // Update the call with the new NCCO
+    console.log('[DEBUG] Attempting to update call with new NCCO');
     await vonage.voice.updateCall(conversationId, {
       action: 'transfer',
       destination: { type: 'ncco', ncco: aiResponseNcco },
     });
-    console.log('[INFO] Updated call with new AI response NCCO.');
+    console.log('[INFO] Call successfully updated.');
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message);
   }
 };
+
 
 /**********************************************************************
  * 4) handleCallEvent (Event URL)
