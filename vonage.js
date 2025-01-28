@@ -309,6 +309,7 @@ export const handleProcessingWebhook = async (req, res) => {
     console.log('[DEBUG] handleProcessingWebhook Body:', JSON.stringify(req.body, null, 2));
     console.log('[DEBUG] handleProcessingWebhook Query:', JSON.stringify(req.query, null, 2));
 
+    // Extract conversationId and businessId
     const businessId = req.body?.businessId || req.query?.businessId;
     const conversationId =
       req.body?.conversationId ||
@@ -323,20 +324,12 @@ export const handleProcessingWebhook = async (req, res) => {
     }
 
     const userText = req.body?.payload?.userText || 'No input';
-
     console.log('[DEBUG] Processing for businessId:', businessId, 'userMessage:', userText);
 
-    // Respond immediately to avoid Vonage timeout
-    res.status(200).json([
-      {
-        action: 'talk',
-        text: 'Processing your request. Please wait.',
-        language: 'en-US',
-        style: 14,
-      },
-    ]);
+    // Respond immediately to Vonage to prevent retries
+    res.status(200).json({ status: 'Processing request' });
 
-    // Asynchronously process AI response
+    // Process AI response asynchronously
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -357,7 +350,7 @@ export const handleProcessingWebhook = async (req, res) => {
       conversationId,
     });
 
-    // Define the NCCO for the AI response
+    // Build the next NCCO
     const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const aiResponseNcco = [
       {
@@ -382,21 +375,18 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    console.log('[DEBUG] Final NCCO before updating call:', JSON.stringify(aiResponseNcco, null, 2));
+    console.log('[DEBUG] Final NCCO:', JSON.stringify(aiResponseNcco, null, 2));
 
-    // Use a timeout to ensure Vonage processes the NCCO update
-    setTimeout(async () => {
-      try {
-        console.log('[DEBUG] Attempting to update call with new NCCO');
-        await vonage.voice.updateCall(conversationId, {
-          action: 'transfer',
-          destination: { type: 'ncco', ncco: aiResponseNcco },
-        });
-        console.log('[INFO] Call successfully updated.');
-      } catch (err) {
-        console.error('[ERROR] Failed to update call:', err.message, err.stack);
-      }
-    }, 1000); // Add a 1-second delay to give Vonage enough time
+    // Update the call with the new NCCO
+    try {
+      await vonage.voice.updateCall(conversationId, {
+        action: 'transfer',
+        destination: { type: 'ncco', ncco: aiResponseNcco },
+      });
+      console.log('[INFO] Call successfully updated with AI response.');
+    } catch (err) {
+      console.error('[ERROR] Failed to update call with NCCO:', err.message, err.stack);
+    }
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message, err.stack);
   }
