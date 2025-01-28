@@ -4,11 +4,11 @@
 import { Vonage } from '@vonage/server-sdk';
 import supabase from './supabaseClient.js';
 import { assistantHandler } from './assistant.js';
-import { logConversation } from './logConversation.js'; // Your custom DB logging
-// import { v4 as uuidv4 } from 'uuid'; // No longer needed for conversation_id
+import { logConversation } from './logConversation.js';
 
 /**
- * Initialize Vonage SDK with environment variables:
+ * Initialize Vonage SDK
+ * Ensure these environment variables are configured:
  *  - VONAGE_API_KEY
  *  - VONAGE_API_SECRET
  *  - VONAGE_APPLICATION_ID
@@ -22,37 +22,45 @@ const vonage = new Vonage({
 });
 
 /**********************************************************************
- * 1) Answer URL - handleInboundCall
+ * 1) handleInboundCall (Answer URL)
  *
- *   - Uses the REAL Vonage conversation_uuid from req.body.conversation_uuid
- *   - Logs the conversation start in inbound_calls with that ID.
- *   - Returns talk + input with business info.
+ *   - Uses Vonage's real conversation_uuid from req.body to track the call.
+ *   - Finds the corresponding business by the "to" number.
+ *   - Logs "Conversation started" in `inbound_calls`.
+ *   - Returns a talk + input NCCO for the initial greeting.
  **********************************************************************/
 export const handleInboundCall = async (req, res) => {
   try {
+    console.log('[DEBUG] handleInboundCall - Incoming Payload:', JSON.stringify(req.body, null, 2));
+
     const to = req.body.to || req.query.to;
     const from = req.body.from || req.query.from;
+    const conversationId = req.body.conversation_uuid; // The real Vonage conversation UUID
 
-    // The real conversation UUID from Vonage
-    const conversationId = req.body.conversation_uuid; 
-    // If it's not present, fallback or handle error
     if (!conversationId) {
       console.error('[ERROR] Missing conversation_uuid from Vonage');
+      return res.json([
+        {
+          action: 'talk',
+          text: 'Sorry, we cannot process your call at this time.',
+          language: 'en-US',
+          style: 14,
+        },
+      ]);
     }
-
     if (!to || !from) {
       console.error('[ERROR] Missing "to" or "from" in inbound call');
       return res.json([
         {
           action: 'talk',
-          text: 'Sorry, we cannot process this call due to missing information.',
+          text: 'Sorry, we cannot process your call due to missing information.',
           language: 'en-US',
           style: 14,
         },
       ]);
     }
 
-    // 1a) Find the business for the called Vonage number
+    // 1a) Look up the business_id by the called Vonage number
     const { data: businessData, error: businessError } = await supabase
       .from('vonage_numbers')
       .select('business_id')
@@ -72,7 +80,7 @@ export const handleInboundCall = async (req, res) => {
     }
     const businessId = businessData.business_id;
 
-    // 1b) Fetch the business name for greeting
+    // 1b) Fetch the business name for a more personalized greeting
     const { data: bizInfo, error: bizError } = await supabase
       .from('businesses')
       .select('name')
@@ -95,7 +103,7 @@ export const handleInboundCall = async (req, res) => {
     // 1c) Log "conversation started" in inbound_calls
     await supabase.from('inbound_calls').insert([
       {
-        conversation_id: conversationId,   // Use REAL conversation_uuid
+        conversation_id: conversationId,
         sender_phone: from,
         receiver_phone: to,
         business_id: businessId,
@@ -106,11 +114,9 @@ export const handleInboundCall = async (req, res) => {
       },
     ]);
 
-    // 1d) Build talk + input
-    // Pass the REAL conversationId in the eventUrl
-    const eventUrlWithParams =
-      `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook` +
-      `?businessId=${businessId}&conversationId=${conversationId}`;
+    // 1d) Build the talk + input NCCO
+    // pass the real conversationId to the next step
+    const inputWebhook = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
 
     const ncco = [
       {
@@ -122,7 +128,7 @@ export const handleInboundCall = async (req, res) => {
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [eventUrlWithParams],
+        eventUrl: [inputWebhook],
         speech: {
           endOnSilence: 0.5,
           language: 'en-US',
@@ -134,6 +140,7 @@ export const handleInboundCall = async (req, res) => {
       },
     ];
 
+    console.log('[INFO] Returning initial talk+input NCCO.');
     return res.json(ncco);
   } catch (err) {
     console.error('[ERROR] handleInboundCall:', err.message);
@@ -149,18 +156,19 @@ export const handleInboundCall = async (req, res) => {
 };
 
 /**********************************************************************
- * 2) handleInputWebhook
+ * 2) handleInputWebhook (Input URL)
  *
- *   - Called after user speaks or presses digits.
- *   - We filter out short/irrelevant noise or filler words (like "um", "uh").
- *   - If valid input, we play a typing sound + notify the processing webhook.
- *   - If invalid, we prompt user to repeat, up to max retries.
+ *   - Processes user input (speech/DTMF).
+ *   - Filters short or filler words (um, uh, hmm) and tries again if needed.
+ *   - If valid, logs user input and returns typing sound + notify.
  **********************************************************************/
 export const handleInputWebhook = async (req, res) => {
   try {
-    const { businessId, conversationId } = req.query;
-    if (!businessId) {
-      console.error('[ERROR] Missing "businessId" in Input Webhook');
+    console.log('[DEBUG] InputWebhook body:', JSON.stringify(req.body, null, 2));
+
+    const { businessId, conversationId, retryCount = '0' } = req.query;
+    if (!businessId || !conversationId) {
+      console.error('[ERROR] Missing businessId or conversationId in Input Webhook');
       return res.json([
         {
           action: 'talk',
@@ -171,53 +179,37 @@ export const handleInputWebhook = async (req, res) => {
       ]);
     }
 
+    // Extract speech or DTMF
     const from = req.body.from;
     const to = req.body.to;
+    const speechResult = req.body.speech?.results?.[0]?.text || '';
+    const dtmfResult = req.body.dtmf?.digits || '';
+    let userText = speechResult ? speechResult.toLowerCase().trim() : (dtmfResult ? `dtmf digit: ${dtmfResult}` : '');
 
-    // Vonage speech + dtmf
-    const userSpeech = req.body.speech?.results?.[0]?.text || '';
-    const userDtmf = req.body.dtmf?.digits || '';
-    let userText = userSpeech
-      ? userSpeech.toLowerCase().trim()
-      : userDtmf
-      ? `dtmf digit: ${userDtmf}`
-      : '';
+    console.log('[DEBUG] userText before filtering:', userText);
 
-    console.log('[DEBUG] InputWebhook body:', JSON.stringify(req.body, null, 2));
-    console.log('[DEBUG] userText before filter:', userText);
-
-    // 2a) Filter out short or filler words
-    // e.g. if userText < 3 chars or matches "um", "uh", "hmm" etc.
+    // 2a) Filter out short/filler words (um, uh, hmm). If invalid, prompt again up to 3 times
+    let retries = parseInt(retryCount, 10);
     const fillerRegex = /^[uhm]+$/i;
     const minLength = 3;
 
-    let retryCount = parseInt(req.query.retryCount || '0', 10);
-
-    if (
-      userText.length < minLength ||
-      fillerRegex.test(userText)
-    ) {
-      // we handle "invalid / noise"
-      if (retryCount < 3) {
-        // Prompt user again
-        retryCount += 1;
-        const nextEventUrl =
-          `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook` +
-          `?businessId=${businessId}&conversationId=${conversationId}&retryCount=${retryCount}`;
-
-        console.log(`[DEBUG] Noise or short input detected. Retry #${retryCount}`);
+    if (!userText || userText.length < minLength || fillerRegex.test(userText)) {
+      if (retries < 3) {
+        retries += 1;
+        console.log(`[INFO] Noise/filler. Asking user to repeat. Attempt #${retries}`);
+        const nextInputUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}&retryCount=${retries}`;
 
         return res.json([
           {
             action: 'talk',
-            text: 'I didn’t catch that. Please say your request clearly.',
+            text: 'I didn’t catch that. Please speak clearly.',
             language: 'en-US',
             style: 14,
           },
           {
             action: 'input',
             type: ['speech', 'dtmf'],
-            eventUrl: [nextEventUrl],
+            eventUrl: [nextInputUrl],
             speech: {
               endOnSilence: 0.5,
               language: 'en-US',
@@ -229,12 +221,11 @@ export const handleInputWebhook = async (req, res) => {
           },
         ]);
       } else {
-        // Exceeded max retries
-        console.log('[INFO] Exceeded max noise retries, ending call.');
+        console.log('[INFO] Exceeded max retries. Ending call.');
         return res.json([
           {
             action: 'talk',
-            text: 'Sorry, I’m still not able to understand. Please call back later.',
+            text: 'Sorry, I’m still not able to understand you. Please call back later. Goodbye.',
             language: 'en-US',
             style: 14,
           },
@@ -242,39 +233,36 @@ export const handleInputWebhook = async (req, res) => {
       }
     }
 
-    // 2b) Log user input since it's valid
-    if (userText) {
-      await logConversation({
-        businessId,
-        senderPhone: from,
-        receiverPhone: to,
-        message: userText,
-        messageType: userSpeech ? 'speech' : 'dtmf',
-        role: 'customer',
-        conversationId,
-      });
-    }
+    // 2b) If valid input, log the conversation
+    await logConversation({
+      businessId,
+      senderPhone: from,
+      receiverPhone: to,
+      message: userText,
+      messageType: speechResult ? 'speech' : (dtmfResult ? 'dtmf' : 'other'),
+      role: 'customer',
+      conversationId,
+    });
 
-    // 2c) Return an NCCO: Stream typing + notify to processing-webhook
+    // 2c) Return typing sound + notify
     const typingSoundUrl = 'https://f004.backblazeb2.com/file/typewriter-typing/typewriter.mp3';
-    const processingWebhookUrl =
-      `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook` +
-      `?businessId=${businessId}&conversationId=${conversationId}`;
+    const processingUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}&conversationId=${conversationId}`;
 
-    const typingNcco = [
+    const ncco = [
       {
         action: 'stream',
         streamUrl: [typingSoundUrl],
-        loop: 0, // indefinite
+        loop: 0, // indefinite typing
       },
       {
         action: 'notify',
         payload: { userText },
-        eventUrl: [processingWebhookUrl],
+        eventUrl: [processingUrl],
       },
     ];
 
-    return res.json(typingNcco);
+    console.log('[INFO] Returning typing sound + notify for AI processing.');
+    return res.json(ncco);
   } catch (err) {
     console.error('[ERROR] handleInputWebhook:', err.message);
     return res.json([
@@ -289,32 +277,30 @@ export const handleInputWebhook = async (req, res) => {
 };
 
 /**********************************************************************
- * 3) handleProcessingWebhook
+ * 3) handleProcessingWebhook (Processing URL)
  *
- *   - Immediately responds with a placeholder so Vonage doesn't retry.
- *   - Asynchronously calls AI -> logs -> uses real conversationId
- *     with vonage.voice.updateCall(...) to switch the call to the new NCCO.
+ *   - Called by the notify action, so we must respond quickly.
+ *   - Then we asynchronously call AI and updateCall with the new NCCO.
  **********************************************************************/
 export const handleProcessingWebhook = async (req, res) => {
   try {
     const { businessId, conversationId } = req.query;
     const userText = req.body?.payload?.userText || 'No input';
 
-    console.log(`[INFO] handleProcessingWebhook triggered for conversationId=${conversationId}`);
-    console.log(`[DEBUG] userText="${userText}"`);
+    console.log(`[DEBUG] handleProcessingWebhook triggered. conversationId=${conversationId}, userText="${userText}"`);
 
-    // Acknowledge immediately
-    // This frees Vonage from waiting for a final NCCO here
+    // 3a) Immediately respond to Vonage so it doesn't retry
+    // Some devs prefer returning an empty array, or a short talk message
     res.status(200).json([
       {
         action: 'talk',
-        text: 'Processing your request. Please wait.',
+        text: 'Processing your request, please hold.',
         language: 'en-US',
         style: 14,
       },
     ]);
 
-    // Now do AI logic asynchronously
+    // 3b) Asynchronously call the AI
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -322,9 +308,9 @@ export const handleProcessingWebhook = async (req, res) => {
     });
 
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
-    console.log(`[INFO] AI says: ${ttsMessage}`);
+    console.log(`[INFO] AI Response: ${ttsMessage}`);
 
-    // Log AI response
+    // 3c) Log AI response
     await logConversation({
       businessId,
       senderPhone: 'AI',
@@ -335,11 +321,8 @@ export const handleProcessingWebhook = async (req, res) => {
       conversationId,
     });
 
-    // Build new NCCO
-    const nextEventUrl =
-      `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook` +
-      `?businessId=${businessId}&conversationId=${conversationId}`;
-
+    // 3d) Build the new NCCO for talk+input
+    const nextInputUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const aiResponseNcco = [
       {
         action: 'talk',
@@ -351,7 +334,7 @@ export const handleProcessingWebhook = async (req, res) => {
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [nextEventUrl],
+        eventUrl: [nextInputUrl],
         speech: {
           endOnSilence: 0.5,
           language: 'en-US',
@@ -363,12 +346,13 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
-    // Transfer the call to the new NCCO using the REAL conversationId from Vonage
+    // 3e) Transfer the call to the new NCCO using the real conversationId from Vonage
+    console.log('[DEBUG] Updating call with conversationId:', conversationId);
     await vonage.voice.updateCall(conversationId, {
       action: 'transfer',
       destination: { type: 'ncco', ncco: aiResponseNcco },
     });
-    console.log('[INFO] Successfully updated call with new NCCO');
+    console.log('[INFO] Successfully updated call with new AI response NCCO.');
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message);
   }
@@ -376,20 +360,21 @@ export const handleProcessingWebhook = async (req, res) => {
 
 /**********************************************************************
  * 4) handleCallEvent (Event URL)
- *   - Logs events like answered, completed, etc.
+ *   - Logs call lifecycle events (e.g., answered, completed).
  **********************************************************************/
 export const handleCallEvent = async (req, res) => {
   try {
-    const { status, to, from } = req.query;
-    console.log(`[INFO] Call event: ${status}, To: ${to}, From: ${from}`);
+    const { status, conversation_uuid, to, from } = req.query;
+    console.log(`[INFO] Call event: status=${status}, conversation_uuid=${conversation_uuid}, to=${to}, from=${from}`);
 
     await supabase.from('call_events').insert([
-      { status, to, from, event_time: new Date() },
+      { status, conversation_uuid, to, from, event_time: new Date() },
     ]);
+
     res.status(200).send('Event received');
-  } catch (error) {
-    console.error('[ERROR] handleCallEvent:', error.message);
-    res.status(500).send('Failed to handle call event');
+  } catch (err) {
+    console.error('[ERROR] handleCallEvent:', err.message);
+    res.status(500).send('Failed to log call event');
   }
 };
 
@@ -399,15 +384,16 @@ export const handleCallEvent = async (req, res) => {
  **********************************************************************/
 export const handleFallback = async (req, res) => {
   try {
-    console.error('[ERROR] Fallback triggered:', req.query || req.body);
+    console.error('[ERROR] Fallback triggered:', JSON.stringify(req.body || req.query, null, 2));
     return res.json([
       {
         action: 'talk',
         text: 'We are unable to process your call at the moment. Please try again later.',
+        language: 'en-US',
       },
     ]);
-  } catch (error) {
-    console.error('[ERROR] handleFallback:', error.message);
+  } catch (err) {
+    console.error('[ERROR] handleFallback:', err.message);
     return res.status(500).send('Failed to handle fallback');
   }
 };
@@ -419,7 +405,7 @@ export const handleFallback = async (req, res) => {
 export const handleInboundMessage = async (req, res) => {
   try {
     const { text, msisdn } = req.body || req.query;
-    console.log(`[INFO] Inbound message from ${msisdn}: ${text}`);
+    console.log(`[INFO] Inbound message from ${msisdn}: "${text}"`);
 
     const assistantResponse = await assistantHandler({
       userMessage: text,
@@ -429,8 +415,8 @@ export const handleInboundMessage = async (req, res) => {
     return res.status(200).json({
       message: assistantResponse.message || 'Thank you for your message!',
     });
-  } catch (error) {
-    console.error('[ERROR] Failed to handle inbound message:', error.message);
+  } catch (err) {
+    console.error('[ERROR] Failed to handle inbound message:', err.message);
     return res.status(500).send('Failed to handle inbound message');
   }
 };
@@ -442,7 +428,7 @@ export const handleInboundMessage = async (req, res) => {
 export const handleCallStatus = async (req, res) => {
   try {
     const { status, conversation_uuid } = req.body || req.query;
-    console.log(`[INFO] Call status update: ${status}, Conversation UUID: ${conversation_uuid}`);
+    console.log(`[INFO] Call status update: ${status}, conversation_uuid=${conversation_uuid}`);
 
     await supabase.from('call_status_updates').insert([
       {
@@ -453,8 +439,8 @@ export const handleCallStatus = async (req, res) => {
     ]);
 
     res.status(200).send('Status received');
-  } catch (error) {
-    console.error('[ERROR] handleCallStatus:', error.message);
+  } catch (err) {
+    console.error('[ERROR] handleCallStatus:', err.message);
     res.status(500).send('Failed to handle call status');
   }
 };
