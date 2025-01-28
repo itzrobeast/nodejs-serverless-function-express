@@ -107,7 +107,7 @@ export const handleInboundCall = async (req, res) => {
     ]);
 
     // Construct the NCCO with "talk" and "input" actions
-    const eventUrlWithParams = `https://your-server-url/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+    const eventUrlWithParams = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
 
     const ncco = [
       {
@@ -182,7 +182,7 @@ export const handleInputWebhook = async (req, res) => {
 
     // Typing sound NCCO
     const typingSoundUrl = 'https://f004.backblazeb2.com/file/typewriter-typing/typewriter-typing-68696.mp3';
-    const processingWebhookUrl = `https://your-server-url/vonage/processing-webhook?businessId=${businessId}`;
+    const processingWebhookUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook?businessId=${businessId}`;
 
     const typingNcco = [
       {
@@ -239,7 +239,7 @@ export const handleProcessingWebhook = async (req, res) => {
       role: 'business',
     });
 
-    const nextEventUrl = `https://your-server-url/vonage/input-webhook?businessId=${businessId}`;
+    const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
 
     const aiResponseNcco = [
       {
