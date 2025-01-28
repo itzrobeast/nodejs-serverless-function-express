@@ -279,6 +279,7 @@ export const handleInputWebhook = async (req, res) => {
         action: 'notify',
         payload: { userText },
         eventUrl: [processingUrl],
+        eventMethod: 'POST'
       },
     ];
 
