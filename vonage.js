@@ -218,9 +218,13 @@ export const handleInputWebhook = async (req, res) => {
  **********************************************************************/
 export const handleProcessingWebhook = async (req, res) => {
   try {
+    console.log('[INFO] handleProcessingWebhook triggered');
+    console.log('[DEBUG] Request body:', req.body);
+
     const { businessId } = req.query;
     const userText = req.body?.payload?.userText || 'No input';
 
+    // Get the assistant's response
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
@@ -229,18 +233,9 @@ export const handleProcessingWebhook = async (req, res) => {
 
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
 
-    // Log AI response
-    await logConversation({
-      businessId,
-      senderPhone: 'AI',
-      receiverPhone: 'Customer',
-      message: ttsMessage,
-      messageType: 'text',
-      role: 'business',
-    });
+    console.log('[INFO] AI Response:', ttsMessage);
 
-    const nextEventUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`;
-
+    // Construct the next NCCO with AI response
     const aiResponseNcco = [
       {
         action: 'talk',
@@ -252,7 +247,7 @@ export const handleProcessingWebhook = async (req, res) => {
       {
         action: 'input',
         type: ['speech', 'dtmf'],
-        eventUrl: [nextEventUrl],
+        eventUrl: [`https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}`],
         speech: {
           endOnSilence: 0.5,
           language: 'en-US',
@@ -264,6 +259,7 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ];
 
+    // Send the response NCCO
     res.json(aiResponseNcco);
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message);
