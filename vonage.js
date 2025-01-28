@@ -270,18 +270,18 @@ export const handleInputWebhook = async (req, res) => {
       `?businessId=${businessId}&conversationId=${conversationId}`;
 
     const ncco = [
-      {
-        action: 'stream',
-        streamUrl: [typingSoundUrl],
-        loop: 1, 
-      },
-      {
-        action: 'notify',
-        payload: { userText },
-        eventUrl: [processingUrl],
-        eventMethod: 'POST'
-      },
-    ];
+  {
+    action: "notify",
+    payload: { userText },
+    eventUrl: ["https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook"],
+    eventMethod: "POST"
+  },
+  {
+    action: "stream",
+    streamUrl: ["https://f004.backblazeb2.com/file/typewriter-typing/typewriter.mp3"],
+    loop: 1  // Keep playing indefinitely
+  }
+];
 
     console.log('[INFO] handleInputWebhook -> Returning typing + notify');
     return res.json(ncco);
