@@ -273,12 +273,12 @@ export const handleInputWebhook = async (req, res) => {
   {
     action: "notify",
     payload: { userText },
-    eventUrl: ["https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/processing-webhook"],
+    eventUrl: [`${processingUrl}`],
     eventMethod: "POST"
   },
   {
     action: "stream",
-    streamUrl: ["https://f004.backblazeb2.com/file/typewriter-typing/typewriter.mp3"],
+     streamUrl: [typingSoundUrl],
     loop: 1  // Keep playing indefinitely
   }
 ];
