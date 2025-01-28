@@ -309,13 +309,12 @@ export const handleProcessingWebhook = async (req, res) => {
     console.log('[DEBUG] handleProcessingWebhook Body:', JSON.stringify(req.body, null, 2));
     console.log('[DEBUG] handleProcessingWebhook Query:', JSON.stringify(req.query, null, 2));
 
-    // Extract required parameters
     const businessId = req.body?.businessId || req.query?.businessId;
     const conversationId =
       req.body?.conversationId ||
       req.query?.conversationId ||
-      req.body?.payload?.conversation_uuid || // From Notify payload
-      req.body?.conversation_uuid || // General fallback
+      req.body?.payload?.conversation_uuid ||
+      req.body?.conversation_uuid ||
       null;
 
     if (!conversationId) {
@@ -323,8 +322,8 @@ export const handleProcessingWebhook = async (req, res) => {
       return res.status(400).json({ error: 'Missing conversationId' });
     }
 
-    // Extract user input
     const userText = req.body?.payload?.userText || 'No input';
+
     console.log('[DEBUG] Processing for businessId:', businessId, 'userMessage:', userText);
 
     // Respond immediately to avoid Vonage timeout
@@ -337,40 +336,17 @@ export const handleProcessingWebhook = async (req, res) => {
       },
     ]);
 
-    // Wait before executing the updateCall action
-setTimeout(async () => {
-  try {
-    console.log('[DEBUG] Attempting to update call with new NCCO:', JSON.stringify(aiResponseNcco, null, 2));
-    await vonage.voice.updateCall(conversationId, {
-      action: 'transfer',
-      destination: { type: 'ncco', ncco: aiResponseNcco },
-    });
-    console.log('[INFO] Call successfully updated.');
-  } catch (err) {
-    console.error('[ERROR] Failed to update call:', err.message, err.stack);
-  }
-}, 2000);
-
-
-
-    // Handle AI response asynchronously
+    // Asynchronously process AI response
     const assistantResponse = await assistantHandler({
       userMessage: userText,
       businessId,
       platform: 'phone',
     });
 
-    console.log('[DEBUG] Assistant Response:', assistantResponse);
-
-    // Validate AI response
-    let ttsMessage = assistantResponse?.message || 'How else can I help you?';
-    if (!ttsMessage || ttsMessage.trim().length < 2) {
-      console.warn('[WARN] AI response is empty or too short. Using fallback message.');
-      ttsMessage = 'I did not understand that. How else can I assist you?';
-    }
+    const ttsMessage = assistantResponse.message || 'How else can I help you?';
     console.log('[INFO] AI says:', ttsMessage);
 
-    // Log AI response to the conversation
+    // Log AI response
     await logConversation({
       businessId,
       senderPhone: 'AI',
@@ -381,7 +357,7 @@ setTimeout(async () => {
       conversationId,
     });
 
-    // Construct NCCO for the next stage
+    // Define the NCCO for the AI response
     const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const aiResponseNcco = [
       {
@@ -408,20 +384,21 @@ setTimeout(async () => {
 
     console.log('[DEBUG] Final NCCO before updating call:', JSON.stringify(aiResponseNcco, null, 2));
 
-    // Update the call with the new NCCO
-    try {
-      console.log('[DEBUG] Attempting to update call with new NCCO:', JSON.stringify(aiResponseNcco, null, 2));
-      await vonage.voice.updateCall(conversationId, {
-        action: 'transfer',
-        destination: { type: 'ncco', ncco: aiResponseNcco },
-      });
-      console.log('[INFO] Call successfully updated.');
-    } catch (err) {
-      console.error('[ERROR] Failed to update call:', err.message);
-    }
+    // Use a timeout to ensure Vonage processes the NCCO update
+    setTimeout(async () => {
+      try {
+        console.log('[DEBUG] Attempting to update call with new NCCO');
+        await vonage.voice.updateCall(conversationId, {
+          action: 'transfer',
+          destination: { type: 'ncco', ncco: aiResponseNcco },
+        });
+        console.log('[INFO] Call successfully updated.');
+      } catch (err) {
+        console.error('[ERROR] Failed to update call:', err.message, err.stack);
+      }
+    }, 1000); // Add a 1-second delay to give Vonage enough time
   } catch (err) {
     console.error('[ERROR] handleProcessingWebhook:', err.message, err.stack);
-    res.status(500).json({ error: 'Internal Server Error', details: err.message });
   }
 };
 
