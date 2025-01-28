@@ -306,6 +306,34 @@ export const handleFallback = async (req, res) => {
   ]);
 };
 
+
+/**
+ * Handle inbound messages or events (Inbound URL).
+ */
+export const handleInboundMessage = async (req, res) => {
+  try {
+    const { text, msisdn } = req.body || req.query;
+    console.log([INFO] Inbound message from ${msisdn}: ${text});
+
+    // Respond to the inbound message using Mila's assistant
+    const assistantResponse = await assistantHandler({
+      userMessage: text,
+      platform: 'sms',
+    });
+
+    return res.status(200).json({
+      message: assistantResponse.message || 'Thank you for your message!',
+    });
+  } catch (error) {
+    console.error('[ERROR] Failed to handle inbound message:', error.message);
+    return res.status(500).send('Failed to handle inbound message');
+  }
+};
+
+
+
+
+
 /**********************************************************************
  * 6) Call Status - handleCallStatus
  **********************************************************************/
