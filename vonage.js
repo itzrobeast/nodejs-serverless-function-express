@@ -318,14 +318,7 @@ export const handleProcessingWebhook = async (req, res) => {
     }
 
     // Respond immediately to avoid Vonage timeout
-    res.status(200).json([
-      {
-        action: 'talk',
-        text: 'Processing your request. Please wait.',
-        language: 'en-US',
-        style: 14,
-      },
-    ]);
+    res.status(200).json({ status: 'ok' });
 
     // Asynchronously handle AI response
     const assistantResponse = await assistantHandler({
