@@ -245,8 +245,8 @@ export const assistantHandler = async ({ userMessage, businessId }) => {
         { role: 'system', content: systemMessage },
         { role: 'user', content: cleanMessage },
       ],
-      max_tokens: 400,
-      temperature: 0.7,
+      max_tokens: 300,
+      temperature: 0.6,
     });
 
     const choice = openaiResponse.choices?.[0];
