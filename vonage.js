@@ -141,29 +141,31 @@ export const handleInboundCall = async (req, res) => {
     const inputWebhook = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
 
     const ncco = [
+  {
+    action: "talk",
+    text: `Hello, this is Mila from ${businessName}. Connecting you now...`,
+    language: "en-US",
+    style: 14,
+  },
+  {
+    action: "connect",
+    endpoint: [
       {
-        action: 'talk',
-        text: `Hello, this is Mila from ${businessName}. How can I assist you today?`,
-        language: 'en-US',
-        style: 14,
-      },
-      {
-        action: 'input',
-        type: ['speech', 'dtmf'],
-        eventUrl: [inputWebhook],
-        speech: {
-          endOnSilence: 0.3,
-          language: 'en-US',
-        },
-        dtmf: {
-          maxDigits: 1,
-          submitOnHash: false,
+        type: "websocket",
+        uri: "wss://milaverse-websocket.onrender.com",
+        "content-type": "audio/l16;rate=16000",
+        headers: {
+          business_id: businessId,
+          conversation_id: conversationId,
         },
       },
-    ];
+    ],
+  },
+];
 
-    console.log('[INFO] handleInboundCall -> Returning talk+input NCCO');
-    return res.json(ncco);
+console.log("[INFO] handleInboundCall -> Returning WebSocket NCCO");
+return res.json(ncco);
+
   } catch (err) {
     console.error('[ERROR] handleInboundCall:', err.message);
     return res.json([
