@@ -37,7 +37,7 @@ import {
 } from './vonage.js';
 import inboundCallsRouter from './inbound-calls.js';
 import sessionRouter from './session.js';
-
+import processAudioHandler from "./process-audio.js";
 
 const app = express();
 
@@ -84,7 +84,7 @@ app.use(
 
 app.use('/session', sessionRouter);
 
-
+app.post("/process-audio", processAudioHandler);
 
 
 // Validate Supabase initialization
@@ -164,7 +164,7 @@ app.get('/health', (req, res) => {
 // Root Route
 app.get('/', (req, res) => {
   console.log('[DEBUG] Root route hit');
-  res.status(200).send('Welcome to the Node.js Serverless App!');
+  res.status(200).send('MilaVerse Backend is running!');
 });
 
 // 404 Handler
