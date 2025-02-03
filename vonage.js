@@ -1,19 +1,21 @@
-/*****************************************************/
-/** vonage.js -- COMPLETE MASTER CODE (No Omissions) **/
-/*****************************************************/
+/*******************************************************
+ * vonage.js
+ * 
+ * This file contains all functions to handle Vonage telephony 
+ * events, including inbound calls, input webhooks, call events,
+ * fallback responses, inbound messages, and call status updates.
+ * 
+ * It is optimized for our Deepgram STT integration and Mila AI 
+ * responses. Ensure that your environment variables for Vonage 
+ * (VONAGE_API_KEY, VONAGE_API_SECRET, VONAGE_APPLICATION_ID, 
+ * VONAGE_PRIVATE_KEY) are correctly set.
+ *******************************************************/
 import { Vonage } from '@vonage/server-sdk';
 import supabase from './supabaseClient.js';
 import { assistantHandler } from './assistant.js';
 import { logConversation } from './logConversation.js';
 
-/**
- * Initialize Vonage SDK
- * Ensure these environment variables:
- *  - VONAGE_API_KEY
- *  - VONAGE_API_SECRET
- *  - VONAGE_APPLICATION_ID
- *  - VONAGE_PRIVATE_KEY
- */
+// Initialize Vonage SDK
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
   apiSecret: process.env.VONAGE_API_SECRET,
@@ -21,13 +23,10 @@ const vonage = new Vonage({
   privateKey: process.env.VONAGE_PRIVATE_KEY,
 });
 
-/**********************************************************************
- * Utility: Extract real conversationId from body or query
- * Some Vonage setups might send 'uuid' instead of 'conversation_uuid'.
- * We handle both, plus check GET or POST.
- **********************************************************************/
+/**
+ * Utility: Extract the conversation ID from the request
+ */
 function getConversationId(req) {
-  // Extract 'conversation_uuid' or fallback to 'uuid' from the request body or query
   const conversationId =
     req.body?.conversation_uuid ||
     req.query?.conversation_uuid ||
@@ -38,16 +37,16 @@ function getConversationId(req) {
   if (!conversationId) {
     console.error('[ERROR] Missing conversationId from Vonage');
   }
-
   return conversationId;
 }
-/**********************************************************************
+
+/**
  * 1) handleInboundCall (Answer URL)
  *
- *   - We fetch the real conversationId via getConversationId().
- *   - We log "Conversation started" in 'inbound_calls'.
- *   - We respond with talk+input NCCO for the initial greeting.
- **********************************************************************/
+ * - Logs "Conversation started"
+ * - Looks up business details
+ * - Returns a talk + connect (WebSocket) NCCO
+ */
 export const handleInboundCall = async (req, res) => {
   try {
     console.log('[DEBUG] handleInboundCall Payload:', JSON.stringify(req.body, null, 2));
@@ -55,8 +54,6 @@ export const handleInboundCall = async (req, res) => {
 
     const to = req.body.to || req.query.to;
     const from = req.body.from || req.query.from;
-
-    // Check both body + query for conversation_uuid or fallback to 'uuid'
     const conversationId = getConversationId(req);
 
     if (!conversationId) {
@@ -103,7 +100,7 @@ export const handleInboundCall = async (req, res) => {
     }
     const businessId = businessData.business_id;
 
-    // Fetch business name for greeting
+    // Fetch business name for the greeting
     const { data: bizInfo, error: bizError } = await supabase
       .from('businesses')
       .select('name')
@@ -123,7 +120,7 @@ export const handleInboundCall = async (req, res) => {
     }
     const businessName = bizInfo.name || 'our business';
 
-    // Log "conversation started"
+    // Log "Conversation started"
     await supabase.from('inbound_calls').insert([
       {
         conversation_id: conversationId,
@@ -137,35 +134,35 @@ export const handleInboundCall = async (req, res) => {
       },
     ]);
 
-    // Return talk+input
+    // Define the input webhook URL for further interaction
     const inputWebhook = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
 
+    // Build the NCCO response with talk and connect (WebSocket) actions
     const ncco = [
-  {
-    action: "talk",
-    text: `Hello, this is Mila from ${businessName}. Connecting you now...`,
-    language: "en-US",
-    style: 14,
-  },
-  {
-    action: "connect",
-    endpoint: [
       {
-        type: "websocket",
-        uri: "wss://milaverse-websocket.onrender.com",
-        "content-type": "audio/l16;rate=16000",
-        headers: {
-          business_id: businessId,
-          conversation_id: conversationId,
-        },
+        action: "talk",
+        text: `Hello, this is Mila from ${businessName}. Connecting you now...`,
+        language: "en-US",
+        style: 14,
       },
-    ],
-  },
-];
+      {
+        action: "connect",
+        endpoint: [
+          {
+            type: "websocket",
+            uri: "wss://milaverse-websocket.onrender.com",
+            "content-type": "audio/l16;rate=16000",
+            headers: {
+              business_id: businessId,
+              conversation_id: conversationId,
+            },
+          },
+        ],
+      },
+    ];
 
-console.log("[INFO] handleInboundCall -> Returning WebSocket NCCO");
-return res.json(ncco);
-
+    console.log("[INFO] handleInboundCall -> Returning WebSocket NCCO");
+    return res.json(ncco);
   } catch (err) {
     console.error('[ERROR] handleInboundCall:', err.message);
     return res.json([
@@ -179,13 +176,14 @@ return res.json(ncco);
   }
 };
 
-/**********************************************************************
+/**
  * 2) handleInputWebhook (Input URL)
  *
- *   - Logs user input (speech/DTMF).
- *   - Filters out short/filler words (like "um", "uh").
- *   - If valid, streams typing sound + notify -> processingWebhook.
- **********************************************************************/
+ * - Logs user input (speech/DTMF)
+ * - Filters out filler words/noise
+ * - Generates an AI response via the assistant handler
+ * - Logs the conversation and returns a new NCCO
+ */
 export const handleInputWebhook = async (req, res) => {
   try {
     console.log('[DEBUG] InputWebhook Body:', JSON.stringify(req.body, null, 2));
@@ -209,7 +207,9 @@ export const handleInputWebhook = async (req, res) => {
 
     const userText = req.body?.speech?.results?.[0]?.text || '';
     const dtmfDigits = req.body?.dtmf?.digits || '';
-    let inputText = userText.trim().toLowerCase() || (dtmfDigits ? `dtmf digit: ${dtmfDigits}` : 'No input');
+    let inputText = userText
+      ? userText.trim().toLowerCase()
+      : (dtmfDigits ? `dtmf digit: ${dtmfDigits}` : 'No input');
     console.log(`[DEBUG] Input from: ${from} -> ${to}, User Text: "${inputText}"`);
 
     // Filter out background noise or filler words
@@ -241,7 +241,7 @@ export const handleInputWebhook = async (req, res) => {
       ]);
     }
 
-    // Generate AI response
+    // Generate AI response via the assistant handler
     const assistantResponse = await assistantHandler({
       userMessage: inputText,
       businessId,
@@ -251,33 +251,33 @@ export const handleInputWebhook = async (req, res) => {
     const ttsMessage = assistantResponse.message || 'How else can I help you?';
     console.log(`[INFO] AI Response to ${from}: ${ttsMessage}`);
 
-    // Log conversation
+    // Log conversation: Customer input
     await logConversation({
-  businessId,
-  senderPhone: from,
-  receiverPhone: to,
-  message: inputText,
-  messageType: 'speech',
-  role: 'customer',
-  conversationId, // Ensure the conversation ID is passed
-}).catch((err) => {
-  console.error('[ERROR] Failed to log customer input:', err);
-});
+      businessId,
+      senderPhone: from,
+      receiverPhone: to,
+      message: inputText,
+      messageType: 'speech',
+      role: 'customer',
+      conversationId,
+    }).catch((err) => {
+      console.error('[ERROR] Failed to log customer input:', err);
+    });
 
-await logConversation({
-  businessId,
-  senderPhone: 'AI',
-  receiverPhone: from,
-  message: ttsMessage,
-  messageType: 'text',
-  role: 'business',
-  conversationId, // Ensure the conversation ID is passed
-}).catch((err) => {
-  console.error('[ERROR] Failed to log AI response:', err);
-});
+    // Log conversation: AI response
+    await logConversation({
+      businessId,
+      senderPhone: 'AI',
+      receiverPhone: from,
+      message: ttsMessage,
+      messageType: 'text',
+      role: 'business',
+      conversationId,
+    }).catch((err) => {
+      console.error('[ERROR] Failed to log AI response:', err);
+    });
 
-
-    // NCCO for AI response and new input
+    // Build the NCCO for AI response and new user input
     const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const ncco = [
       {
@@ -285,7 +285,7 @@ await logConversation({
         text: ttsMessage,
         language: 'en-US',
         style: 14,
-        bargeIn: true, // Enable barge-in for user interruptions
+        bargeIn: true,
       },
       {
         action: 'input',
@@ -305,7 +305,9 @@ await logConversation({
     console.log('[INFO] Returning AI response NCCO');
     return res.json(ncco);
   } catch (err) {
-    console.error(`[ERROR] handleInputWebhook for call from ${req.body?.from || 'Unknown'} to ${req.body?.to || 'Unknown'}: ${err.message}`);
+    console.error(
+      `[ERROR] handleInputWebhook for call from ${req.body?.from || 'Unknown'} to ${req.body?.to || 'Unknown'}: ${err.message}`
+    );
     return res.json([
       {
         action: 'talk',
@@ -317,22 +319,20 @@ await logConversation({
   }
 };
 
-
-
-/**********************************************************************
- * 4) handleCallEvent (Event URL)
- *   - Logs call lifecycle events (answered, completed, etc.).
- **********************************************************************/
+/**
+ * 3) handleCallEvent (Event URL)
+ *
+ * - Logs call lifecycle events (answered, completed, etc.)
+ */
 export const handleCallEvent = async (req, res) => {
   try {
     console.log('[DEBUG] handleCallEvent Query:', JSON.stringify(req.query, null, 2));
 
     const { status, conversation_uuid, to, from } = req.query;
-
     console.log(`[INFO] Call event: status=${status}, conversation_uuid=${conversation_uuid}, to=${to}, from=${from}`);
 
     await supabase.from('call_events').insert([
-      { status, conversation_uuid, to, from, event_time: new Date() },
+      { status, conversation_uuid, to, from, event_time: new Date().toISOString() },
     ]);
 
     res.status(200).send('Event received');
@@ -342,10 +342,11 @@ export const handleCallEvent = async (req, res) => {
   }
 };
 
-/**********************************************************************
- * 5) handleFallback (Fallback URL)
- *   - Called if Answer URL fails or times out.
- **********************************************************************/
+/**
+ * 4) handleFallback (Fallback URL)
+ *
+ * - Called if the Answer URL fails or times out.
+ */
 export const handleFallback = async (req, res) => {
   try {
     console.error('[ERROR] Fallback triggered:', JSON.stringify(req.body || req.query, null, 2));
@@ -362,10 +363,11 @@ export const handleFallback = async (req, res) => {
   }
 };
 
-/**********************************************************************
- * 6) handleInboundMessage (Inbound URL)
- *   - For inbound SMS or messages. We pass it to the AI and respond.
- **********************************************************************/
+/**
+ * 5) handleInboundMessage (Inbound SMS/Message)
+ *
+ * - Processes inbound SMS or messages and responds via the AI.
+ */
 export const handleInboundMessage = async (req, res) => {
   try {
     console.log('[DEBUG] handleInboundMessage Body:', JSON.stringify(req.body, null, 2));
@@ -388,10 +390,11 @@ export const handleInboundMessage = async (req, res) => {
   }
 };
 
-/**********************************************************************
- * 7) handleCallStatus (Status URL)
- *   - Additional call progress or final statuses are posted here.
- **********************************************************************/
+/**
+ * 6) handleCallStatus (Status URL)
+ *
+ * - Logs additional call progress or final statuses.
+ */
 export const handleCallStatus = async (req, res) => {
   try {
     console.log('[DEBUG] handleCallStatus Body:', JSON.stringify(req.body, null, 2));
@@ -404,7 +407,7 @@ export const handleCallStatus = async (req, res) => {
       {
         status,
         conversation_uuid,
-        status_time: new Date(),
+        status_time: new Date().toISOString(),
       },
     ]);
 
