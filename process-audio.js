@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export default async function handler(req, res) {
+const processAudioHandler = async (req, res) => {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
     }
@@ -26,9 +26,11 @@ export default async function handler(req, res) {
         console.error("❌ Error processing audio:", error.message);
         return res.status(500).json({ error: "Failed to process audio" });
     }
-}
+};
 
 // 🔹 Mock AI Response Function (Replace this with Mila AI logic)
 async function generateAIResponse(userText) {
     return `You said: ${userText}. How can I assist you further?`;
 }
+
+export default processAudioHandler; // ✅ Ensure this is exported for `index.js`
