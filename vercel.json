@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     { "src": "index.js", "use": "@vercel/node" },
-    { "src": "assistant-api.js", "use": "@vercel/node" },
+  
     { "src": "setup-business.js", "use": "@vercel/node" },
     { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
