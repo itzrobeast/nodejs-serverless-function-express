@@ -141,9 +141,7 @@ const ncco = [
   {
     action: "talk",
     // Keep the message simple while troubleshooting
-    text: `Hi, I'm Mila from ${businessName} I'm here to help you!..`,
-  
-    bargeIn: true      
+    text: `Hello I'm Mila from ${businessName}. I am here to help you! ..`
   },
   {
     action: "connect",
@@ -151,7 +149,7 @@ const ncco = [
       {
         type: "websocket",
         uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
-        "content-type": "audio/l16"
+        "content-type": "audio/l16;rate=16000"
       }
     ]
   }
