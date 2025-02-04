@@ -142,8 +142,7 @@ const ncco = [
     action: "talk",
     // Keep the message simple while troubleshooting
     text: `Hi, I'm Mila from ${businessName} I'm here to help you!..`,
-    language: "en-US",   // Add this back first
-    style: 14,           // Add this after
+  
     bargeIn: true      
   },
   {
