@@ -5,7 +5,6 @@
  * events, including inbound calls, input webhooks, call events,
  * fallback responses, inbound messages, and call status updates.
  * 
- * It is optimized for our Deepgram STT integration and Mila AI 
  * responses. Ensure that your environment variables for Vonage 
  * (VONAGE_API_KEY, VONAGE_API_SECRET, VONAGE_APPLICATION_ID, 
  * VONAGE_PRIVATE_KEY) are correctly set.
@@ -152,6 +151,8 @@ const ncco = [
       {
         type: "websocket",
         uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
+"content-type": "audio/l16;rate=16000",
+
         "content-type": "audio/l16;rate=16000",
       },
     ],
