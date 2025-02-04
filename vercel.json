@@ -10,7 +10,7 @@
     { "src": "/setup-business", "dest": "index.js" },
     { "src": "/setup-business/health", "dest": "index.js" },
     { "src": "/get-business", "dest": "index.js" },
-    { "src": "/assistant", "dest": "dest": "index.js" },
+    { "src": "/assistant", "dest": "index.js" },
     { "src": "/api/assistant", "dest": "/api/assistant.js" },
     { "src": "/instagram-webhook", "dest": "index.js" },
     { "src": "/leadgen-webhook", "dest": "index.js" },
