@@ -9,7 +9,7 @@
     { "src": "/setup-business", "dest": "index.js" },
     { "src": "/setup-business/health", "dest": "index.js" },
     { "src": "/get-business", "dest": "index.js" },
-    { "src": "/assistant", "dest": "index.js" },
+    { "src": "/assistant", "dest": "/assistant-api.js" },
     { "src": "/instagram-webhook", "dest": "index.js" },
     { "src": "/leadgen-webhook", "dest": "index.js" },
     { "src": "/auth/refresh-token", "dest": "index.js" },
