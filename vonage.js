@@ -143,7 +143,7 @@ const ncco = [
     text: `Hello, this is Mila from ${businessName}. I am here to help you!...`,
     language: "en-US",
     style: 14,
-    bargeIn: true, // Allow interruptions so the WebSocket receives input in parallel
+    bargeIn: true
   },
   {
     action: "connect",
@@ -151,14 +151,11 @@ const ncco = [
       {
         type: "websocket",
         uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
-"content-type": "audio/l16;rate=16000",
-
-        "content-type": "audio/l16;rate=16000",
-      },
-    ],
-  },
+        "content-type": "audio/l16;rate=16000"
+      }
+    ]
+  }
 ];
-
 
 
     
