@@ -138,27 +138,26 @@ export const handleInboundCall = async (req, res) => {
     const inputWebhook = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
 
     // Build the NCCO response with talk and connect (WebSocket) actions
-    const ncco = [
+const ncco = [
   {
     action: "talk",
     text: `Hello, this is Mila from ${businessName}. I am here to help you!...`,
     language: "en-US",
     style: 14,
+    bargeIn: true, // Allow interruptions so the WebSocket receives input in parallel
   },
   {
     action: "connect",
     endpoint: [
       {
         type: "websocket",
-        // ✅ Include businessId + conversationId in the query string
         uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
         "content-type": "audio/l16;rate=16000",
-        // ✅ Optionally remove the "headers" property entirely
-        // because Vonage won't pass them as normal WebSocket headers
       },
     ],
   },
 ];
+
 
 
     
