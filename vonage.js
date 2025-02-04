@@ -139,28 +139,26 @@ export const handleInboundCall = async (req, res) => {
 
     // Build the NCCO response with talk and connect (WebSocket) actions
     const ncco = [
+  {
+    action: "talk",
+    text: `Hello, this is Mila from ${businessName}. I am here to help you!...`,
+    language: "en-US",
+    style: 14,
+  },
+  {
+    action: "connect",
+    endpoint: [
       {
-        action: "talk",
-        text: `Hello, this is Mila from ${businessName}. Connecting you now...`,
-        language: "en-US",
-        style: 14,
+        type: "websocket",
+        // ✅ Include businessId + conversationId in the query string
+        uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
+        "content-type": "audio/l16;rate=16000`,
+        // ✅ Optionally remove the "headers" property entirely
+        // because Vonage won't pass them as normal WebSocket headers
       },
-      {
-        action: "connect",
-        endpoint: [
-          {
-            type: "websocket",
-            uri: "wss://milaverse-websocket.onrender.com",
-            "content-type": "audio/l16;rate=16000",
-            headers: {
-              business_id: businessId,
-              conversation_id: conversationId,
-            },
-          },
-        ],
-      },
-    ];
-
+    ],
+  },
+];
     console.log("[INFO] handleInboundCall -> Returning WebSocket NCCO");
     return res.json(ncco);
   } catch (err) {
