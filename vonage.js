@@ -150,8 +150,7 @@ const ncco = [
     endpoint: [
       {
         type: "websocket",
-        uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
-        "content-type": "audio/l16;rate=16000"
+        uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`
       }
     ]
   }
