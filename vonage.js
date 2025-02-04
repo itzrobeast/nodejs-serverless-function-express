@@ -140,21 +140,21 @@ export const handleInboundCall = async (req, res) => {
 const ncco = [
   {
     action: "talk",
-    text: `Hello, this is Mila from ${businessName}. I am here to help you!...`,
-    language: "en-US",
-    style: 14,
-    bargeIn: true
+    // Keep the message simple while troubleshooting
+    text: `Hello from ${businessName}`
   },
   {
     action: "connect",
     endpoint: [
       {
         type: "websocket",
-        uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`
+        uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
+        "content-type": "audio/l16;rate=16000"
       }
     ]
   }
 ];
+
 
 
     
