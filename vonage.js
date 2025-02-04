@@ -152,13 +152,16 @@ export const handleInboundCall = async (req, res) => {
         type: "websocket",
         // ✅ Include businessId + conversationId in the query string
         uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
-        "content-type": "audio/l16;rate=16000`,
+        "content-type": "audio/l16;rate=16000",
         // ✅ Optionally remove the "headers" property entirely
         // because Vonage won't pass them as normal WebSocket headers
       },
     ],
   },
 ];
+
+
+    
     console.log("[INFO] handleInboundCall -> Returning WebSocket NCCO");
     return res.json(ncco);
   } catch (err) {
