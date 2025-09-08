@@ -15,9 +15,9 @@ router.get('/', async (req, res) => {
     const business_id = req.query.business_id;
     if (!business_id) return res.status(400).json({ error: 'business_id required' });
 
-    const { data: business, error: bErr } = await supabase
-      .from('businesses')
-      .select('id,outbound_calls_enabled,outbound_test_mode,timezone')
+    + const { data: business, error: bErr } = await supabase
++   .from('businesses')
++   .select('id,outbound_calls_enabled,outbound_test_mode')
       .eq('id', business_id)
       .single();
     if (bErr) return res.status(500).json({ error: bErr.message });
