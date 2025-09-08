@@ -38,6 +38,7 @@ import {
 import inboundCallsRouter from './inbound-calls.js';
 import sessionRouter from './session.js';
 import processAudioHandler from "./process-audio.js";
+import outboundSettingsRouter from './outbound-settings.js';
 
 const app = express();
 
@@ -147,7 +148,7 @@ const routes = [
   { path: '/vonage/inbound', router: inboundMessageRouter },
   { path: '/vonage/status', router: callStatusRouter },
   { path: '/vonage/input-webhook', router: inputWebhookRouter },
-
+  { path: '/outbound-settings', router: outboundSettingsRouter },
   { path: '/inbound-calls', router: inboundCallsRouter },
 ];
 
