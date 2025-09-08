@@ -61,7 +61,8 @@ router.put('/update-business', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized: Please log in again.' });
     }
 
-    const { name, locations, insurance_policies, objections, contact_email, ai_knowledge_base, platform } = req.body;
+    const { name, locations, insurance_policies, objections, contact_email,
+         ai_knowledge_base, platform, phone, website, address } = req.body;
 
     if (!name) {
       console.error('[ERROR] Missing required field: name');
@@ -79,6 +80,10 @@ router.put('/update-business', async (req, res) => {
         contact_email,
         ai_knowledge_base,
         platform,
+        phone,
+        website,
+        address,
+        
       })
       .eq('business_owner_id', business_owner_id)
       .single();
