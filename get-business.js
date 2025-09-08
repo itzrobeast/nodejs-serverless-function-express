@@ -62,7 +62,7 @@ router.put('/update-business', async (req, res) => {
     }
 
     const { name, locations, insurance_policies, objections, contact_email,
-         ai_knowledge_base, platform, phone, website, address } = req.body;
+         ai_knowledge_base, platform, appointment_booking_link, phone, website, address } = req.body;
 
     if (!name) {
       console.error('[ERROR] Missing required field: name');
@@ -83,6 +83,7 @@ router.put('/update-business', async (req, res) => {
         phone,
         website,
         address,
+        appointment_booking_link,
         
       })
       .eq('business_owner_id', business_owner_id)
