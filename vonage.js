@@ -1,20 +1,29 @@
 /*******************************************************
  * vonage.js
- * 
- * This file contains all functions to handle Vonage telephony 
- * events, including inbound calls, input webhooks, call events,
- * fallback responses, inbound messages, and call status updates.
- * 
- * responses. Ensure that your environment variables for Vonage 
- * (VONAGE_API_KEY, VONAGE_API_SECRET, VONAGE_APPLICATION_ID, 
- * VONAGE_PRIVATE_KEY) are correctly set.
+ *
+ * Handles Vonage telephony events:
+ *  - Inbound Answer URL -> returns a pure WebSocket NCCO
+ *  - Input URL (legacy; not used when WS is connected)
+ *  - Event URL
+ *  - Fallback URL
+ *  - Inbound Message (SMS)
+ *  - Status URL
+ *
+ * IMPORTANT:
+ *  - We REMOVED the fixed `talk` greeting. The NCCO now only
+ *    connects to your WebSocket. Greeting comes from OpenAI WS.
+ *  - Set WS_CONNECT_URL to override the default WS endpoint.
  *******************************************************/
 import { Vonage } from '@vonage/server-sdk';
 import supabase from './supabaseClient.js';
-import { assistantHandler } from './assistant.js';
-import { logConversation } from './logConversation.js';
+import { assistantHandler } from './assistant.js'; // used for inbound SMS only
+import { logConversation } from './logConversation.js'; // used in legacy input flow
 
-// Initialize Vonage SDK
+// ---------- ENV ----------
+const WS_CONNECT_URL =
+  process.env.WS_CONNECT_URL || 'wss://milaverse-websocket.onrender.com';
+
+// Initialize Vonage SDK (still useful for future outbound features)
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
   apiSecret: process.env.VONAGE_API_SECRET,
@@ -22,9 +31,7 @@ const vonage = new Vonage({
   privateKey: process.env.VONAGE_PRIVATE_KEY,
 });
 
-/**
- * Utility: Extract the conversation ID from the request
- */
+/** Extract conversation UUID from request safely */
 function getConversationId(req) {
   const conversationId =
     req.body?.conversation_uuid ||
@@ -39,87 +46,61 @@ function getConversationId(req) {
   return conversationId;
 }
 
+/** Normalize E.164-ish phone formatting (lightweight) */
+function normalizeNumber(n) {
+  if (!n) return '';
+  return String(n).replace(/[^\d+]/g, '');
+}
+
 /**
  * 1) handleInboundCall (Answer URL)
  *
- * - Logs "Conversation started"
- * - Looks up business details
- * - Returns a talk + connect (WebSocket) NCCO
+ * Looks up the business_id by the inbound "to" number and returns a
+ * WebSocket connect NCCO ONLY. No "talk" step, so the robotic
+ * greeting disappears — greeting is handled by the OpenAI WS server.
  */
 export const handleInboundCall = async (req, res) => {
   try {
-    console.log('[DEBUG] handleInboundCall Payload:', JSON.stringify(req.body, null, 2));
-    console.log('[DEBUG] handleInboundCall Query:', JSON.stringify(req.query, null, 2));
+    console.log('[DEBUG] handleInboundCall body:', JSON.stringify(req.body || {}, null, 2));
+    console.log('[DEBUG] handleInboundCall query:', JSON.stringify(req.query || {}, null, 2));
 
-    const to = req.body.to || req.query.to;
-    const from = req.body.from || req.query.from;
+    const to = normalizeNumber(req.body?.to || req.query?.to);
+    const from = normalizeNumber(req.body?.from || req.query?.from);
     const conversationId = getConversationId(req);
 
-    if (!conversationId) {
-      console.error('[ERROR] Missing conversation_uuid (or uuid) from Vonage');
+    if (!conversationId || !to || !from) {
+      console.error('[ERROR] Missing required call params (conversationId/to/from).');
       return res.json([
         {
           action: 'talk',
-          text: 'We cannot process your call at this time. Missing conversation details.',
+          text: 'Sorry, we cannot process your call right now.',
           language: 'en-US',
           style: 14,
         },
       ]);
     }
 
-    if (!to || !from) {
-      console.error('[ERROR] Missing "to" or "from" in inbound call');
-      return res.json([
-        {
-          action: 'talk',
-          text: 'Sorry, we cannot process your call due to missing information.',
-          language: 'en-US',
-          style: 14,
-        },
-      ]);
-    }
-
-    // Lookup the business by the Vonage "to" number
-    const { data: businessData, error: businessError } = await supabase
+    // Map inbound "to" number -> business_id
+    const { data: mapRow, error: mapErr } = await supabase
       .from('vonage_numbers')
       .select('business_id')
       .eq('vonage_number', to)
       .single();
 
-    if (businessError || !businessData) {
-      console.error('[ERROR] Business not found for number:', to);
+    if (mapErr || !mapRow?.business_id) {
+      console.error('[ERROR] Business mapping not found for number:', to, mapErr?.message);
       return res.json([
         {
           action: 'talk',
-          text: 'Sorry, we cannot process your call at this time.',
+          text: 'We are unable to route your call at this time.',
           language: 'en-US',
           style: 14,
         },
       ]);
     }
-    const businessId = businessData.business_id;
+    const businessId = mapRow.business_id;
 
-    // Fetch business name for the greeting
-    const { data: bizInfo, error: bizError } = await supabase
-      .from('businesses')
-      .select('name')
-      .eq('id', businessId)
-      .single();
-
-    if (bizError || !bizInfo) {
-      console.error('[ERROR] Failed to fetch business name:', bizError?.message || 'No data');
-      return res.json([
-        {
-          action: 'talk',
-          text: 'Sorry, we cannot process your call at this time.',
-          language: 'en-US',
-          style: 14,
-        },
-      ]);
-    }
-    const businessName = bizInfo.name || 'our business';
-
-    // Log "Conversation started"
+    // Log conversation start
     await supabase.from('inbound_calls').insert([
       {
         conversation_id: conversationId,
@@ -133,39 +114,32 @@ export const handleInboundCall = async (req, res) => {
       },
     ]);
 
-    // Define the input webhook URL for further interaction
-    const inputWebhook = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+    // Build a pure WebSocket NCCO (NO talk step)
+    const wsUri = `${WS_CONNECT_URL}?business_id=${encodeURIComponent(
+      businessId
+    )}&conversation_id=${encodeURIComponent(conversationId)}`;
 
-    // Build the NCCO response with talk and connect (WebSocket) actions
-const ncco = [
-  {
-    action: "talk",
-    // Keep the message simple while troubleshooting
-    text: `Hello I'm Mila from ${businessName}. I am here to help you! ..`
-  },
-  {
-    action: "connect",
-    endpoint: [
+    const ncco = [
       {
-        type: "websocket",
-        uri: `wss://milaverse-websocket.onrender.com?business_id=${businessId}&conversation_id=${conversationId}`,
-        "content-type": "audio/l16;rate=16000"
-      }
-    ]
-  }
-];
+        action: 'connect',
+        endpoint: [
+          {
+            type: 'websocket',
+            uri: wsUri,
+            'content-type': 'audio/l16;rate=16000',
+          },
+        ],
+      },
+    ];
 
-
-
-    
-    console.log("[INFO] handleInboundCall -> Returning WebSocket NCCO");
+    console.log('[INFO] handleInboundCall -> Returning WS NCCO:', wsUri);
     return res.json(ncco);
   } catch (err) {
-    console.error('[ERROR] handleInboundCall:', err.message);
+    console.error('[ERROR] handleInboundCall:', err);
     return res.json([
       {
         action: 'talk',
-        text: 'We are unable to process your call at this time. Please try again later.',
+        text: 'We are unable to process your call at the moment. Please try again later.',
         language: 'en-US',
         style: 14,
       },
@@ -174,24 +148,22 @@ const ncco = [
 };
 
 /**
- * 2) handleInputWebhook (Input URL)
+ * 2) handleInputWebhook (legacy Input URL)
  *
- * - Logs user input (speech/DTMF)
- * - Filters out filler words/noise
- * - Generates an AI response via the assistant handler
- * - Logs the conversation and returns a new NCCO
+ * If you return only a WS NCCO, Vonage will not call this.
+ * We keep it for backward compatibility & testing.
  */
 export const handleInputWebhook = async (req, res) => {
   try {
-    console.log('[DEBUG] InputWebhook Body:', JSON.stringify(req.body, null, 2));
-    console.log('[DEBUG] InputWebhook Query:', JSON.stringify(req.query, null, 2));
+    console.log('[DEBUG] InputWebhook Body:', JSON.stringify(req.body || {}, null, 2));
+    console.log('[DEBUG] InputWebhook Query:', JSON.stringify(req.query || {}, null, 2));
 
     const { businessId, conversationId } = req.query;
-    const from = req.body?.from || 'Unknown';
-    const to = req.body?.to || 'Unknown';
+    const from = normalizeNumber(req.body?.from || 'Unknown');
+    const to = normalizeNumber(req.body?.to || 'Unknown');
 
     if (!businessId || !conversationId) {
-      console.error(`[ERROR] Missing businessId or conversationId in Input Webhook. From: ${from}, To: ${to}`);
+      console.error('[ERROR] Missing businessId or conversationId in Input Webhook.');
       return res.json([
         {
           action: 'talk',
@@ -202,66 +174,53 @@ export const handleInputWebhook = async (req, res) => {
       ]);
     }
 
-    const userText = req.body?.speech?.results?.[0]?.text || '';
-    const dtmfDigits = req.body?.dtmf?.digits || '';
-    let inputText = userText
-      ? userText.trim().toLowerCase()
-      : (dtmfDigits ? `dtmf digit: ${dtmfDigits}` : 'No input');
-    console.log(`[DEBUG] Input from: ${from} -> ${to}, User Text: "${inputText}"`);
+    const userText =
+      req.body?.speech?.results?.[0]?.text ||
+      (req.body?.dtmf?.digits ? `dtmf digit: ${req.body.dtmf.digits}` : '');
 
-    // Filter out background noise or filler words
+    // Skip trivial/noise input
+    const cleaned = (userText || '').trim().toLowerCase();
     const fillerRegex = /^(uh|um|ah|hm|hmm|noise|silent|background|end_on_silence)$/i;
-    if (fillerRegex.test(inputText) || inputText.length < 3) {
-      console.log('[INFO] Detected noise/filler input. Ignoring...');
+    if (!cleaned || cleaned.length < 3 || fillerRegex.test(cleaned)) {
+      const nextUrl = `${req.protocol}://${req.get('host')}/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
       return res.json([
         {
           action: 'talk',
-          text: 'I didn’t catch that. Could you repeat that, please?',
+          text: "I didn’t catch that. Could you repeat that, please?",
           language: 'en-US',
           style: 14,
+          bargeIn: true,
         },
         {
           action: 'input',
           type: ['speech', 'dtmf'],
-          eventUrl: [
-            `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`,
-          ],
-          speech: {
-            endOnSilence: 0.3,
-            language: 'en-US',
-          },
-          dtmf: {
-            maxDigits: 1,
-            submitOnHash: false,
-          },
+          eventUrl: [nextUrl],
+          speech: { endOnSilence: 0.3, language: 'en-US' },
+          dtmf: { maxDigits: 1, submitOnHash: false },
         },
       ]);
     }
 
-    // Generate AI response via the assistant handler
+    // Generate AI reply (legacy, non-realtime)
     const assistantResponse = await assistantHandler({
-      userMessage: inputText,
+      userMessage: cleaned,
       businessId,
       platform: 'phone',
     });
 
-    const ttsMessage = assistantResponse.message || 'How else can I help you?';
-    console.log(`[INFO] AI Response to ${from}: ${ttsMessage}`);
+    const ttsMessage = assistantResponse?.message || 'How else can I help you?';
 
-    // Log conversation: Customer input
+    // Log both sides for completeness
     await logConversation({
       businessId,
       senderPhone: from,
       receiverPhone: to,
-      message: inputText,
+      message: cleaned,
       messageType: 'speech',
       role: 'customer',
       conversationId,
-    }).catch((err) => {
-      console.error('[ERROR] Failed to log customer input:', err);
-    });
+    }).catch((e) => console.error('[WARN] log customer failed:', e?.message));
 
-    // Log conversation: AI response
     await logConversation({
       businessId,
       senderPhone: 'AI',
@@ -270,12 +229,9 @@ export const handleInputWebhook = async (req, res) => {
       messageType: 'text',
       role: 'business',
       conversationId,
-    }).catch((err) => {
-      console.error('[ERROR] Failed to log AI response:', err);
-    });
+    }).catch((e) => console.error('[WARN] log ai failed:', e?.message));
 
-    // Build the NCCO for AI response and new user input
-    const nextUrl = `https://nodejs-serverless-function-express-two-wine.vercel.app/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+    const nextUrl = `${req.protocol}://${req.get('host')}/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const ncco = [
       {
         action: 'talk',
@@ -288,23 +244,13 @@ export const handleInputWebhook = async (req, res) => {
         action: 'input',
         type: ['speech', 'dtmf'],
         eventUrl: [nextUrl],
-        speech: {
-          endOnSilence: 0.3,
-          language: 'en-US',
-        },
-        dtmf: {
-          maxDigits: 1,
-          submitOnHash: false,
-        },
+        speech: { endOnSilence: 0.3, language: 'en-US' },
+        dtmf: { maxDigits: 1, submitOnHash: false },
       },
     ];
-
-    console.log('[INFO] Returning AI response NCCO');
     return res.json(ncco);
   } catch (err) {
-    console.error(
-      `[ERROR] handleInputWebhook for call from ${req.body?.from || 'Unknown'} to ${req.body?.to || 'Unknown'}: ${err.message}`
-    );
+    console.error('[ERROR] handleInputWebhook:', err);
     return res.json([
       {
         action: 'talk',
@@ -319,13 +265,13 @@ export const handleInputWebhook = async (req, res) => {
 /**
  * 3) handleCallEvent (Event URL)
  *
- * - Logs call lifecycle events (answered, completed, etc.)
+ * Logs call lifecycle events (answered, completed, etc.)
  */
 export const handleCallEvent = async (req, res) => {
   try {
-    console.log('[DEBUG] handleCallEvent Query:', JSON.stringify(req.query, null, 2));
+    console.log('[DEBUG] handleCallEvent Query:', JSON.stringify(req.query || {}, null, 2));
 
-    const { status, conversation_uuid, to, from } = req.query;
+    const { status, conversation_uuid, to, from } = req.query || {};
     console.log(`[INFO] Call event: status=${status}, conversation_uuid=${conversation_uuid}, to=${to}, from=${from}`);
 
     await supabase.from('call_events').insert([
@@ -334,7 +280,7 @@ export const handleCallEvent = async (req, res) => {
 
     res.status(200).send('Event received');
   } catch (err) {
-    console.error('[ERROR] handleCallEvent:', err.message);
+    console.error('[ERROR] handleCallEvent:', err);
     res.status(500).send('Failed to handle call event');
   }
 };
@@ -342,11 +288,11 @@ export const handleCallEvent = async (req, res) => {
 /**
  * 4) handleFallback (Fallback URL)
  *
- * - Called if the Answer URL fails or times out.
+ * Called if the Answer URL fails or times out.
  */
 export const handleFallback = async (req, res) => {
   try {
-    console.error('[ERROR] Fallback triggered:', JSON.stringify(req.body || req.query, null, 2));
+    console.error('[ERROR] Fallback triggered:', JSON.stringify(req.body || req.query || {}, null, 2));
     return res.json([
       {
         action: 'talk',
@@ -355,7 +301,7 @@ export const handleFallback = async (req, res) => {
       },
     ]);
   } catch (err) {
-    console.error('[ERROR] handleFallback:', err.message);
+    console.error('[ERROR] handleFallback:', err);
     return res.status(500).send('Failed to handle fallback');
   }
 };
@@ -363,14 +309,14 @@ export const handleFallback = async (req, res) => {
 /**
  * 5) handleInboundMessage (Inbound SMS/Message)
  *
- * - Processes inbound SMS or messages and responds via the AI.
+ * Processes inbound SMS via your assistant.
  */
 export const handleInboundMessage = async (req, res) => {
   try {
-    console.log('[DEBUG] handleInboundMessage Body:', JSON.stringify(req.body, null, 2));
-    console.log('[DEBUG] handleInboundMessage Query:', JSON.stringify(req.query, null, 2));
+    console.log('[DEBUG] handleInboundMessage Body:', JSON.stringify(req.body || {}, null, 2));
+    console.log('[DEBUG] handleInboundMessage Query:', JSON.stringify(req.query || {}, null, 2));
 
-    const { text, msisdn } = req.body || req.query;
+    const { text, msisdn } = req.body || req.query || {};
     console.log(`[INFO] Inbound message from ${msisdn}: "${text}"`);
 
     const assistantResponse = await assistantHandler({
@@ -379,10 +325,10 @@ export const handleInboundMessage = async (req, res) => {
     });
 
     return res.status(200).json({
-      message: assistantResponse.message || 'Thank you for your message!',
+      message: assistantResponse?.message || 'Thank you for your message!',
     });
   } catch (err) {
-    console.error('[ERROR] Failed to handle inbound message:', err.message);
+    console.error('[ERROR] handleInboundMessage:', err);
     return res.status(500).send('Failed to handle inbound message');
   }
 };
@@ -390,14 +336,14 @@ export const handleInboundMessage = async (req, res) => {
 /**
  * 6) handleCallStatus (Status URL)
  *
- * - Logs additional call progress or final statuses.
+ * Logs progress/final statuses.
  */
 export const handleCallStatus = async (req, res) => {
   try {
-    console.log('[DEBUG] handleCallStatus Body:', JSON.stringify(req.body, null, 2));
-    console.log('[DEBUG] handleCallStatus Query:', JSON.stringify(req.query, null, 2));
+    console.log('[DEBUG] handleCallStatus Body:', JSON.stringify(req.body || {}, null, 2));
+    console.log('[DEBUG] handleCallStatus Query:', JSON.stringify(req.query || {}, null, 2));
 
-    const { status, conversation_uuid } = req.body || req.query;
+    const { status, conversation_uuid } = req.body || req.query || {};
     console.log(`[INFO] Call status update: ${status}, conversation_uuid=${conversation_uuid}`);
 
     await supabase.from('call_status_updates').insert([
@@ -410,7 +356,7 @@ export const handleCallStatus = async (req, res) => {
 
     res.status(200).send('Status received');
   } catch (err) {
-    console.error('[ERROR] handleCallStatus:', err.message);
+    console.error('[ERROR] handleCallStatus:', err);
     res.status(500).send('Failed to handle call status');
   }
 };
