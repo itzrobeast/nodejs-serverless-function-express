@@ -10,20 +10,20 @@
  *  - Status URL
  *
  * IMPORTANT:
- *  - We REMOVED the fixed `talk` greeting. The NCCO now only
- *    connects to your WebSocket. Greeting comes from OpenAI WS.
+ *  - NO hard-coded `talk` greeting here. Greeting is injected
+ *    dynamically by the OpenAI WebSocket server.
  *  - Set WS_CONNECT_URL to override the default WS endpoint.
  *******************************************************/
-import { Vonage } from '@vonage/server-sdk';
-import supabase from './supabaseClient.js';
-import { assistantHandler } from './assistant.js'; // used for inbound SMS only
-import { logConversation } from './logConversation.js'; // used in legacy input flow
+import { Vonage } from "@vonage/server-sdk";
+import supabase from "./supabaseClient.js";
+import { assistantHandler } from "./assistant.js"; // used for inbound SMS only
+import { logConversation } from "./logConversation.js"; // used in legacy input flow
 
 // ---------- ENV ----------
 const WS_CONNECT_URL =
-  process.env.WS_CONNECT_URL || 'wss://milaverse-websocket.onrender.com';
+  process.env.WS_CONNECT_URL || "wss://milaverse-websocket.onrender.com";
 
-// Initialize Vonage SDK (still useful for future outbound features)
+// Initialize Vonage SDK (useful for outbound features if needed later)
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
   apiSecret: process.env.VONAGE_API_SECRET,
@@ -41,40 +41,47 @@ function getConversationId(req) {
     null;
 
   if (!conversationId) {
-    console.error('[ERROR] Missing conversationId from Vonage');
+    console.error("[ERROR] Missing conversationId from Vonage");
   }
   return conversationId;
 }
 
 /** Normalize E.164-ish phone formatting (lightweight) */
 function normalizeNumber(n) {
-  if (!n) return '';
-  return String(n).replace(/[^\d+]/g, '');
+  if (!n) return "";
+  return String(n).replace(/[^\d+]/g, "");
 }
 
 /**
  * 1) handleInboundCall (Answer URL)
  *
- * Looks up the business_id by the inbound "to" number and returns a
- * WebSocket connect NCCO ONLY. No "talk" step, so the robotic
- * greeting disappears — greeting is handled by the OpenAI WS server.
+ * Looks up business_id by inbound "to" number and returns a
+ * WebSocket NCCO ONLY. No `talk` greeting.
  */
 export const handleInboundCall = async (req, res) => {
   try {
-    console.log('[DEBUG] handleInboundCall body:', JSON.stringify(req.body || {}, null, 2));
-    console.log('[DEBUG] handleInboundCall query:', JSON.stringify(req.query || {}, null, 2));
+    console.log(
+      "[DEBUG] handleInboundCall body:",
+      JSON.stringify(req.body || {}, null, 2)
+    );
+    console.log(
+      "[DEBUG] handleInboundCall query:",
+      JSON.stringify(req.query || {}, null, 2)
+    );
 
     const to = normalizeNumber(req.body?.to || req.query?.to);
     const from = normalizeNumber(req.body?.from || req.query?.from);
     const conversationId = getConversationId(req);
 
     if (!conversationId || !to || !from) {
-      console.error('[ERROR] Missing required call params (conversationId/to/from).');
+      console.error(
+        "[ERROR] Missing required call params (conversationId/to/from)."
+      );
       return res.json([
         {
-          action: 'talk',
-          text: 'Sorry, we cannot process your call right now.',
-          language: 'en-US',
+          action: "talk",
+          text: "Sorry, we cannot process your call right now.",
+          language: "en-US",
           style: 14,
         },
       ]);
@@ -82,18 +89,22 @@ export const handleInboundCall = async (req, res) => {
 
     // Map inbound "to" number -> business_id
     const { data: mapRow, error: mapErr } = await supabase
-      .from('vonage_numbers')
-      .select('business_id')
-      .eq('vonage_number', to)
+      .from("vonage_numbers")
+      .select("business_id")
+      .eq("vonage_number", to)
       .single();
 
     if (mapErr || !mapRow?.business_id) {
-      console.error('[ERROR] Business mapping not found for number:', to, mapErr?.message);
+      console.error(
+        "[ERROR] Business mapping not found for number:",
+        to,
+        mapErr?.message
+      );
       return res.json([
         {
-          action: 'talk',
-          text: 'We are unable to route your call at this time.',
-          language: 'en-US',
+          action: "talk",
+          text: "We are unable to route your call at this time.",
+          language: "en-US",
           style: 14,
         },
       ]);
@@ -101,46 +112,46 @@ export const handleInboundCall = async (req, res) => {
     const businessId = mapRow.business_id;
 
     // Log conversation start
-    await supabase.from('inbound_calls').insert([
+    await supabase.from("inbound_calls").insert([
       {
         conversation_id: conversationId,
         sender_phone: from,
         receiver_phone: to,
         business_id: businessId,
-        message: 'Conversation started',
-        message_type: 'system',
-        role: 'system',
+        message: "Conversation started",
+        message_type: "system",
+        role: "system",
         timestamp: new Date().toISOString(),
       },
     ]);
 
-    // Build a pure WebSocket NCCO (NO talk step)
+    // Build pure WebSocket NCCO
     const wsUri = `${WS_CONNECT_URL}?business_id=${encodeURIComponent(
       businessId
     )}&conversation_id=${encodeURIComponent(conversationId)}`;
 
     const ncco = [
       {
-        action: 'connect',
+        action: "connect",
         endpoint: [
           {
-            type: 'websocket',
+            type: "websocket",
             uri: wsUri,
-            'content-type': 'audio/l16;rate=16000',
+            "content-type": "audio/l16;rate=16000",
           },
         ],
       },
     ];
 
-    console.log('[INFO] handleInboundCall -> Returning WS NCCO:', wsUri);
+    console.log("[INFO] handleInboundCall -> Returning WS NCCO:", wsUri);
     return res.json(ncco);
   } catch (err) {
-    console.error('[ERROR] handleInboundCall:', err);
+    console.error("[ERROR] handleInboundCall:", err);
     return res.json([
       {
-        action: 'talk',
-        text: 'We are unable to process your call at the moment. Please try again later.',
-        language: 'en-US',
+        action: "talk",
+        text: "We are unable to process your call at the moment. Please try again later.",
+        language: "en-US",
         style: 14,
       },
     ]);
@@ -150,25 +161,32 @@ export const handleInboundCall = async (req, res) => {
 /**
  * 2) handleInputWebhook (legacy Input URL)
  *
- * If you return only a WS NCCO, Vonage will not call this.
- * We keep it for backward compatibility & testing.
+ * Only used in fallback/testing when WebSocket isn’t active.
  */
 export const handleInputWebhook = async (req, res) => {
   try {
-    console.log('[DEBUG] InputWebhook Body:', JSON.stringify(req.body || {}, null, 2));
-    console.log('[DEBUG] InputWebhook Query:', JSON.stringify(req.query || {}, null, 2));
+    console.log(
+      "[DEBUG] InputWebhook Body:",
+      JSON.stringify(req.body || {}, null, 2)
+    );
+    console.log(
+      "[DEBUG] InputWebhook Query:",
+      JSON.stringify(req.query || {}, null, 2)
+    );
 
     const { businessId, conversationId } = req.query;
-    const from = normalizeNumber(req.body?.from || 'Unknown');
-    const to = normalizeNumber(req.body?.to || 'Unknown');
+    const from = normalizeNumber(req.body?.from || "Unknown");
+    const to = normalizeNumber(req.body?.to || "Unknown");
 
     if (!businessId || !conversationId) {
-      console.error('[ERROR] Missing businessId or conversationId in Input Webhook.');
+      console.error(
+        "[ERROR] Missing businessId or conversationId in Input Webhook."
+      );
       return res.json([
         {
-          action: 'talk',
-          text: 'Sorry, something went wrong. Goodbye.',
-          language: 'en-US',
+          action: "talk",
+          text: "Sorry, something went wrong. Goodbye.",
+          language: "en-US",
           style: 14,
         },
       ]);
@@ -176,86 +194,90 @@ export const handleInputWebhook = async (req, res) => {
 
     const userText =
       req.body?.speech?.results?.[0]?.text ||
-      (req.body?.dtmf?.digits ? `dtmf digit: ${req.body.dtmf.digits}` : '');
+      (req.body?.dtmf?.digits ? `dtmf digit: ${req.body.dtmf.digits}` : "");
 
-    // Skip trivial/noise input
-    const cleaned = (userText || '').trim().toLowerCase();
-    const fillerRegex = /^(uh|um|ah|hm|hmm|noise|silent|background|end_on_silence)$/i;
+    const cleaned = (userText || "").trim().toLowerCase();
+    const fillerRegex =
+      /^(uh|um|ah|hm|hmm|noise|silent|background|end_on_silence)$/i;
+
     if (!cleaned || cleaned.length < 3 || fillerRegex.test(cleaned)) {
-      const nextUrl = `${req.protocol}://${req.get('host')}/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+      const nextUrl = `${req.protocol}://${req.get(
+        "host"
+      )}/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
       return res.json([
         {
-          action: 'talk',
+          action: "talk",
           text: "I didn’t catch that. Could you repeat that, please?",
-          language: 'en-US',
+          language: "en-US",
           style: 14,
           bargeIn: true,
         },
         {
-          action: 'input',
-          type: ['speech', 'dtmf'],
+          action: "input",
+          type: ["speech", "dtmf"],
           eventUrl: [nextUrl],
-          speech: { endOnSilence: 0.3, language: 'en-US' },
+          speech: { endOnSilence: 0.3, language: "en-US" },
           dtmf: { maxDigits: 1, submitOnHash: false },
         },
       ]);
     }
 
-    // Generate AI reply (legacy, non-realtime)
+    // Non-realtime AI reply
     const assistantResponse = await assistantHandler({
       userMessage: cleaned,
       businessId,
-      platform: 'phone',
+      platform: "phone",
     });
 
-    const ttsMessage = assistantResponse?.message || 'How else can I help you?';
+    const ttsMessage = assistantResponse?.message || "How else can I help you?";
 
-    // Log both sides for completeness
     await logConversation({
       businessId,
       senderPhone: from,
       receiverPhone: to,
       message: cleaned,
-      messageType: 'speech',
-      role: 'customer',
+      messageType: "speech",
+      role: "customer",
       conversationId,
-    }).catch((e) => console.error('[WARN] log customer failed:', e?.message));
+    }).catch((e) => console.error("[WARN] log customer failed:", e?.message));
 
     await logConversation({
       businessId,
-      senderPhone: 'AI',
+      senderPhone: "AI",
       receiverPhone: from,
       message: ttsMessage,
-      messageType: 'text',
-      role: 'business',
+      messageType: "text",
+      role: "business",
       conversationId,
-    }).catch((e) => console.error('[WARN] log ai failed:', e?.message));
+    }).catch((e) => console.error("[WARN] log ai failed:", e?.message));
 
-    const nextUrl = `${req.protocol}://${req.get('host')}/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
+    const nextUrl = `${req.protocol}://${req.get(
+      "host"
+    )}/vonage/input-webhook?businessId=${businessId}&conversationId=${conversationId}`;
     const ncco = [
       {
-        action: 'talk',
+        action: "talk",
         text: ttsMessage,
-        language: 'en-US',
+        language: "en-US",
         style: 14,
         bargeIn: true,
       },
       {
-        action: 'input',
-        type: ['speech', 'dtmf'],
+        action: "input",
+        type: ["speech", "dtmf"],
         eventUrl: [nextUrl],
-        speech: { endOnSilence: 0.3, language: 'en-US' },
+        speech: { endOnSilence: 0.3, language: "en-US" },
         dtmf: { maxDigits: 1, submitOnHash: false },
       },
     ];
     return res.json(ncco);
   } catch (err) {
-    console.error('[ERROR] handleInputWebhook:', err);
+    console.error("[ERROR] handleInputWebhook:", err);
     return res.json([
       {
-        action: 'talk',
-        text: 'Sorry, something went wrong. Goodbye.',
-        language: 'en-US',
+        action: "talk",
+        text: "Sorry, something went wrong. Goodbye.",
+        language: "en-US",
         style: 14,
       },
     ]);
@@ -264,89 +286,109 @@ export const handleInputWebhook = async (req, res) => {
 
 /**
  * 3) handleCallEvent (Event URL)
- *
- * Logs call lifecycle events (answered, completed, etc.)
  */
 export const handleCallEvent = async (req, res) => {
   try {
-    console.log('[DEBUG] handleCallEvent Query:', JSON.stringify(req.query || {}, null, 2));
+    console.log(
+      "[DEBUG] handleCallEvent Query:",
+      JSON.stringify(req.query || {}, null, 2)
+    );
 
     const { status, conversation_uuid, to, from } = req.query || {};
-    console.log(`[INFO] Call event: status=${status}, conversation_uuid=${conversation_uuid}, to=${to}, from=${from}`);
+    console.log(
+      `[INFO] Call event: status=${status}, conversation_uuid=${conversation_uuid}, to=${to}, from=${from}`
+    );
 
-    await supabase.from('call_events').insert([
-      { status, conversation_uuid, to, from, event_time: new Date().toISOString() },
+    await supabase.from("call_events").insert([
+      {
+        status,
+        conversation_uuid,
+        to,
+        from,
+        event_time: new Date().toISOString(),
+      },
     ]);
 
-    res.status(200).send('Event received');
+    res.status(200).send("Event received");
   } catch (err) {
-    console.error('[ERROR] handleCallEvent:', err);
-    res.status(500).send('Failed to handle call event');
+    console.error("[ERROR] handleCallEvent:", err);
+    res.status(500).send("Failed to handle call event");
   }
 };
 
 /**
  * 4) handleFallback (Fallback URL)
- *
- * Called if the Answer URL fails or times out.
  */
 export const handleFallback = async (req, res) => {
   try {
-    console.error('[ERROR] Fallback triggered:', JSON.stringify(req.body || req.query || {}, null, 2));
+    console.error(
+      "[ERROR] Fallback triggered:",
+      JSON.stringify(req.body || req.query || {}, null, 2)
+    );
     return res.json([
       {
-        action: 'talk',
-        text: 'We are unable to process your call at the moment. Please try again later.',
-        language: 'en-US',
+        action: "talk",
+        text: "We are unable to process your call at the moment. Please try again later.",
+        language: "en-US",
       },
     ]);
   } catch (err) {
-    console.error('[ERROR] handleFallback:', err);
-    return res.status(500).send('Failed to handle fallback');
+    console.error("[ERROR] handleFallback:", err);
+    return res.status(500).send("Failed to handle fallback");
   }
 };
 
 /**
- * 5) handleInboundMessage (Inbound SMS/Message)
- *
- * Processes inbound SMS via your assistant.
+ * 5) handleInboundMessage (SMS/Messages)
  */
 export const handleInboundMessage = async (req, res) => {
   try {
-    console.log('[DEBUG] handleInboundMessage Body:', JSON.stringify(req.body || {}, null, 2));
-    console.log('[DEBUG] handleInboundMessage Query:', JSON.stringify(req.query || {}, null, 2));
+    console.log(
+      "[DEBUG] handleInboundMessage Body:",
+      JSON.stringify(req.body || {}, null, 2)
+    );
+    console.log(
+      "[DEBUG] handleInboundMessage Query:",
+      JSON.stringify(req.query || {}, null, 2)
+    );
 
     const { text, msisdn } = req.body || req.query || {};
     console.log(`[INFO] Inbound message from ${msisdn}: "${text}"`);
 
     const assistantResponse = await assistantHandler({
       userMessage: text,
-      platform: 'sms',
+      platform: "sms",
     });
 
     return res.status(200).json({
-      message: assistantResponse?.message || 'Thank you for your message!',
+      message: assistantResponse?.message || "Thank you for your message!",
     });
   } catch (err) {
-    console.error('[ERROR] handleInboundMessage:', err);
-    return res.status(500).send('Failed to handle inbound message');
+    console.error("[ERROR] handleInboundMessage:", err);
+    return res.status(500).send("Failed to handle inbound message");
   }
 };
 
 /**
  * 6) handleCallStatus (Status URL)
- *
- * Logs progress/final statuses.
  */
 export const handleCallStatus = async (req, res) => {
   try {
-    console.log('[DEBUG] handleCallStatus Body:', JSON.stringify(req.body || {}, null, 2));
-    console.log('[DEBUG] handleCallStatus Query:', JSON.stringify(req.query || {}, null, 2));
+    console.log(
+      "[DEBUG] handleCallStatus Body:",
+      JSON.stringify(req.body || {}, null, 2)
+    );
+    console.log(
+      "[DEBUG] handleCallStatus Query:",
+      JSON.stringify(req.query || {}, null, 2)
+    );
 
     const { status, conversation_uuid } = req.body || req.query || {};
-    console.log(`[INFO] Call status update: ${status}, conversation_uuid=${conversation_uuid}`);
+    console.log(
+      `[INFO] Call status update: ${status}, conversation_uuid=${conversation_uuid}`
+    );
 
-    await supabase.from('call_status_updates').insert([
+    await supabase.from("call_status_updates").insert([
       {
         status,
         conversation_uuid,
@@ -354,9 +396,9 @@ export const handleCallStatus = async (req, res) => {
       },
     ]);
 
-    res.status(200).send('Status received');
+    res.status(200).send("Status received");
   } catch (err) {
-    console.error('[ERROR] handleCallStatus:', err);
-    res.status(500).send('Failed to handle call status');
+    console.error("[ERROR] handleCallStatus:", err);
+    res.status(500).send("Failed to handle call status");
   }
 };
