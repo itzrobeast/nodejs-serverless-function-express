@@ -2,7 +2,7 @@
  * vonage.js
  *
  * Handles Vonage telephony events:
- *  - Inbound Answer URL -> returns a pure WebSocket NCCO
+ *  - Inbound Answer URL -> returns a pure WebRTC NCCO
  *  - Input URL (legacy; not used when WS is connected)
  *  - Event URL
  *  - Fallback URL
@@ -10,9 +10,8 @@
  *  - Status URL
  *
  * IMPORTANT:
- *  - NO hard-coded `talk` greeting here. Greeting is injected
- *    dynamically by the OpenAI WebSocket server.
- *  - Set WS_CONNECT_URL to override the default WS endpoint.
+ *  - No hard-coded greeting. Mila’s voice comes directly
+ *    from the OpenAI Realtime API through the WebRTC bridge.
  *******************************************************/
 import { Vonage } from "@vonage/server-sdk";
 import supabase from "./supabaseClient.js";
@@ -20,10 +19,10 @@ import { assistantHandler } from "./assistant.js"; // used for inbound SMS only
 import { logConversation } from "./logConversation.js"; // used in legacy input flow
 
 // ---------- ENV ----------
-const WS_CONNECT_URL =
-  process.env.WS_CONNECT_URL || "wss://milaverse-websocket.onrender.com";
+const WEBRTC_BRIDGE_URL =
+  process.env.WEBRTC_BRIDGE_URL || "https://milaverse-websocket.onrender.com/webrtc-session";
 
-// Initialize Vonage SDK (useful for outbound features if needed later)
+// Initialize Vonage SDK (for outbound features if needed later)
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
   apiSecret: process.env.VONAGE_API_SECRET,
@@ -56,7 +55,8 @@ function normalizeNumber(n) {
  * 1) handleInboundCall (Answer URL)
  *
  * Looks up business_id by inbound "to" number and returns a
- * WebSocket NCCO ONLY. No `talk` greeting.
+ * WebRTC NCCO. Mila’s audio is streamed through the Render
+ * bridge (milaverse-websocket).
  */
 export const handleInboundCall = async (req, res) => {
   try {
@@ -125,8 +125,8 @@ export const handleInboundCall = async (req, res) => {
       },
     ]);
 
-    // Build pure WebSocket NCCO
-    const wsUri = `${WS_CONNECT_URL}?business_id=${encodeURIComponent(
+    // Build WebRTC NCCO
+    const webrtcUri = `${WEBRTC_BRIDGE_URL}?business_id=${encodeURIComponent(
       businessId
     )}&conversation_id=${encodeURIComponent(conversationId)}`;
 
@@ -135,15 +135,15 @@ export const handleInboundCall = async (req, res) => {
         action: "connect",
         endpoint: [
           {
-            type: "websocket",
-            uri: wsUri,
+            type: "webrtc",
+            uri: webrtcUri,
             "content-type": "audio/l16;rate=16000",
           },
         ],
       },
     ];
 
-    console.log("[INFO] handleInboundCall -> Returning WS NCCO:", wsUri);
+    console.log("[INFO] handleInboundCall -> Returning WebRTC NCCO:", webrtcUri);
     return res.json(ncco);
   } catch (err) {
     console.error("[ERROR] handleInboundCall:", err);
@@ -160,8 +160,6 @@ export const handleInboundCall = async (req, res) => {
 
 /**
  * 2) handleInputWebhook (legacy Input URL)
- *
- * Only used in fallback/testing when WebSocket isn’t active.
  */
 export const handleInputWebhook = async (req, res) => {
   try {
@@ -334,7 +332,7 @@ export const handleFallback = async (req, res) => {
     ]);
   } catch (err) {
     console.error("[ERROR] handleFallback:", err);
-    return res.status(500).send("Failed to handle fallback");
+    res.status(500).send("Failed to handle fallback");
   }
 };
 
